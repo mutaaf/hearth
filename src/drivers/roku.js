@@ -102,10 +102,12 @@ export class RokuDriver extends Driver {
         const info = await this.#info();
         const active = await this.#ecp('GET', '/query/active-app').catch(() => '');
         // The home screen is <app>Roku</app> with no id.
-        const app = active.match(/<app\b[^>]*\bid="([^"]+)"/)?.[1] ?? null;
-        this.setState({ online: true, power: info.power, app });
+        const m = active.match(/<app\b[^>]*\bid="([^"]+)"[^>]*>([^<]*)</);
+        const app = m?.[1] ?? null;
+        const appTitle = m ? m[2].replace(/&amp;/g, '&').replace(/&apos;|&#39;/g, "'").trim() || null : null;
+        this.setState({ online: true, power: info.power, app, appTitle });
       } catch {
-        this.setState({ online: false, power: 'off', app: null });
+        this.setState({ online: false, power: 'off', app: null, appTitle: null });
       }
     };
     tick();

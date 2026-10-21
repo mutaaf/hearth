@@ -121,7 +121,7 @@ test('polling reports standby and the app on screen', async () => {
   const driver = new RokuDriver(makeTv(), { base });
   const state = new Promise((resolve) => driver.on('state', (s) => s.online && resolve(s)));
   driver.start();
-  assert.deepEqual(await state, { online: true, power: 'standby', volume: null, muted: null, app: '12' });
+  assert.deepEqual(await state, { online: true, power: 'standby', volume: null, muted: null, app: '12', appTitle: 'Netflix' });
   await driver.stop();
 });
 

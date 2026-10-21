@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { badRequest, HearthError, notFound } from './errors.js';
-import { discover, isIPv4, isMac, portOpen, probe, tvId } from './discovery.js';
+import { discover, isIPv4, isMac, macFor, portOpen, probe, tvId } from './discovery.js';
 import { LgDriver } from './drivers/lg.js';
 import { GoogleTvDriver } from './drivers/googletv.js';
 import { RokuDriver } from './drivers/roku.js';
@@ -164,6 +164,11 @@ export class Hub extends EventEmitter {
       if (!found) throw new HearthError(404, 'No LG or Samsung TV answered at that address. Is it switched on?');
     }
 
+    // No MAC from discovery (Google TVs)? Ask the OS; it's needed to wake it.
+    if (!found.macs?.length) {
+      const mac = await macFor(ip);
+      if (mac) found.macs = [mac];
+    }
     const tv = {
       id: tvId(found.brand, found.macs, ip),
       brand: found.brand,

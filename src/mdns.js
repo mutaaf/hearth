@@ -4,7 +4,7 @@ import makeMdns from 'multicast-dns';
 // stitch PTR → SRV/TXT → A records into { service, name, ip, port, txt }.
 // Google TVs, Chromecasts and AirPlay devices announce themselves this way
 // (they don't answer SSDP like LG, Samsung and Roku do).
-export async function browse(services, { timeout = 2200 } = {}) {
+export async function browse(services, { timeout = 3000 } = {}) {
   let mdns;
   try {
     mdns = makeMdns();
@@ -31,10 +31,13 @@ export async function browse(services, { timeout = 2200 } = {}) {
   mdns.on('error', () => {});
 
   const ask = () => mdns.query(services.map((name) => ({ name, type: 'PTR' })));
+  // Multicast is lossy and sleepy devices answer late: ask three times.
   ask();
   await sleep(400);
-  ask(); // multicast is lossy; ask twice
-  await sleep(Math.max(0, timeout - 400));
+  ask();
+  await sleep(900);
+  ask();
+  await sleep(Math.max(0, timeout - 1300));
 
   // Some responders send PTR/SRV but leave the address for a follow-up.
   const missing = [...srv.values()].map((s) => s.target).filter((h) => !addr.has(h));
