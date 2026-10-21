@@ -21,6 +21,7 @@ North star: **anyone can turn a house full of slow, ad-ridden smart TVs into one
 - **Samsung 2016–17** on ws:8001, connecting with no prompt
 - **LG PIN pairing:** the TV shows a number and you type it, so no remote is needed
 - Unpaired TVs can be woken; the wizard wakes an off TV before connecting
+- **Apple TV** via pyatv (one shared Python bridge): two on-screen codes (Companion, then AirPlay), keys with holds, power, every installed app, live app/title/power pushed (no polling), typing into search
 
 ## Next
 1. **Aurora:** a one-screen remote with a joystick pad and smart "what's on" information, and aurora-field visuals across the app (in progress).
@@ -33,7 +34,8 @@ North star: **anyone can turn a house full of slow, ad-ridden smart TVs into one
 8. **Voice:** expose the hub as an MCP server, so an assistant can say "turn off the kids' TV".
 
 ## Later
-- More brands: Apple TV (Companion protocol), Vizio SmartCast, Sony Bravia IP control, HDMI-CEC via a Pi.
+- Apple TV extras: artwork for what's playing, re-run just the AirPlay code from TV settings, swipe gestures on the pad (Companion touch), account switching.
+- More brands: Vizio SmartCast, Sony Bravia IP control, HDMI-CEC via a Pi.
 - **Hearth Launcher:** an Android TV home-screen app that turns any streaming box into the "custom TV OS" (family profiles, no ads, synced across every TV, driven by the hub).
 - Rooted-LG automation: one-tap Homebrew Channel setup and telemetry kill scripts over SSH.
 - Native shells (Expo) for push notifications and lock-screen controls.

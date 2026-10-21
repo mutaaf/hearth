@@ -26,7 +26,7 @@ const VOLUME_STEP = 0.02;
 
 export class GoogleTvDriver extends Driver {
   static brand = 'androidtv';
-  capabilities = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false };
+  capabilities = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false, pointer: false, keyboard: false };
   #sock = null;
   #buf = Buffer.alloc(0);
   #requestId = 1;

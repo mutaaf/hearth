@@ -54,6 +54,7 @@ class FakeBridge extends EventEmitter {
         this.connected.delete(args.key);
         return {};
       case 'remote':
+      case 'text':
       case 'power':
       case 'launch':
       case 'set_volume':
@@ -238,6 +239,22 @@ test('power, apps and launch go through the bridge; launch shows the app at once
   assert.equal(driver.state.app, 'com.google.ios.youtube');
   assert.equal(driver.state.appTitle, 'YouTube');
   await assert.rejects(driver.launch(''), (e) => e.status === 400);
+  await driver.stop();
+});
+
+test('typing goes to the focused field; Enter is a no-op (tvOS searches as you type)', async () => {
+  const { driver, bridge, tv } = makeDriver({ credentials: { companion: 'c' } });
+  driver.start();
+  await tick();
+  assert.equal(driver.capabilities.keyboard, true);
+  assert.equal(driver.capabilities.pointer, false);
+  await driver.text({ text: 'bluey' });
+  await driver.text({ backspace: 2 });
+  await driver.text({ enter: true });
+  assert.deepEqual(bridge.sent('text'), [
+    { key: tv.id, text: 'bluey', backspace: 0 },
+    { key: tv.id, text: '', backspace: 2 },
+  ]);
   await driver.stop();
 });
 

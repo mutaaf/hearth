@@ -211,7 +211,7 @@ class Bridge:
         return [describe(c) for c in confs]
 
     async def op_info(self, req):
-        return describe(await find(self.loop, req.get("ip"), req.get("identifier")))
+        return {**describe(await find(self.loop, req.get("ip"), req.get("identifier"))), "pyatv": version()}
 
     async def op_pair_begin(self, req):
         key, proto = req["key"], req["protocol"]
@@ -345,6 +345,18 @@ class Bridge:
     async def op_launch(self, req):
         dev = self.device(req)
         await dev.atv.apps.launch_app(req["app"])
+        return {}
+
+    # Typing into whatever text field has focus (search boxes). Companion only
+    # accepts text while tvOS shows its keyboard.
+    async def op_text(self, req):
+        dev = self.device(req)
+        kb = dev.atv.keyboard
+        if req.get("backspace"):
+            current = await kb.text_get() or ""
+            await kb.text_set(current[: max(0, len(current) - int(req["backspace"]))])
+        if req.get("text"):
+            await kb.text_append(str(req["text"]))
         return {}
 
     async def op_set_volume(self, req):

@@ -35,7 +35,8 @@ export class AppleTvDriver extends Driver {
   static brand = 'appletv';
   // Volume level only exists when the Apple TV drives its own speakers
   // (HomePods); with a TV over HDMI-CEC it just sends volume up/down.
-  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  // No pointer on tvOS; typing works whenever the on-screen keyboard is up.
+  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: false, pointer: false, keyboard: true };
   #stopped = true;
   #connected = false;
   #connecting = null;
@@ -258,6 +259,23 @@ export class AppleTvDriver extends Driver {
     if (!this.capabilities.volumeLevel) throw unsupported('Setting the volume level');
     await this.#ready();
     await this.bridge.request('set_volume', { key: this.#key, level: Math.max(0, Math.min(100, Number(level) || 0)) });
+  }
+
+  // Text into the focused field (tvOS search). Enter has no network
+  // equivalent; tvOS searches as you type, so it's a no-op.
+  async text({ text, backspace } = {}) {
+    if (!text && !backspace) return;
+    await this.#ready();
+    await this.bridge.request('text', {
+      key: this.#key,
+      text: text ? String(text).slice(0, 500) : '',
+      backspace: Math.min(100, Number(backspace) || 0),
+    }, { timeout: 8000 });
+  }
+
+  // For diagnostics: what the Apple TV announces (no pairing needed).
+  async deviceInfo() {
+    return this.bridge.request('info', { ip: this.tv.ip, identifier: this.tv.atvId }, { timeout: 10_000 });
   }
 
   // Bundle ids (com.netflix.Netflix) from the Apple TV's own Companion list.
