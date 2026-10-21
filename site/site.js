@@ -66,7 +66,7 @@
   // screens wide enough to show it (phones get a full-screen link instead).
   var phone = document.getElementById('phone');
   var frame = document.getElementById('demoFrame');
-  var skin = 'classic';
+  var skin = 'aurora';
   var wantsFrame = function () { return window.matchMedia('(min-width: 861px)').matches; };
   function load() {
     var src = frame.dataset.src + '&skin=' + skin;
