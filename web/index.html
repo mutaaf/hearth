@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="scenes.css">
   <link rel="stylesheet" href="health.css">
   <link rel="stylesheet" href="modes.css">
+  <link rel="stylesheet" href="doctor.css">
   <link rel="stylesheet" href="launcher.css">
 </head>
 <body>
@@ -121,6 +122,11 @@
     <div class="pair-banner" id="pairBanner" hidden>
       <p><b>Not connected yet</b>One quick step with the TV’s remote.</p>
       <button type="button" class="cta small" data-press="up" data-action="pair">Connect</button>
+    </div>
+    <!-- doctor: shown when a paired TV stops answering -->
+    <div class="fix-banner" id="fixBanner" hidden>
+      <p><b>Not responding</b>Asleep, unplugged, or moved?</p>
+      <button type="button" class="cta small" data-press="up" data-doctor="fix" id="fixBannerBtn">Fix it</button>
     </div>
 
     <div class="panels">
@@ -284,6 +290,8 @@
       <p class="mono sub left" id="editMeta"></p>
       <!-- health -->
       <button type="button" class="chip big" data-press="up" data-action="tv-health"><svg><use href="#i-pulse"/></svg> Health &amp; diagnostics</button>
+      <!-- doctor: codes & pairing (doctor.js renders it) -->
+      <div id="codesBox"></div>
       <div class="sheet-actions">
         <button type="button" class="danger hold" data-press="confirm" data-action="forget"><span class="charge" aria-hidden="true"></span>Hold to forget</button>
         <button type="submit" class="cta small">Save</button>

@@ -92,6 +92,23 @@ Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default
 
 ## Troubleshooting
 
+**First, tap Fix.** Every TV has a **Fix connection** button. It's on a card that stops answering, on the remote's "Not responding" banner, in the TV's ⚙ settings, in Health, and as a bulk action. Health also has **Fix every connection**. It checks, in order:
+
+1. Is the TV on the network?
+2. If not, wake it with Wake-on-LAN.
+3. Still nothing? Look for it at a new address. Routers sometimes move TVs, and Hearth follows them automatically.
+4. Reconnect.
+5. Check that it answers and still trusts Hearth.
+6. If it doesn't trust Hearth any more, the doctor takes you straight to the right pairing step.
+
+**Codes & pairing** in each TV's settings:
+
+- **LG:** pair again with a number on screen (no remote needed), or with Allow.
+- **Samsung:** pair again.
+- **Google TV:** *Unlock full remote*. Type the 6-character code the TV shows once, and arrows, OK, back, home and power work too.
+- **Roku:** nothing to pair.
+
+
 - **"No TVs answered".** Make sure the TV is really on, not in standby, and on the same network as the computer running Hearth. Guest Wi-Fi and some mesh "client isolation" settings block discovery. Add the TV by IP instead (Settings → Network on the TV shows it).
 - **Mac: nothing found at all.** macOS may ask to let Terminal/Node "find devices on your local network". Allow it (System Settings → Privacy & Security → Local Network).
 - **The pairing prompt never appeared.** On LG, check Settings → General → **LG Connect Apps** is on (or use *Show a number on the TV*). On Samsung, check Settings → General → External Device Manager → **Device Connection Manager**.

@@ -23,7 +23,7 @@ North star: **anyone can turn a house full of slow, ad-ridden smart TVs into one
 - Unpaired TVs can be woken; the wizard wakes an off TV before connecting
 - **Apple TV** via pyatv (one shared Python bridge): two on-screen codes (Companion, then AirPlay), keys with holds, power, every installed app, live app/title/power pushed (no polling), typing into search
 
-**v0.9: one launcher, true state**
+**v0.10: one launcher, true state**
 - **Open any popular app on every TV at once** ("YouTube TV on all TVs"): a cross-brand catalog of 20 streaming apps with each platform's own ids, a house-wide Watch row (hold to open everywhere, wakes TVs first) and a per-TV grid; `POST /api/launch`, and scenes/bulk speak the same `{ app }`
 - **Samsung that matches the TV**, 2016-17 sets included: the app on screen (REST), real volume and mute (UPnP), real on/asleep/off (probed on a KU6290), REST launch fallback
 - **No stale state anywhere:** every command is re-checked a moment later; Google TVs report standby; quiet Cast sockets are dropped; LG/Roku standby clears "now playing"; polling speeds up while the app is open

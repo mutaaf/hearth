@@ -8,6 +8,7 @@ import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
 import { createHealth } from './health.js'; // health
+import { createDoctor } from './doctor.js'; // doctor
 import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -141,6 +142,7 @@ function renderHouse() {
           <span class="unit-state mono"><span class="led"></span>${esc(statusWord(t))}</span>
         </div>
         ${t.paired ? '' : '<span class="unit-pair mono">Tap to connect</span>'}
+        ${t.paired && !t.state?.online ? `<button type="button" class="unit-fix" data-press="up" data-doctor="fix" data-tv="${esc(t.id)}">Fix</button>` : ''}
       </article>`)
     .join('');
   if (list.length) firstPaint = false;
@@ -176,6 +178,8 @@ function renderRemote() {
   $('#rLed').className = `led ${ledClass(t)}`;
   $('#p-remote').classList.toggle('offline', !t.state?.online);
   $('#pairBanner').hidden = t.paired;
+  $('#fixBanner').hidden = !(t.paired && !t.state?.online); // doctor
+  $('#fixBannerBtn').dataset.tv = t.id;
 
   const showMeter = caps.volumeLevel && t.state?.volume != null;
   $('#meter').hidden = !showMeter;
@@ -626,6 +630,7 @@ function openEdit(id = current) {
   $('#editName').value = t.name;
   $('#editRoom').value = t.room;
   $('#editMeta').textContent = [brandName(t.brand), t.model, t.ip].filter(Boolean).join(' · ');
+  doctor.renderCodes($('#codesBox'), t); // doctor
   openSheet('#editSheet');
 }
 
@@ -673,6 +678,22 @@ const bulk = createBulk({
     scenes.openEditor(null, { name: 'My scene', ...prefill });
   },
 });
+
+// ── doctor: fix connections + codes & pairing ─────────────
+const doctor = createDoctor({ api, note, getTv: (id) => tvs.get(id), onPair: pairAgain });
+
+// Forget the old key, then jump straight into the right pairing step.
+async function pairAgain(tv, how) {
+  if (!tv) return;
+  try {
+    await api('POST', `/tvs/${tv.id}/unpair`);
+  } catch (err) {
+    return note(err.message, true);
+  }
+  const fresh = (await api('GET', '/tvs').catch(() => [])).find((t) => t.id === tv.id) ?? { ...tv, paired: false };
+  tvs.set(fresh.id, fresh);
+  setup.open({ tvId: tv.id, candidate: fresh, step: how === 'lg-pin' ? 'pin' : 'pair', repair: true });
+}
 
 // ── Install on home screens + share with family ──────────
 const install = createInstall({ api, note, isDemo: Boolean(demo) });
@@ -754,6 +775,8 @@ function connectEvents() {
     else render();
   });
   es.addEventListener('scene', (e) => scenes.onEvent('scene', JSON.parse(e.data)));
+  es.addEventListener('doctor', (e) => doctor.onEvent(JSON.parse(e.data))); // doctor
+  es.addEventListener('healed', (e) => doctor.onHealed(JSON.parse(e.data)));
   es.addEventListener('scenes', (e) => scenes.onEvent('scenes', JSON.parse(e.data)));
   es.addEventListener('nearby', (e) => {
     const was = nearby.length;
@@ -771,6 +794,7 @@ function tickClock() {
 function onPress(el, info) {
   const d = el.dataset;
   if (d.install) return install.handle(el);
+  if (d.doctor) return doctor.handle(el); // doctor
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
   if (d.bulk) return bulk.handle(el, info);

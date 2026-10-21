@@ -40,7 +40,7 @@ export function createBulk({ api, getTvs, render, note, openEdit, saveAsScene })
         <button type="button" class="bulk-pill" data-press="up" data-bulk="none">None</button>
         <button type="button" class="bulk-pill done" data-press="up" data-bulk="exit">Done</button>
       </div>
-      ${results.length ? `<div class="bulk-results">${results.map((r) => `<span class="chip-result ${r.ok ? 'ok' : 'bad'}" title="${esc(r.error ?? '')}">${r.ok ? '✓' : '✕'} ${esc(r.name)}${r.ok ? '' : ` · ${esc(r.error)}`}</span>`).join('')}</div>` : ''}
+      ${results.length ? `<div class="bulk-results">${results.map((r) => `<span class="chip-result ${r.ok ? 'res-ok' : 'res-bad'}" title="${esc(r.error ?? '')}">${r.ok ? '✓' : '✕'} ${esc(r.name)}${r.ok ? '' : ` · ${esc(r.error)}`}</span>`).join('')}</div>` : ''}
       <div class="bulk-actions">
         ${btn('on', '⏻', 'On')}
         ${btn('off', '⏼', 'Off')}
@@ -51,6 +51,7 @@ export function createBulk({ api, getTvs, render, note, openEdit, saveAsScene })
         ${canSay ? btn('say', '💬', 'Say') : ''}
         ${btn('room', '🏷️', n === 1 ? 'Rename' : 'Room')}
         ${n === 1 ? btn('settings', '⚙️', 'Settings') : ''}
+        ${btn('fix', '🩺', 'Fix')}
         ${btn('scene', '✨', 'Save scene')}
         <button type="button" class="bulk-act danger hold" data-press="confirm" data-bulk="forget" ${any ? '' : 'disabled'}><span class="charge" aria-hidden="true"></span><span>🗑️</span><small>Hold: forget</small></button>
       </div>`;
@@ -221,6 +222,7 @@ export function createBulk({ api, getTvs, render, note, openEdit, saveAsScene })
         case 'say': return sayPicker();
         case 'room': return roomPicker();
         case 'settings': return openEdit([...selected][0]);
+        case 'fix': return run('doctor', {}, 'Fix connections');
         case 'forget': return run('forget', {}, 'Forgot');
         case 'scene': {
           const step = last ?? { action: 'power', args: { on: true } };

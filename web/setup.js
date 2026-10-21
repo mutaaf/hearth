@@ -56,6 +56,8 @@ export function createSetup({ root, api, onTv, onClose, note }) {
     run++;
     clearInterval(countdown);
     unmountField();
+    // Pairing again (doctor / Codes & pairing): the TV already has a room.
+    if (step === 'name' && (extra.repair ?? state.repair)) step = 'done';
     Object.assign(state, extra, { step });
     STEPS[step]();
     root.querySelector('.setup-body')?.focus?.();
@@ -426,10 +428,11 @@ export function createSetup({ root, api, onTv, onClose, note }) {
     },
     // open() → start at "turn it on"; open({ candidate }) → a TV we already
     // found (nearby banner); open({ tvId, candidate }) → an added, unpaired TV.
-    open({ candidate = null, tvId = null } = {}) {
-      state = { candidate, tvId };
+    open({ candidate = null, tvId = null, step = null, repair = false } = {}) {
+      state = { candidate, tvId, repair };
       root.hidden = false;
       document.body.style.overflow = 'hidden';
+      if (step) return go(step, { tv: candidate }); // doctor: straight to the right pairing step
       if (!candidate && !tvId) return go('on');
       // An added TV that's off: wake it first (no pairing needed for that).
       if (tvId && candidate && !candidate.state?.online && candidate.canWake) return go('wake');

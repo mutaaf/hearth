@@ -110,6 +110,30 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - One vocabulary everywhere: `POST /api/launch { app: 'youtubetv' | 'YouTube TV', tvs: 'all' | [ids], wake }`, bulk/scene action `launch` with `{ app }`, `{ title }` or `{ id }` (+ `wake`). Results: `{ id, name, ok, appId?, title?, via?, woke?, reason?, error? }`, reasons `not-installed`, `unsupported`, `off`, `offline`, `unpaired`, `failed`.
 - `wake: true` powers on TVs that are off/asleep first and waits (25 s) for them; it never toggles a TV whose power is `unknown`. Rokus and Google TVs open apps from standby by themselves.
 
+## Connection doctor & codes (src/doctor.js, web/doctor.js)
+
+- `runDoctor(hub, id, deps)` runs these steps in order:
+  1. **network:** a TCP probe of the brand's ports, plus the ARP MAC.
+  2. **wake:** WOL, then wait up to 25 s.
+  3. **find:** `hub.scan()`, which self-heals moved TVs.
+  4. **reconnect:** `driver.stop()`, then `start()`. Unpaired Roku and Google TV get a pair-less `hub.pair()`.
+  5. **verify:** `driver.verify()`.
+  6. **pair:** the advice for re-pairing.
+
+  Each step is streamed as an SSE `doctor` event `{id, step, status, detail, nerd}`. All I/O (probe, macFor, wake, sleep, now) is injectable for tests.
+- `driver.verify()` is a read-only check returning `{ ok, auth: 'ok'|'missing'|'rejected'|'prompt', how?, detail }`. It never sends a button.
+  - **LG:** waits for connect, prompt or refused, then `getSystemInfo` and `getPowerState`.
+  - **Samsung:** REST, then the ws channel up to `ms.channel.connect`. A 403 means rejected; a 408 means it's prompting.
+  - **Roku:** device-info. A 403 means Network access is limited.
+  - **Google TV:** Cast status, plus the remote handshake if it has been unlocked.
+- `how` tells the UI which pairing step to open: `lg-pin`, `lg-allow`, `samsung-allow`, `googletv-code` or `roku-network-access`. Re-pairing calls `POST /api/tvs/:id/unpair` first, then `setup.open({ tvId, candidate, step, repair: true })`. With `repair`, the wizard skips "which room?".
+- **Self-healing:** `hub.#heal()` runs on every scan. A known TV is matched by id, any shared MAC, or `macForFn(ip)` for MAC-less discoveries. It's then moved with `relocate()`, which rebuilds the driver, persists, and emits SSE `healed`. It never takes an IP another known TV holds.
+- **Google TV full remote** (`src/drivers/googletv-remote.js`, Android TV Remote v2):
+  - Pairing runs on TLS :6467 with varint-framed protobuf `PairingMessage`: request → option → configuration. The TV then shows a code.
+  - `pair({mode:'code'})` returns `{needsCode}`; `pair({code})` sends `SHA256(client n ‖ client e ‖ server n ‖ server e ‖ code[1..2])`. If the code's first byte doesn't match the hash, that's a local 400 and nothing is sent.
+  - The remote runs on TLS :6466 with the same client cert. It does configure (622) and set_active, answers every ping, and sends key_inject with SHORT, or START_LONG/END_LONG for holds.
+  - Credentials `remoteCert`/`remoteKey` live in `tv.credentials`, which never reach the browser. Cast stays in charge of app launches and status.
+
 ## Invariants
 
 - Pairing keys never leave the server: `Hub.view()` is the only shape sent to clients. A test enforces this.
@@ -161,6 +185,11 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | The D-pad's OK button is `class="ok"` | Global `.ok` (absolute, round) also hit `.chip-result.ok` result chips; launcher.css resets them for `.launch-results` and `.bulk-results`. Don't give new elements a bare `.ok` class. |
 | Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
 | `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
+| Never use `ok`/`bad` as a state class | `.ok` is the D-pad's OK button (`position:absolute; inset:31%`), so `.dr-step.ok` or `.chip-result.ok` turn into floating circles. Prefix state classes (`st-ok`, `res-ok`). |
+| Fields named `cert`/`key` on a class with a `key()` method | `Object.assign(this, { key })` shadows the method. AtvRemote stores `certPem`/`keyPem`. |
+| A Google TV paired with a cert it later forgets drops the TLS handshake on :6466 | Surfaced as 401 "unlock again", with retries backed off to 60 s. The doctor reports `googletv-code`. |
+| `tv` objects are live: `relocate()` mutates `tv.ip` | Capture `startIp` before scanning; comparing `hub.get(id).ip` with `tv.ip` is always equal. |
+| `arp -n <ip>` spawned from Node sees "no entry" (and `netstat -rn` shows no LAN routes) on this Mac, while the same command in a shell works | Seen 2026-10-21; likely macOS Local Network privacy filtering what Node's child processes can read. `macFor()` then returns null: Google TVs added without a MAC can't be woken, and MAC-based self-healing falls back to id matching. Granting Node Local Network access (System Settings → Privacy & Security → Local Network) may fix it. Not reproducible in tests. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | Apple TV needs Python: pyatv is Python-only | `npm run up` creates `~/.hearth/py` (override `HEARTH_VENV`; shared by every HEARTH_HOME, so a scratch server reuses it) and pins `pyatv==PYATV_VERSION` (src/atv-bridge.js). No python3 ≥ 3.10 → it prints a skip line and Hearth runs; Apple TVs answer 503 "needs Python 3 and pyatv". The bridge isn't cached as failed, so installing later works without a restart. |
 | `brew upgrade python` leaves a venv whose `bin/python` symlink dangles | `up.mjs` runs the venv's python; if it fails it rebuilds with `venv --clear` and reinstalls pyatv. |

@@ -1,0 +1,54 @@
+/* Connection doctor + codes (doctor.js). */
+.dr-steps, .dr-all { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.dr-step {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 16px;
+  background: var(--body); border: 1px solid var(--body-edge); transition: border-color .25s, opacity .25s;
+}
+.dr-step.st-pending { opacity: .45; }
+.dr-step .chip { margin-left: auto; flex: none; }
+.dr-dot {
+  width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800;
+  background: var(--body-edge); color: #fff;
+}
+.dr-step.st-running .dr-dot { border: 3px solid var(--body-edge); border-top-color: var(--signal); background: none; animation: spin .8s linear infinite; }
+.dr-step.st-ok .dr-dot { background: #2fb864; animation: dr-pop .35s cubic-bezier(.2, 1.6, .3, 1); }
+.dr-step.st-warn .dr-dot { background: #f5a524; }
+.dr-step.st-fail .dr-dot { background: #d9452b; }
+.dr-step.st-ok { border-color: #2fb86455; }
+.dr-step.st-warn { border-color: #f5a52466; }
+.dr-step.st-fail { border-color: #d9452b66; }
+@keyframes dr-pop { from { transform: scale(.4); } }
+.dr-text { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.dr-text b { font-size: 15px; }
+.dr-text small { font-size: 13px; color: var(--ink-soft); line-height: 1.4; }
+.dr-nerd summary { font-size: 10px; text-transform: uppercase; color: var(--ink-faint); cursor: pointer; margin-top: 4px; }
+.dr-nerd pre { font-size: 10.5px; max-height: 160px; overflow: auto; padding: 8px; border-radius: 10px; background: var(--bg-deep); white-space: pre-wrap; word-break: break-all; }
+.dr-h { margin: 18px 2px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-soft); font-weight: 500; }
+#codesBox { display: grid; gap: 8px; }
+#codesBox .toggle { width: 100%; text-align: left; }
+
+/* Google TV code entry */
+.dr-art { display: grid; place-items: center; margin: 4px 0 10px; }
+.dr-tv { width: 200px; aspect-ratio: 16 / 10; border-radius: 12px; background: #07080c; box-shadow: 0 0 0 6px var(--key); display: grid; place-items: center; }
+.dr-code { color: #fff; font-size: 18px; letter-spacing: .2em; animation: breathe-code 1.6s ease-in-out infinite; }
+@keyframes breathe-code { 50% { opacity: .35; } }
+.dr-input { text-transform: uppercase; letter-spacing: .3em; }
+.shake { animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+
+/* A "Fix" chip on a TV card, and the remote's not-responding banner */
+.unit-fix {
+  position: absolute; left: 22px; top: 22px; z-index: 2; padding: 7px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: #f5a524; color: #1d1b18; box-shadow: 0 6px 18px -6px #f5a524;
+}
+.unit-fix.pressed { transform: scale(.94); }
+.fix-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px 12px 12px 16px; border-radius: 20px; background: var(--key); color: var(--key-ink); flex: none; }
+.fix-banner p { margin: 0; font-size: 13px; line-height: 1.35; }
+.fix-banner b { display: block; font-size: 16px; }
+
+[data-skin="aurora"] .dr-step { background: var(--glass-1); border-color: var(--hair); }
+[data-skin="aurora"] .fix-banner { background: var(--glass-1); border: 1px solid #f5a52455; }
+[data-skin="8bit"] .dr-step, [data-skin="8bit"] .dr-dot, [data-skin="8bit"] .unit-fix, [data-skin="8bit"] .fix-banner, [data-skin="8bit"] .dr-tv { border-radius: 0; }
+[data-skin="8bit"] .dr-text b { font-size: 10px; }
+[data-skin="8bit"] .dr-text small, [data-skin="8bit"] .fix-banner p { font-size: 8px; line-height: 1.8; }
+[data-skin="8bit"] .unit-fix { font-size: 8px; }

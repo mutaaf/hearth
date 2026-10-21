@@ -344,6 +344,24 @@ export class SamsungDriver extends Driver {
     });
   }
 
+  // Connection doctor: REST info, then open the remote channel and wait for
+  // ms.channel.connect. No keys are sent.
+  async verify() {
+    const t0 = Date.now();
+    const info = await this.fetchInfo().catch(() => null);
+    if (!info) return { ok: false, auth: this.tv.credentials ? 'ok' : 'missing', how: 'samsung-allow', detail: 'The TV didn’t answer on :8001' };
+    const rest = `REST answered in ${Date.now() - t0} ms`;
+    if (!this.tv.credentials) return { ok: true, auth: 'missing', how: 'samsung-allow', detail: rest };
+    try {
+      await this.#connect(8000);
+      return { ok: true, auth: 'ok', detail: `${rest} · remote channel open on :${this.port}` };
+    } catch (err) {
+      if (err.status === 403) return { ok: true, auth: 'rejected', how: 'samsung-allow', detail: 'The TV said no to Hearth (ms.channel.unauthorized)' };
+      if (err.status === 408) return { ok: true, auth: 'prompt', how: 'samsung-allow', detail: 'The TV is waiting for someone to press Allow' };
+      return { ok: true, auth: 'ok', detail: `${rest} · remote channel: ${err.message}` };
+    }
+  }
+
   async pair() {
     await this.#connect(PAIR_TIMEOUT);
     this.start();
