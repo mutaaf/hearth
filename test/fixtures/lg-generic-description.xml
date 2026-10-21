@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType>
+    <friendlyName>Den TV</friendlyName>
+    <manufacturer>LG Electronics</manufacturer>
+    <modelName>LG Smart TV</modelName>
+    <modelNumber>55UP7000PUA</modelNumber>
+  </device>
+</root>

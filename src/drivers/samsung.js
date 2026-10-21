@@ -1,0 +1,187 @@
+import WebSocket from 'ws';
+import { HearthError, offline, unsupported } from '../errors.js';
+import { samsungInfo } from '../discovery.js';
+import { keyCode } from '../keys.js';
+import { Driver } from './base.js';
+
+// Samsung Tizen (2016+). Keys and apps go over the "samsung.remote.control"
+// websocket channel on :8002 (wss, self-signed cert); the first connection
+// shows an Allow prompt on the TV and returns a token we keep. Power state
+// comes from the plain REST endpoint on :8001.
+const APP_NAME = Buffer.from('Hearth').toString('base64');
+const PAIR_TIMEOUT = 60_000;
+const POLL_MS = 5000;
+
+export class SamsungDriver extends Driver {
+  static brand = 'samsung';
+  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  #ws = null;
+  #connecting = null;
+  #poll = null;
+  #appTypes = new Map();
+
+  constructor(tv, opts = {}) {
+    super(tv, opts);
+    // Overridable so tests can stand up a fake TV on localhost.
+    this.port = opts.port ?? 8002;
+    this.secure = opts.secure ?? true;
+    this.fetchInfo = opts.fetchInfo ?? (() => samsungInfo(this.tv.ip, 1500));
+  }
+
+  url() {
+    const token = this.tv.credentials?.token;
+    const base = `${this.secure ? 'wss' : 'ws'}://${this.tv.ip}:${this.port}/api/v2/channels/samsung.remote.control?name=${APP_NAME}`;
+    return token ? `${base}&token=${encodeURIComponent(token)}` : base;
+  }
+
+  start() {
+    if (this.#poll) return;
+    const tick = async () => {
+      try {
+        const info = await this.fetchInfo();
+        // PowerState only exists on 2018+ models; answering at all means it's on.
+        const power = info?.device?.PowerState ?? 'on';
+        this.setState({ online: true, power });
+      } catch {
+        this.setState({ online: false, power: 'off', app: null });
+        this.#close();
+      }
+    };
+    tick();
+    this.#poll = setInterval(tick, POLL_MS);
+    this.#poll.unref?.();
+  }
+
+  async stop() {
+    clearInterval(this.#poll);
+    this.#poll = null;
+    this.#close();
+  }
+
+  #close() {
+    this.#ws?.terminate();
+    this.#ws = null;
+    this.#connecting = null;
+  }
+
+  #connect(timeout = 8000) {
+    if (this.#ws?.readyState === WebSocket.OPEN) return Promise.resolve(this.#ws);
+    if (this.#connecting) return this.#connecting;
+    this.#connecting = new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url(), { rejectUnauthorized: false, handshakeTimeout: 5000 });
+      let settled = false;
+      const settle = (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.#connecting = null;
+        if (err) {
+          ws.terminate();
+          reject(err);
+        } else {
+          this.#ws = ws;
+          resolve(ws);
+        }
+      };
+      const timer = setTimeout(
+        () => settle(new HearthError(408, 'Nobody pressed Allow on the TV in time')),
+        timeout,
+      );
+      ws.on('message', (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(raw.toString());
+        } catch {
+          return;
+        }
+        if (msg.event === 'ms.channel.connect') {
+          const token = msg.data?.token;
+          if (token && token !== this.tv.credentials?.token) this.onCredentials({ token: String(token) });
+          settle();
+        } else if (msg.event === 'ms.channel.unauthorized') {
+          settle(new HearthError(403, 'Pairing was declined on the TV'));
+        }
+        this.emit('message', msg);
+      });
+      ws.on('error', (err) => settle(err.code === 'ECONNREFUSED' || err.code === 'EHOSTUNREACH' ? offline() : err));
+      ws.on('close', () => {
+        if (this.#ws === ws) this.#ws = null;
+        settle(offline());
+      });
+    });
+    return this.#connecting;
+  }
+
+  async #send(payload) {
+    const ws = await this.#connect();
+    ws.send(JSON.stringify(payload));
+  }
+
+  async #ask(payload, event, timeout = 5000) {
+    const ws = await this.#connect();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.off('message', onMessage);
+        reject(new HearthError(504, 'The TV did not answer'));
+      }, timeout);
+      const onMessage = (msg) => {
+        if (msg.event !== event) return;
+        clearTimeout(timer);
+        this.off('message', onMessage);
+        resolve(msg.data);
+      };
+      this.on('message', onMessage);
+      ws.send(JSON.stringify(payload));
+    });
+  }
+
+  async pair() {
+    await this.#connect(PAIR_TIMEOUT);
+    this.start();
+  }
+
+  #sendKey(code) {
+    return this.#send({
+      method: 'ms.remote.control',
+      params: { Cmd: 'Click', DataOfCmd: code, Option: 'false', TypeOfRemote: 'SendRemoteKey' },
+    });
+  }
+
+  async key(name) {
+    const code = keyCode('samsung', name);
+    if (!code) throw unsupported(`The "${name}" button`);
+    await this.#sendKey(code);
+  }
+
+  async powerOn() {
+    // Frame/2018+ sets keep the network alive in standby: a POWER key wakes them.
+    if (this.state.online && this.state.power === 'standby') return this.#sendKey('KEY_POWER');
+    await super.powerOn();
+  }
+
+  async powerOff() {
+    if (!this.state.online || this.state.power === 'standby') return;
+    await this.#sendKey('KEY_POWER');
+  }
+
+  async apps() {
+    const data = await this.#ask(
+      { method: 'ms.channel.emit', params: { event: 'ed.installedApp.get', to: 'host', data: '' } },
+      'ed.installedApp.get',
+    );
+    const list = data?.data ?? [];
+    for (const app of list) this.#appTypes.set(app.appId, app.app_type);
+    return list.map((app) => ({ id: app.appId, title: app.name, icon: null }));
+  }
+
+  async launch(id) {
+    await this.#send({
+      method: 'ms.channel.emit',
+      params: {
+        event: 'ed.apps.launch',
+        to: 'host',
+        data: { appId: id, action_type: this.#appTypes.get(id) === 2 ? 'DEEP_LINK' : 'NATIVE_LAUNCH' },
+      },
+    });
+  }
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <specVersion><major>1</major><minor>0</minor></specVersion>
+  <device>
+    <deviceType>urn:lge:device:tv:1</deviceType>
+    <friendlyName>Den TV</friendlyName>
+    <manufacturer>LG Electronics</manufacturer>
+    <modelName>55UP7000PUA</modelName>
+    <UDN>uuid:00000000-0000-0000-0000-000000000001</UDN>
+    <wifiMac>AA:BB:CC:00:00:02</wifiMac>
+    <wiredMac>AA:BB:CC:00:00:01</wiredMac>
+  </device>
+</root>

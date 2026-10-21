@@ -1,0 +1,62 @@
+# Hearth: agent and contributor guide
+
+Universal remote for the house's smart TVs. A Node server on the LAN discovers TVs, holds a live connection per TV, and serves a phone-first web remote. Zero build step, three runtime dependencies.
+
+## Run it
+
+- `npm run up`: idempotent bootstrap (Node check → install → start detached → health → URL + QR). `npm run down` stops it.
+- `npm test`: node:test suite with no TV or network needed (fake drivers + a fake Samsung websocket TV).
+- Dev loop: `npm start` in the foreground, edit `web/*`, reload the browser. Server changes need a restart.
+- To experiment without touching your real setup: `HEARTH_HOME=/tmp/h HEARTH_PORT=8771 npm start`.
+
+## Layout
+
+```
+bin/hearth.js          CLI: `serve` (default) and `scan`
+scripts/up.mjs|down    one-command env (see feedback: one idempotent `npm run up`)
+src/server.js          node:http JSON API + SSE (/api/events) + static web/ + icon proxy
+src/hub.js             owns TVs + one driver per TV; emits 'change' → SSE
+src/store.js           ~/.hearth/tvs.json (0600, queued atomic writes)
+src/discovery.js       SSDP M-SEARCH → identify (LG UPnP XML / Samsung REST :8001); probe(ip)
+src/drivers/base.js    the driver contract (start/stop/pair/key/power/apps/launch/inputs/toast)
+src/drivers/lg.js      webOS via lgtv2 (SSAP over wss:3001 → ws:3000 fallback)
+src/drivers/samsung.js Tizen via samsung.remote.control websocket on wss:8002
+src/keys.js            unified key names → brand key codes
+src/wol.js             Wake-on-LAN magic packet
+web/                   vanilla JS app (index.html, style.css, app.js), no framework
+```
+
+## Adding a brand
+
+1. `src/drivers/<brand>.js` extends `Driver`; set `static brand` and `capabilities`.
+2. Add key codes for the brand in `src/keys.js`.
+3. Register it in `DRIVERS` in `src/hub.js` and teach `discovery.js` to identify it.
+4. Add a test with a fake device (see `test/samsung.test.js`).
+
+The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`); no UI change is needed for a new brand.
+
+## Invariants
+
+- Pairing keys never leave the server: `Hub.view()` is the only shape sent to clients. A test enforces this.
+- Mutating API calls must be `application/json` (blocks cross-site form POSTs). Keep it that way.
+- The icon proxy only fetches from the TV's own IP.
+- Drivers throw `HearthError` with a status (`unsupported()` → 501, `offline()` → 503), never HTTP-aware code.
+- Unpaired TVs are never connected to automatically, because connecting pops a prompt on the TV.
+
+## Environment nuances
+
+| Nuance | Why it matters |
+|---|---|
+| `node --test test/` fails on Node 25 ("Cannot find module …/test") | Directory args were dropped; the script uses the glob `"test/*.test.js"`. |
+| LG exposes ~6 UPnP descriptions with junk model fields (`1.0`, `WEBOS`, `6.5.3`, `LG Smart TV`) | `isModelCode()` filters them; only the `urn:lge:device:tv:1` description carries wired+Wi-Fi MACs, so it is searched for explicitly. |
+| SSDP answers are lossy; a single M-SEARCH sometimes misses the tv:1 service | Discovery sends each search twice. After pairing, the LG driver backfills model (`getSystemInfo`) and MACs (`connectionmanager/getinfo`). |
+| lgtv2 reads `~/.lgtv2/keyfile-<host>` when `clientKey` is undefined | The driver passes `clientKey: ''` and a `keyFile` under `HEARTH_HOME` so nothing leaks between tools. |
+| LG firmware from 2023 on only accepts `wss://:3001` with a self-signed cert | lgtv2 tries wss first and falls back to ws; app icons may be https on the TV, hence the server-side icon proxy. |
+| Two saves in the same tick raced on one temp file (ENOENT on rename) | `Store.save` is queued; `Hub.pair` awaits a save so the key is on disk before success is reported. |
+| Headless Chrome `--screenshot` hangs with `--virtual-time-budget` | The SSE stream keeps the network busy forever. Use `--timeout` and kill the process; window widths under ~500px are clamped. |
+| macOS has no `timeout` binary | Don't rely on it in scripts. |
+| macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
+
+## Definition of done
+
+Tests green (`npm test`), README updated for anything user-facing, a new nuance added to the table above whenever one bites.

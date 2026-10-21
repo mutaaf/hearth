@@ -1,0 +1,10 @@
+{
+  "name": "Hearth",
+  "short_name": "Hearth",
+  "description": "One remote for every TV in the house.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e9e3d7",
+  "theme_color": "#e9e3d7",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

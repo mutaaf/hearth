@@ -1,0 +1,25 @@
+{
+  "name": "hearth",
+  "version": "0.1.0",
+  "description": "One remote for every TV in the house. Finds your LG and Samsung TVs on the Wi-Fi and gives every phone a fast, ad-free remote.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "hearth": "bin/hearth.js"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "up": "node scripts/up.mjs",
+    "down": "node scripts/down.mjs",
+    "start": "node bin/hearth.js",
+    "scan": "node bin/hearth.js scan",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "lgtv2": "^2.1.0",
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.0"
+  }
+}
