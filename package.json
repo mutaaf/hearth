@@ -20,10 +20,12 @@
     "deploy:site": "node scripts/build-site.mjs && npx --yes wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "aurora-field": "^3.3.0",
     "lgtv2": "^2.1.0",
     "multicast-dns": "^7.2.5",
     "node-forge": "^1.4.0",
+    "openai": "^7.41.0",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.0"
   },

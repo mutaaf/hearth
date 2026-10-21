@@ -1,12 +1,20 @@
 {
-  // hearth: the public landing page + demo at mutaafaziz.com/hearth/.
-  // Static assets only; the real Hearth runs on each family's home network.
+  // hearth: the public landing page + demo at mutaafaziz.com/hearth/, plus the
+  // AI health-insights API at /hearth/api/* (src/worker/). The real Hearth runs
+  // on each family's home network and calls this API with anonymised reports.
   // The route takes precedence over the mutaafaziz.com Custom Domain (the personal site).
   "name": "hearth",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
   "previews": {},
-  "assets": { "directory": "./dist" },
+  "main": "src/worker/index.js",
+  // The Worker only runs for /hearth/api/*; everything else is static assets.
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/hearth/api/*"] },
+  // The default brain: Gemma 4 on Workers AI (free daily allowance), capped in code.
+  "ai": { "binding": "AI" },
+  // Rate-limit counters. No database_id on purpose: provisioned by name on first deploy (as COLD GAS).
+  "d1_databases": [{ "binding": "DB", "database_name": "hearth" }],
   "routes": [{ "pattern": "mutaafaziz.com/hearth*", "zone_name": "mutaafaziz.com" }]
 }
