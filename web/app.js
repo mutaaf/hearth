@@ -6,6 +6,7 @@ import { createSetup } from './setup.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createHealth } from './health.js'; // health
+import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const tvs = new Map();
@@ -85,6 +86,7 @@ const brandName = (b) => BRANDS[b] ?? 'TV';
 
 function appName(t) {
   if (t.state?.appTitle) return t.state.appTitle;
+  if (t.state?.inputLabel) return t.state.inputLabel; // what's on that HDMI port
   const id = t.state?.app;
   if (!id) return isOn(t) ? 'On' : '';
   const cached = appCache.get(t.id)?.find((a) => a.id === id);
@@ -115,6 +117,7 @@ function renderHouse() {
     : on === list.length ? `All ${on} screen${on === 1 ? ' is' : 's are'} on.`
     : `${on} of ${list.length} screens are on.`;
   $('#onCount').textContent = list.length ? `${on} on · ${list.length} total · long-press a TV to select` : '';
+  renderRightNow(list); // modes.js: the house's "Right now" line
 
   const banner = $('#nearby');
   banner.hidden = !nearby.length;
@@ -126,9 +129,9 @@ function renderHouse() {
   units.classList.toggle('settled', !firstPaint);
   units.innerHTML = list
     .map((t, i) => `
-      <article class="unit ${ledClass(t)} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
+      <article class="unit ${ledClass(t)} act-${activityOf(t).kind} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
         <span class="sel-check" aria-hidden="true"></span>
-        <div class="screen"><div class="scan"></div><span class="now">${esc(appName(t))}</span></div>
+        <div class="screen"><div class="scan"></div>${activityBadge(t)}<span class="now">${esc(appName(t))}</span></div>
         ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
         <div class="unit-meta">
           <h3 class="unit-name">${esc(t.name)}</h3>
@@ -140,6 +143,7 @@ function renderHouse() {
     .join('');
   if (list.length) firstPaint = false;
   houseField?.setShape(on ? 'hearth-house' : 'hearth-flame', { pin: true });
+  houseField?.set({ palette: housePalette(list) }); // games glow neon, browsing ice
 }
 
 // ── Remote view ──────────────────────────────────────────
@@ -183,6 +187,7 @@ function renderRemote() {
   for (const el of document.querySelectorAll('#apps .app')) el.classList.toggle('current', el.dataset.app === t.state?.app);
   renderLcd(t);
   renderAurora(t);
+  modes?.update(t); // modes.js: activity chip + auto Trackpad/Gamepad
 }
 
 // 8-bit skin: the dot-matrix screen narrates the TV.
@@ -484,6 +489,7 @@ function mountOrb() {
 function unmountOrb() {
   orbField?.destroy();
   orbField = null;
+  orbPalette = 'ember';
 }
 let mood = '';
 function orbMood(t) {
@@ -494,7 +500,14 @@ function orbMood(t) {
     orbField.setShape(next, { pin: true });
     orbField.set({ autonomy: next === 'hearth-flame' ? 0.35 : 1 });
   }
+  // Tint the particles with what's on: games neon, browsing ice.
+  const palette = t.state?.online ? paletteFor(activityOf(t).kind) : 'ember';
+  if (palette !== orbPalette) {
+    orbPalette = palette;
+    orbField.set({ palette });
+  }
 }
+let orbPalette = 'ember';
 function orbPointer(type, x, y) {
   if (!orbField) return;
   const zone = $('.orb-zone').getBoundingClientRect();
@@ -654,6 +667,7 @@ function route() {
     $('#house').hidden = true;
     $('#remote').hidden = false;
     if (changed) {
+      modes?.enter(t);
       lastKey = '';
       $('#apps').innerHTML = '<p class="hint mono">Turn the TV on to see its apps.</p>';
       $('#inputs').innerHTML = '';
@@ -677,6 +691,7 @@ function route() {
     $('#remote').hidden = true;
     $('#house').hidden = false;
     keepAwake(false);
+    modes?.leave();
     unmountOrb();
     mountHouseField();
     renderHouse();
@@ -843,8 +858,10 @@ const KEYBOARD = {
   Enter: 'ok', Backspace: 'back', Escape: 'back', h: 'home', '+': 'volup', '=': 'volup', '-': 'voldown', m: 'mute',
 };
 
+let modes = null;
 function wire() {
   pressable(document, onPress);
+  modes = createModes({ api, note, sendKey, getTv: () => tvs.get(current) });
   setupSliders();
   setupSheets();
   gesturePad($('#pad'), {

@@ -70,7 +70,9 @@ function wake(t, view) {
   return { score: 70, evidence: ['Can be woken; not tried yet'] };
 }
 
-function connection(d) {
+function connection(d, view) {
+  // A TV that is simply switched off isn't unhealthy: measure it next time.
+  if (view && !view.state?.online && !d?.network?.rtt?.ok) return { score: null, evidence: ['Off right now — measured next time it’s on'] };
   const n = d?.network;
   if (!n) return { score: null, evidence: ['Run diagnostics to measure'] };
   const ev = [];
@@ -172,7 +174,7 @@ export function findings(view, t, d, year, sub) {
   const out = [];
   const add = (severity, title, detail, fix) => out.push({ severity, title, detail, fix });
   if (!view.paired) add('high', 'Not connected to Hearth yet', 'Hearth can see this TV but can’t control it.', 'Open it in Hearth and follow the one-time connect step.');
-  if (view.paired && !view.state?.online) add('medium', 'Off or unreachable right now', 'Some checks need the TV switched on.', 'Turn it on and run the check again.');
+  if (view.paired && !view.state?.online) add('info', 'Off right now', 'Being off isn’t a problem. A few checks wait until it’s on.', 'Nothing to do.');
   if (!view.canWake || view.brand === 'androidtv') add('medium', 'Can’t be turned on from your phone', 'Hearth has no way to wake it from sleep.', WAKE_FIX[view.brand]);
   else if (t?.wake?.attempts >= 2 && t.wake.successPct < 60) add('high', 'Wake-ups often fail', `${t.wake.ok} of ${t.wake.attempts} worked.`, WAKE_FIX[view.brand]);
   if (d?.software?.updateAvailable === true) add('medium', 'A software update is waiting', 'Updates fix bugs and security holes.', 'Install it from the TV’s settings when nobody’s watching.');
@@ -186,7 +188,7 @@ export function findings(view, t, d, year, sub) {
   if (view.capabilities?.remote === false) add('low', 'Arrow keys need Google’s code', 'Without pairing, Hearth controls volume, mute and apps.', 'Use the Google TV remote for menus.');
   if (PRIVACY_FIX[view.brand]) add('tip', 'Stop the TV watching what you watch', 'Most smart TVs track viewing for ads (ACR).', PRIVACY_FIX[view.brand]);
   if (!out.some((f) => f.severity === 'high' || f.severity === 'medium') && sub.overall >= 85) add('good', 'Healthy', 'Fast, reliable and fully under control.', null);
-  const rank = { high: 0, medium: 1, low: 2, tip: 3, good: 4 };
+  const rank = { high: 0, medium: 1, low: 2, info: 3, tip: 4, good: 5 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
 }
 
@@ -195,7 +197,7 @@ export function rate(view, t, d, { aiYear = null, aiAdjust = null } = {}) {
   const sub = {
     responsiveness: responsiveness(t, d),
     reliability: reliability(t),
-    connection: connection(d),
+    connection: connection(d, view),
     software: software(d, year),
     wake: wake(t, view),
     coverage: coverage(view),

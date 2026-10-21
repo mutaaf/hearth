@@ -7,7 +7,7 @@ import { detectProvider } from './vendor/insight-schema.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const AI_KEY = 'hearth.ai';
 const NERD_KEY = 'hearth.nerd';
-const SEV = { high: 'Fix this', medium: 'Worth fixing', low: 'Good to know', tip: 'Tip', good: 'All good' };
+const SEV = { high: 'Fix this', medium: 'Worth fixing', low: 'Good to know', tip: 'Tip', good: 'All good', info: 'Note' };
 const BRAND = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV' };
 const LABEL = { responsiveness: 'Responsiveness', reliability: 'Reliability', connection: 'Connection', software: 'Software', wake: 'Wake from sleep', coverage: 'Control coverage' };
 
@@ -286,8 +286,8 @@ export function createHealth({ root, note, haptic, feedback, demo }) {
     const h = last;
     if (!h) return;
     const r = h.rating;
-    const needs = r.findings.filter((f) => f.severity !== 'tip' && f.severity !== 'good').slice(0, 3);
-    const tips = r.findings.filter((f) => f.severity === 'tip' || f.severity === 'good');
+    const needs = r.findings.filter((f) => !['tip', 'good', 'info'].includes(f.severity)).slice(0, 3);
+    const tips = r.findings.filter((f) => ['tip', 'good', 'info'].includes(f.severity));
     shell(`
       <section class="h-hero">
         ${ring(r.overall, r.grade, 104)}
