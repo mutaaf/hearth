@@ -51,18 +51,20 @@
 [data-skin="aurora"] .ghost.pressed { background: var(--glass-2); }
 
 /* ── House ─────────────────────────────── */
+/* The house field scrolls away with the page (absolute, not fixed): pinned
+   particles under moving cards read as broken, and cost frames on phones. */
 [data-skin="aurora"] .house-field {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 72dvh; z-index: 0; pointer-events: none;
+  position: absolute; top: 0; left: 0; width: 100%; height: 72dvh; z-index: 0; pointer-events: none;
   -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent);
 }
-[data-skin="aurora"] .house-stage { position: fixed; top: 6dvh; right: 0; width: min(100vw, 560px); height: 46dvh; pointer-events: none; }
+[data-skin="aurora"] .house-stage { position: absolute; top: 6dvh; right: 0; width: min(100vw, 560px); height: 46dvh; pointer-events: none; }
 [data-skin="aurora"] #remote:not([hidden]) ~ .house-field { display: none !important; }
 [data-skin="aurora"] #house { position: relative; z-index: 1; }
 [data-skin="aurora"] .hero { padding-top: max(26dvh, 150px); }
 [data-skin="aurora"] .hero h2 { text-shadow: 0 2px 40px #07080c; }
 [data-skin="aurora"] .kicker { color: var(--signal); }
 [data-skin="aurora"] .nearby { background: var(--glass-1); border: 1px solid #ff6a2b55; box-shadow: 0 0 40px -12px var(--signal); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-[data-skin="aurora"] .unit { padding: 10px; }
+[data-skin="aurora"] .unit { padding: 10px; background: #10121bf0; backdrop-filter: none; -webkit-backdrop-filter: none; }
 [data-skin="aurora"] .screen { background: #05060a; box-shadow: inset 0 0 0 1px #ffffff12; }
 [data-skin="aurora"] .screen::before { background: linear-gradient(115deg, #ffffff08 0 30%, transparent 30.5%); }
 [data-skin="aurora"] .unit.on .screen {

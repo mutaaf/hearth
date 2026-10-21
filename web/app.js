@@ -503,7 +503,7 @@ function mountHouseField() {
   if (prefs.skin !== 'aurora' || houseField || current) return;
   const anyOn = [...tvs.values()].some(isOn);
   houseField = makeField($('#houseField'), $('#houseStage'), {
-    shapes: ['hearth-house', 'hearth-flame', 'mind'], initial: anyOn ? 'hearth-house' : 'hearth-flame', count: innerWidth < 500 ? 1600 : 2600, stars: 90,
+    shapes: ['hearth-house', 'hearth-flame', 'mind'], initial: anyOn ? 'hearth-house' : 'hearth-flame', count: innerWidth < 500 ? 1100 : 2200, stars: 60,
   });
 }
 function unmountHouseField() {
