@@ -3,6 +3,7 @@
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
 import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
+import { createInstall } from './install.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createHealth } from './health.js'; // health
@@ -661,6 +662,9 @@ const bulk = createBulk({
   },
 });
 
+// ── Install on home screens + share with family ──────────
+const install = createInstall({ api, note, isDemo: Boolean(demo) });
+
 // ── Routing ──────────────────────────────────────────────
 function route() {
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
@@ -752,6 +756,7 @@ function tickClock() {
 // ── Every press in the app ───────────────────────────────
 function onPress(el, info) {
   const d = el.dataset;
+  if (d.install) return install.handle(el);
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
   if (d.bulk) return bulk.handle(el, info);
@@ -865,6 +870,7 @@ const KEYBOARD = {
 let modes = null;
 function wire() {
   pressable(document, onPress);
+  install.mount();
   modes = createModes({ api, note, sendKey, getTv: () => tvs.get(current) });
   setupSliders();
   setupSheets();

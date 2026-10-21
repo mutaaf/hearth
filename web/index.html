@@ -5,21 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Hearth</title>
   <meta name="description" content="One remote for every TV in the house.">
-  <meta name="theme-color" content="#e9e3d7">
+  <meta name="theme-color" content="#07080c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Hearth">
   <meta name="format-detection" content="telephone=no">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wdth,wght@87.5,400..600&family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="skin-8bit.css">
   <link rel="stylesheet" href="skin-aurora.css">
+  <link rel="stylesheet" href="install.css">
   <link rel="stylesheet" href="scenes.css">
   <link rel="stylesheet" href="health.css">
   <link rel="stylesheet" href="modes.css">
@@ -306,6 +309,10 @@
     </div>
     <!-- health: AI insights settings (rendered by health.js) -->
     <div class="toggles" id="aiSettings"></div>
+    <div class="toggles">
+      <button type="button" class="toggle" data-press="up" data-install="share"><span><b>Get Hearth on another phone or iPad</b><small class="mono">Link · QR code · Send with Messages</small></span><span aria-hidden="true">📲</span></button>
+      <button type="button" class="toggle" data-press="up" data-install="open"><span><b>Put Hearth on this home screen</b><small class="mono">Opens like a real app</small></span><span aria-hidden="true">➕</span></button>
+    </div>
     <div class="sheet-actions">
       <button type="button" class="ghost" data-press="up" data-action="test-feel">Test the feel</button>
       <button type="button" class="cta small" data-close>Done</button>

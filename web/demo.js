@@ -217,6 +217,7 @@
     }],
     ['POST', /^\/scenes\/([\w-]+)\/run$/, function (m) { runScene(findScene(m[1])); return { ok: true, started: true }; }],
     ['GET', /^\/tvs$/, function () { return tvs; }],
+    ['GET', /^\/info$/, function () { return { name: 'hearth', friendlyUrl: null }; }],
     ['POST', /^\/scan$/, function () {
       return wait(2400).then(function () {
         return tvs.map(function (t) { return { id: t.id, brand: t.brand, name: t.name, model: t.model, ip: t.ip, macs: [], added: true }; })

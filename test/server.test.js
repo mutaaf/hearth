@@ -127,3 +127,13 @@ test('icon proxy only fetches from the TV itself', async () => {
   const res = await fetch(`${base}/api/tvs/${tv.id}/icon?u=${encodeURIComponent('http://example.com/x.png')}`);
   assert.equal(res.status, 400);
 });
+
+test('install helpers: /api/info and a QR code for the share link', async () => {
+  const info = await call('GET', '/api/info');
+  assert.equal(info.body.name, 'hearth');
+  const res = await fetch(`${base}/api/qr.svg?u=${encodeURIComponent('http://azizfamily.local/tv')}`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /svg/);
+  assert.match(await res.text(), /<svg[^>]+viewBox="0 0 \d+ \d+"/);
+  assert.equal((await fetch(`${base}/api/qr.svg?u=javascript:alert(1)`)).status, 400);
+});
