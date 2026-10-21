@@ -45,4 +45,11 @@ export class Driver extends EventEmitter {
   async inputs() { return []; }
   async setInput(_id) { throw unsupported('Switching inputs'); }
   async toast(_message) { throw unsupported('On-screen messages'); }
+
+  // Trackpad + keyboard (browsers, search boxes). capabilities.pointer /
+  // capabilities.keyboard tell the app which a TV supports.
+  // pointer({ type: 'move'|'click'|'scroll', dx, dy })
+  async pointer(_input) { throw unsupported('A pointer'); }
+  // text({ text } | { backspace: n } | { enter: true })
+  async text(_input) { throw unsupported('Typing'); }
 }

@@ -55,6 +55,21 @@ function routes(hub) {
       return hub.driver(tv).toast(message).then(() => ({ ok: true }));
     }),
     r('POST', '/all/power', (_, body) => hub.powerAll(Boolean(body.on))),
+    // ── trackpad + keyboard (browser / search) ──
+    r('POST', `/tvs/${id}/pointer`, ([tv], body) => {
+      if (!['move', 'click', 'scroll'].includes(body.type)) throw badRequest('type must be move, click or scroll');
+      const clamp = (n) => Math.max(-2000, Math.min(2000, Number(n) || 0));
+      return hub.driver(tv).pointer({ type: body.type, dx: clamp(body.dx), dy: clamp(body.dy) }).then(() => ({ ok: true }));
+    }),
+    r('POST', `/tvs/${id}/text`, ([tv], body) => {
+      const input = {
+        text: typeof body.text === 'string' ? body.text.slice(0, 500) : '',
+        backspace: Math.max(0, Math.min(100, Number(body.backspace) || 0)),
+        enter: Boolean(body.enter),
+      };
+      if (!input.text && !input.backspace && !input.enter) throw badRequest('Send text, backspace or enter');
+      return hub.driver(tv).text(input).then(() => ({ ok: true }));
+    }),
   ];
 }
 

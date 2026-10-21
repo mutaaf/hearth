@@ -14,7 +14,7 @@ const POLL_MS = 5000;
 
 export class SamsungDriver extends Driver {
   static brand = 'samsung';
-  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: false, pointer: true, keyboard: true };
   #ws = null;
   #connecting = null;
   #poll = null;
@@ -199,6 +199,38 @@ export class SamsungDriver extends Driver {
   // Older sets: one button, one toggle.
   get powerToggles() {
     return this.state.power === 'unknown';
+  }
+
+  // Tizen's browser takes a mouse over the same channel ("ProcessMouseDevice").
+  async pointer({ type, dx = 0, dy = 0 } = {}) {
+    if (type === 'move') {
+      return this.#send({
+        method: 'ms.remote.control',
+        params: { Cmd: 'Move', Position: { x: Math.round(dx), y: Math.round(dy), Time: String(Date.now()) }, TypeOfRemote: 'ProcessMouseDevice' },
+      });
+    }
+    if (type === 'click') {
+      return this.#send({ method: 'ms.remote.control', params: { Cmd: 'LeftClick', TypeOfRemote: 'ProcessMouseDevice' } });
+    }
+    if (type === 'scroll') {
+      // No wheel on this channel: a scroll becomes arrow steps.
+      const steps = Math.min(5, Math.max(1, Math.round(Math.abs(dy) / 40)));
+      for (let i = 0; i < steps; i++) await this.#sendKey(dy < 0 ? 'KEY_UP' : 'KEY_DOWN');
+      return;
+    }
+    throw unsupported(`Pointer "${type}"`);
+  }
+
+  // Text goes into whatever field has focus (a search box, the browser bar).
+  async text({ text, backspace, enter } = {}) {
+    if (text) {
+      await this.#send({
+        method: 'ms.remote.control',
+        params: { Cmd: Buffer.from(String(text).slice(0, 500)).toString('base64'), DataOfCmd: 'base64', TypeOfRemote: 'SendInputString' },
+      });
+    }
+    if (backspace) throw unsupported('Deleting text on this Samsung (type it again from the start)');
+    if (enter) await this.#send({ method: 'ms.remote.control', params: { TypeOfRemote: 'SendInputEnd' } });
   }
 
   async apps() {

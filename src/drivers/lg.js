@@ -25,6 +25,9 @@ const SSAP = {
   systemInfo: 'ssap://system/getSystemInfo',
   network: 'ssap://com.webos.service.connectionmanager/getinfo',
   pointer: 'ssap://com.webos.service.networkinput/getPointerInputSocket',
+  insertText: 'ssap://com.webos.service.ime/insertText',
+  deleteText: 'ssap://com.webos.service.ime/deleteCharacters',
+  enter: 'ssap://com.webos.service.ime/sendEnterKey',
 };
 
 const PAIR_TIMEOUT = 60_000;
@@ -38,19 +41,22 @@ const UNREACHABLE = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ETIMEDOUT', 'ENETU
 
 export class LgDriver extends Driver {
   static brand = 'lg';
-  capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: true };
+  capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: true, pointer: true, keyboard: true };
+  // HDMI app id → the CEC name of what's plugged in ("PlayStation 5").
+  #inputLabels = new Map();
   #client = null;
   #pointer = null;
 
   constructor(tv, opts = {}) {
     super(tv, opts);
     this.pinUrls = opts.pinUrls; // tests point PIN pairing at a fake TV
+    this.url = opts.url; // tests point the main connection at a fake TV
   }
 
   start() {
     if (this.#client) return;
     const client = new LGTV({
-      host: this.tv.ip,
+      ...(this.url ? { url: this.url } : { host: this.tv.ip }),
       // '' rather than undefined so lgtv2 never reads a stray ~/.lgtv2 key file.
       clientKey: this.tv.credentials?.clientKey ?? '',
       keyFile: path.join(hearthHome(), 'lg', this.tv.id),
@@ -212,11 +218,20 @@ export class LgDriver extends Driver {
       this.setState({ volume: v.volume ?? null, muted: v.muteStatus ?? v.muted ?? null });
     });
     client.subscribe(SSAP.foreground, (err, res) => {
-      if (!err && res) this.setState({ app: res.appId || null });
+      if (!err && res) this.setState({ app: res.appId || null, inputLabel: this.#inputLabels.get(res.appId) ?? null });
     });
     client.subscribePowerState((err, res) => {
       if (!err && res) this.setState({ power: res.state === 'unknown' ? 'on' : res.state });
     });
+
+    // Learn what's plugged into each HDMI port (CEC names) for activity.
+    client
+      .request(SSAP.inputs)
+      .then((res) => {
+        for (const d of res?.devices ?? []) if (d.appId && d.label) this.#inputLabels.set(d.appId, d.label);
+        if (this.state.app) this.setState({ inputLabel: this.#inputLabels.get(this.state.app) ?? null });
+      })
+      .catch(() => {});
 
     const info = {};
     if (!this.tv.model) {
@@ -237,11 +252,16 @@ export class LgDriver extends Driver {
   }
 
   async #button(name) {
+    return this.#input('button', { name });
+  }
+
+  // Everything on the pointer-input socket: buttons, moves, clicks, scrolls.
+  async #input(type, payload) {
     if (!this.#client?.connected) throw offline();
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         this.#pointer ??= await this.#client.getSocket(SSAP.pointer);
-        this.#pointer.send('button', { name });
+        this.#pointer.send(type, payload);
         return;
       } catch (err) {
         // The input socket can go stale while the main one stays up; reopen once.
@@ -291,6 +311,21 @@ export class LgDriver extends Driver {
 
   async setInput(id) {
     await this.#request(SSAP.switchInput, { inputId: id });
+  }
+
+  async pointer({ type, dx = 0, dy = 0 } = {}) {
+    const x = Math.round(Number(dx) || 0);
+    const y = Math.round(Number(dy) || 0);
+    if (type === 'move') return this.#input('move', { dx: x, dy: y, down: 0 });
+    if (type === 'click') return this.#input('click');
+    if (type === 'scroll') return this.#input('scroll', { dx: x, dy: y });
+    throw unsupported(`Pointer "${type}"`);
+  }
+
+  async text({ text, backspace, enter } = {}) {
+    if (text) await this.#request(SSAP.insertText, { text: String(text).slice(0, 500), replace: 0 });
+    if (backspace) await this.#request(SSAP.deleteText, { count: Math.min(100, Number(backspace) || 1) });
+    if (enter) await this.#request(SSAP.enter);
   }
 
   async toast(message) {

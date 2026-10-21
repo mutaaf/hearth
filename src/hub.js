@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { badRequest, HearthError, notFound } from './errors.js';
+import { classify } from './activity.js';
 import { discover, isIPv4, isMac, macFor, portOpen, probe, tvId } from './discovery.js';
 import { LgDriver } from './drivers/lg.js';
 import { GoogleTvDriver } from './drivers/googletv.js';
@@ -113,8 +114,20 @@ export class Hub extends EventEmitter {
       capabilities: driver?.capabilities ?? {},
       state: driver?.state ?? { online: false, power: 'unknown' },
       since: this.#since.get(tv.id) ?? null,
+      activity: this.#activity(tv, driver),
     };
   }
+
+  // ── Activity (what's on: game, browser, streaming…) + how long ──
+  #activitySince = new Map(); // tv.id → { key, since }
+  #activity(tv, driver) {
+    const a = classify({ brand: tv.brand, paired: Boolean(tv.credentials), state: driver?.state ?? {} });
+    const key = `${a.kind}|${a.label}`;
+    const prev = this.#activitySince.get(tv.id);
+    if (prev?.key !== key) this.#activitySince.set(tv.id, { key, since: Date.now() });
+    return { ...a, since: this.#activitySince.get(tv.id).since };
+  }
+  // ── end activity ──
 
   list() {
     return this.tvs.map((tv) => this.view(tv));
