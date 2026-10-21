@@ -22,6 +22,17 @@ Work through the levels in order and stop when the TV feels fast.
 - **Self Diagnosis → Reset Smart Hub** (Settings → Support → Device Care) clears years of app clutter. You'll sign into apps again.
 - **Device Care → Start Device Care**, then a full power cycle.
 
+### Roku
+- **Limit ad tracking:** Settings → Privacy → Advertising → **Limit ad tracking**.
+- **Roku TVs only, turn off ACR:** Settings → Privacy → Smart TV experience → uncheck **Use info from TV inputs**.
+- **Remove channels you never use:** highlight it → ✱ → *Remove channel*.
+- Leave Settings → System → Advanced system settings → **Control by mobile apps** on *Default*, or Hearth can't drive it.
+
+### Google TV / Android TV
+- **Apps only mode** hides the recommendation rows and is much snappier: Settings → Accounts & sign-in → your account → **Apps only mode**.
+- **Ads:** Settings → Privacy → Ads → **Delete advertising ID** and opt out of personalization.
+- **Uninstall or disable preinstalled apps:** Settings → Apps → pick one → *Uninstall* or *Disable*.
+
 ## Level 2: Block ads and tracking for the whole house (30 minutes, one time)
 
 Point the TVs' DNS at an ad and tracker blocker. This also speeds up the home screen, because the TV stops waiting on ad servers.
@@ -39,7 +50,7 @@ A reset removes years of cruft. Do Level 1 again straight after, *before* signin
 - LG: Settings → General → System → Reset to Initial Settings.
 - Samsung: Settings → General → Reset (PIN `0000`).
 
-Hearth pairing has to be redone after a reset. Use **Pair** on that TV's card.
+After a reset, an LG or a newer Samsung needs to connect to Hearth again: tap its card. Rokus, Google TVs and 2016–17 Samsungs reconnect on their own.
 
 ## Level 4: Homebrew (advanced, LG only, at your own risk)
 

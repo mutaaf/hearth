@@ -69,7 +69,7 @@
   var skin = 'classic';
   var wantsFrame = function () { return window.matchMedia('(min-width: 861px)').matches; };
   function load() {
-    var src = frame.dataset.src + (skin === 'classic' ? '' : '&skin=' + skin);
+    var src = frame.dataset.src + '&skin=' + skin;
     if (frame.getAttribute('src') === src) return;
     phone.classList.remove('loaded');
     frame.classList.remove('ready');
@@ -99,7 +99,7 @@
         b.setAttribute('aria-pressed', String(on));
       });
       if (wantsFrame()) load();
-      else window.location.href = 'demo/' + (skin === 'classic' ? '' : '?skin=' + skin);
+      else window.location.href = 'demo/?skin=' + skin;
     });
   });
 

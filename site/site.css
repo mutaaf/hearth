@@ -244,11 +244,12 @@ main { position: relative; z-index: 3; }
 
 .compat { margin-top: 14px; padding: 28px clamp(20px, 3vw, 34px); border-radius: 26px; border: 1px solid var(--edge); }
 .compat-title { margin: 0 0 18px; font-family: var(--mono); font-stretch: 87.5%; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; color: var(--soft); }
-.compat-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 40px; }
+.compat-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 32px; }
+@media (max-width: 1100px) { .compat-cols { grid-template-columns: 1fr 1fr; gap: 26px 40px; } }
 .compat-col h4 { margin: 0 0 10px; font-size: 26px; letter-spacing: -.04em; }
 .compat-col h4 span { font-family: var(--mono); font-stretch: 87.5%; font-size: 11px; font-weight: 400; letter-spacing: .04em; color: var(--faint); margin-left: 6px; }
 .compat ul { list-style: none; margin: 0; padding: 0; }
-.compat li { display: flex; gap: 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--edge); font-size: 15px; }
+.compat li { display: flex; gap: 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--edge); font-size: 15px; line-height: 1.35; }
 .compat li::before { flex: none; width: 18px; font-family: var(--mono); font-weight: 600; text-align: center; }
 .compat li.y::before { content: '✓'; color: var(--signal); }
 .compat li.p::before { content: '◐'; color: var(--faint); }
