@@ -3,9 +3,12 @@
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
 import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
+import { createInstall } from './install.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
+import { createHealth } from './health.js'; // health
+import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const tvs = new Map();
@@ -79,12 +82,13 @@ const isUnknown = (t) => t.state?.online && t.state.power === 'unknown';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
 const statusWord = (t) =>
-  !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
-const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV' };
+  t.state?.unavailable ? 'Needs setup' : !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
+const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' };
 const brandName = (b) => BRANDS[b] ?? 'TV';
 
 function appName(t) {
   if (t.state?.appTitle) return t.state.appTitle;
+  if (t.state?.inputLabel) return t.state.inputLabel; // what's on that HDMI port
   const id = t.state?.app;
   if (!id) return isOn(t) ? 'On' : '';
   const cached = appCache.get(t.id)?.find((a) => a.id === id);
@@ -115,6 +119,7 @@ function renderHouse() {
     : on === list.length ? `All ${on} screen${on === 1 ? ' is' : 's are'} on.`
     : `${on} of ${list.length} screens are on.`;
   $('#onCount').textContent = list.length ? `${on} on · ${list.length} total · long-press a TV to select` : '';
+  renderRightNow(list); // modes.js: the house's "Right now" line
 
   const banner = $('#nearby');
   banner.hidden = !nearby.length;
@@ -126,9 +131,9 @@ function renderHouse() {
   units.classList.toggle('settled', !firstPaint);
   units.innerHTML = list
     .map((t, i) => `
-      <article class="unit ${ledClass(t)} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
+      <article data-brand="${esc(t.brand)}" class="unit ${ledClass(t)} act-${activityOf(t).kind} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
         <span class="sel-check" aria-hidden="true"></span>
-        <div class="screen"><div class="scan"></div><span class="now">${esc(appName(t))}</span></div>
+        <div class="screen"><div class="scan"></div>${activityBadge(t)}<span class="now">${esc(appName(t))}</span></div>
         ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
         <div class="unit-meta">
           <h3 class="unit-name">${esc(t.name)}</h3>
@@ -141,6 +146,7 @@ function renderHouse() {
   if (list.length) firstPaint = false;
   launcher.renderHouse();
   houseField?.setShape(on ? 'hearth-house' : 'hearth-flame', { pin: true });
+  houseField?.set({ palette: housePalette(list) }); // games glow neon, browsing ice
 }
 
 // ── Remote view ──────────────────────────────────────────
@@ -163,6 +169,8 @@ function renderRemote() {
   renderSwitcher();
   const bits = [statusWord(t)];
   if (isOn(t) && t.state.app) bits.push(appName(t));
+  if (isOn(t) && t.state.nowPlaying) bits.push(t.state.nowPlaying);
+  if (t.state?.unavailable) bits.push(t.state.unavailable);
   if (t.state?.volume != null) bits.push(`vol ${t.state.volume}${t.state.muted ? ' (muted)' : ''}`);
   $('#rStatus').textContent = bits.join(' · ');
   $('#rLed').className = `led ${ledClass(t)}`;
@@ -185,6 +193,7 @@ function renderRemote() {
   launcher.renderPanel(t);
   renderLcd(t);
   renderAurora(t);
+  modes?.update(t); // modes.js: activity chip + auto Trackpad/Gamepad
 }
 
 // 8-bit skin: the dot-matrix screen narrates the TV.
@@ -297,7 +306,9 @@ function insights(t) {
   const out = [];
   const others = [...tvs.values()].filter((o) => o.id !== t.id && isOn(o));
   const hour = new Date().getHours();
+  if (t.state?.unavailable) out.push(t.state.unavailable);
   if (!t.paired) out.push('Not connected yet — tap Connect above');
+  if (isOn(t) && t.state.nowPlaying) out.push(`Now playing: ${t.state.nowPlaying}`);
   else if (!t.state?.online) out.push(t.canWake ? 'Off · tap ⏻ to wake it' : 'Off · turn it on with its own remote once');
   if (t.state?.muted) out.push('Muted · tap the ring to unmute');
   if ((t.state?.volume ?? 0) >= 60) out.push(`Loud · volume ${t.state.volume}`);
@@ -376,8 +387,8 @@ function renderDock(t) {
   const caps = t.capabilities ?? {};
   const html = [
     `<button type="button" class="dock-item ${t.state?.muted ? 'on' : ''}" data-press="down" data-key="mute" aria-label="Mute"><svg><use href="#i-mute"/></svg><small>${t.state?.muted ? 'Unmute' : 'Mute'}</small></button>`,
-    // Neutral: nothing reports play/pause state, so don't pretend to know it.
-    caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-play"/></svg><small>Play/Pause</small></button>`,
+    // Only the TV's own word on play/pause (Apple TV pushes it); otherwise neutral.
+    caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-${t.state?.playing === 'playing' ? 'pause' : 'play'}"/></svg><small>${t.state?.playing === 'playing' ? 'Pause' : t.state?.playing === 'paused' ? 'Play' : 'Play/Pause'}</small></button>`,
     ...top.map((a) => `<button type="button" class="dock-item app ${a.id === t.state?.app ? 'current' : ''}" data-press="up" data-app="${esc(a.id)}"><i style="--tint:${tint(a.title)}">${
       t.capabilities?.appIcons && a.icon ? `<img alt="" src="api/tvs/${encodeURIComponent(t.id)}/icon?u=${encodeURIComponent(a.icon)}">` : esc((a.title.match(/[A-Za-z0-9+]/) ?? ['•'])[0].toUpperCase())
     }</i><small>${esc(a.title)}</small></button>`),
@@ -487,6 +498,7 @@ function mountOrb() {
 function unmountOrb() {
   orbField?.destroy();
   orbField = null;
+  orbPalette = 'ember';
 }
 let mood = '';
 function orbMood(t) {
@@ -497,7 +509,14 @@ function orbMood(t) {
     orbField.setShape(next, { pin: true });
     orbField.set({ autonomy: next === 'hearth-flame' ? 0.35 : 1 });
   }
+  // Tint the particles with what's on: games neon, browsing ice.
+  const palette = t.state?.online ? paletteFor(activityOf(t).kind) : 'ember';
+  if (palette !== orbPalette) {
+    orbPalette = palette;
+    orbField.set({ palette });
+  }
 }
+let orbPalette = 'ember';
 function orbPointer(type, x, y) {
   if (!orbField) return;
   const zone = $('.orb-zone').getBoundingClientRect();
@@ -614,8 +633,12 @@ function openSettings() {
   for (const card of document.querySelectorAll('[data-skin-pick]')) card.classList.toggle('active', card.dataset.skinPick === prefs.skin);
   $('#prefHaptics').checked = prefs.haptics;
   $('#prefSound').checked = soundOn();
+  health.renderAiSettings($('#aiSettings')); // health
   openSheet('#settingsSheet');
 }
+
+// ── health: report cards + diagnostics + AI notes ─────────
+const health = createHealth({ root: $('#health'), note, haptic, feedback, demo });
 
 // ── Setup wizard ─────────────────────────────────────────
 const setup = createSetup({
@@ -651,6 +674,9 @@ const bulk = createBulk({
   },
 });
 
+// ── Install on home screens + share with family ──────────
+const install = createInstall({ api, note, isDemo: Boolean(demo) });
+
 // ── Routing ──────────────────────────────────────────────
 function route() {
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
@@ -661,6 +687,7 @@ function route() {
     $('#house').hidden = true;
     $('#remote').hidden = false;
     if (changed) {
+      modes?.enter(t);
       lastKey = '';
       $('#apps').innerHTML = '<p class="hint mono">Turn the TV on to see its apps.</p>';
       $('#inputs').innerHTML = '';
@@ -684,6 +711,7 @@ function route() {
     $('#remote').hidden = true;
     $('#house').hidden = false;
     keepAwake(false);
+    modes?.leave();
     unmountOrb();
     mountHouseField();
     renderHouse();
@@ -742,6 +770,7 @@ function tickClock() {
 // ── Every press in the app ───────────────────────────────
 function onPress(el, info) {
   const d = el.dataset;
+  if (d.install) return install.handle(el);
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
   if (d.bulk) return bulk.handle(el, info);
@@ -768,7 +797,9 @@ function onPress(el, info) {
   }
   if (d.dock === 'playpause') {
     const t = tvs.get(current);
-    playing.set(current, !(playing.get(current) ?? true));
+    // Live state when the TV reports it (Apple TV); otherwise alternate.
+    const live = t?.state?.playing === 'playing' ? true : t?.state?.playing === 'paused' ? false : null;
+    playing.set(current, live != null ? !live : !(playing.get(current) ?? true));
     return sendKey(playing.get(current) ? 'play' : 'pause');
   }
   if (d.tab) {
@@ -807,6 +838,13 @@ function onPress(el, info) {
       return openSettings();
     case 'select':
       return bulk.selecting ? bulk.exit() : bulk.enter();
+    // ── health
+    case 'health':
+      haptic('tap');
+      return health.openHouse();
+    case 'tv-health':
+      $('#editSheet').close();
+      return health.openTv(editing);
     case 'edit':
       haptic('tap');
       return openEdit();
@@ -846,8 +884,11 @@ const KEYBOARD = {
   Enter: 'ok', Backspace: 'back', Escape: 'back', h: 'home', '+': 'volup', '=': 'volup', '-': 'voldown', m: 'mute',
 };
 
+let modes = null;
 function wire() {
   pressable(document, onPress);
+  install.mount();
+  modes = createModes({ api, note, sendKey, getTv: () => tvs.get(current) });
   setupSliders();
   setupSheets();
   gesturePad($('#pad'), {
@@ -874,7 +915,7 @@ function wire() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && bulk.selecting) return bulk.exit();
-    if (e.target.closest('input, dialog, #setup, #sceneEditor')) return;
+    if (e.target.closest('input, dialog, #setup, #sceneEditor, #health')) return;
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('button, [role="button"]')) {
       if (e.target.matches('.unit')) e.target.click();
       return;

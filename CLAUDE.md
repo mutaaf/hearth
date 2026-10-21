@@ -2,12 +2,12 @@
 
 Universal remote for the house's smart TVs. A Node server on the LAN discovers TVs, holds a live connection per TV, and serves a phone-first web remote. Zero build step, a handful of small runtime dependencies (lgtv2, ws, multicast-dns, aurora-field, qrcode-terminal).
 
-Brands: LG webOS, Samsung Tizen (2016+), Roku (ECP), Google TV / Android TV (Cast).
+Brands: LG webOS, Samsung Tizen (2016+), Roku (ECP), Google TV / Android TV (Cast), Apple TV (pyatv: Companion + AirPlay/MRP, via a Python bridge).
 
 ## Run it
 
-- `npm run up`: idempotent bootstrap (Node check → install → start detached → health → URL + QR). `npm run down` stops it.
-- `npm test`: node:test suite with no TV or network needed (fake drivers, a fake Samsung websocket TV, a fake LG PIN-pairing TV, a fake Roku ECP server).
+- `npm run up`: idempotent bootstrap (Node check → install → Apple TV venv with pinned pyatv (optional) → start detached → health → URL + QR). `npm run down` stops it.
+- `npm test`: node:test suite with no TV, network or Python needed (fake drivers, a fake Samsung TV (websocket + REST apps + UPnP SOAP), a fake LG PIN-pairing TV, a fake Roku ECP server, a fake Cast TV over TLS, a fake pyatv bridge and bridge process).
 - Dev loop: `npm start` in the foreground, edit `web/*`, reload the browser. Server changes need a restart.
 - To experiment without touching your real setup: `HEARTH_HOME=/tmp/h HEARTH_PORT=8771 npm start`.
 
@@ -28,15 +28,27 @@ scripts/up.mjs|down    one-command env (see feedback: one idempotent `npm run up
 src/server.js          node:http JSON API + SSE (/api/events) + static web/ + icon proxy
 src/hub.js             owns TVs + one driver per TV; emits 'change' → SSE
 src/store.js           ~/.hearth/tvs.json (0600, queued atomic writes)
-src/discovery.js       SSDP (LG UPnP XML / Samsung REST :8001 / Roku roku:ecp) + mDNS (Google TV)
-                       → one list; probe(ip) for add-by-IP; macFor(ip) via the OS ARP table
+src/discovery.js       SSDP (LG UPnP XML / Samsung REST :8001 / Roku roku:ecp) + mDNS (Google TV;
+                       Apple TV via _companion-link/_airplay, AppleTV* models only)
+                       → one list; probe(ip) for add-by-IP (Apple TV: AirPlay :7000/info); macFor(ip) via ARP
 src/mdns.js            minimal mDNS browse (multicast-dns): PTR → SRV/TXT → A
 src/proto.js           just-enough protobuf (varints + length-delimited) for Cast
 src/drivers/base.js    the driver contract (start/stop/pair/key/power/apps/launch/inputs/toast)
 src/drivers/lg.js      webOS via lgtv2 (SSAP over wss:3001 → ws:3000), plus in-house PIN pairing
-src/drivers/samsung.js Tizen via samsung.remote.control: wss:8002 + token (2018+) or ws:8001 (2016-17)
+src/drivers/samsung.js Tizen: keys/launch over samsung.remote.control (wss:8002 + token 2018+, ws:8001 2016-17);
+                       state from REST :8001 (visible app per id) + UPnP :9197 (volume/mute) + :9119 (screen on)
 src/drivers/roku.js    Roku ECP over HTTP :8060 (no pairing; keydown/keyup for real holds)
-src/drivers/googletv.js Google TV / Android TV via Cast (TLS :8009): volume, mute, apps, status
+src/drivers/googletv.js Google TV / Android TV via Cast (TLS :8009): volume, mute, apps (GET_APP_AVAILABILITY),
+                       status incl. isStandBy; drops a socket that goes quiet
+src/drivers/appletv.js Apple TV: talks to the shared pyatv bridge; two-step PIN pairing, pushed state
+src/drivers/appletv-bridge.py  the Python side: ONE process for every Apple TV, JSON lines on stdio
+src/atv-bridge.js      spawns/owns that process (lazy start, restart with backoff, 'restart' → drivers
+                       reconnect); venv path + pinned PYATV_VERSION shared with scripts/up.mjs
+src/catalog.js         the cross-brand app catalog (20 streaming apps × per-brand id arrays + sources) and
+                       resolveApp(): id → exact title → fuzzy (never YouTube for YouTube TV)
+src/launch.js          POST /api/launch: wake → resolve per TV → launch in parallel → per-TV results; also
+                       the `launch` action for bulk/scenes and GET /api/catalog/status
+src/upnp.js            just-enough UPnP SOAP (Samsung RenderingControl)
 src/keys.js            unified key names → brand key codes
 src/wol.js             Wake-on-LAN magic packet
 web/                   vanilla JS app (index.html, style.css, app.js, shapes.js), no framework
@@ -44,7 +56,9 @@ web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio soun
                        (data-press="down|up|repeat|long|confirm"), the gesture D-pad, wake lock
 web/setup.js           the caveman setup wizard (turn on → find → [wake] → connect per brand → room → done)
 web/skin-8bit.css      8-bit pocket-console skin (only under <html data-skin="8bit">)
-web/demo.js            pretend TVs for the public demo only
+web/launcher.js|.css   the app launcher: "Watch" strip on the house (hold = every / selected TVs) and the
+                       "Streaming" grid on a TV's Apps panel (tap = this TV), ✓/✕ chips per TV
+web/demo.js            pretend TVs for the public demo only (has a slice of the catalog)
 site/                  landing page for mutaafaziz.com/hearth
 scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
 ```
@@ -54,25 +68,47 @@ scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
 1. `src/drivers/<brand>.js` extends `Driver`; set `static brand` and `capabilities`.
 2. Add key codes for the brand in `src/keys.js`, or keep a private map in the driver (Roku does).
 3. Register it in `DRIVERS` in `src/hub.js` and teach `discovery.js` to identify it.
-4. Add a test with a fake device (see `test/samsung.test.js`).
+4. Add a test with a fake device (see `test/samsung.test.js`; for a bridged brand, `test/appletv.test.js`).
+5. Brand-aware spots outside the driver: `REACH_PORTS`/`BRAND_NAMES` in hub.js, `KNOWN_PORTS`/`CONTROL_PORT`/`brandInfo` in diagnostics.js, `WAKE_FIX`/`PRIVACY_FIX`/`controls()` in health.js, `BRANDS` in web/app.js, `brandName`/`startPair` in web/setup.js, and web/demo.js.
 
-The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`); no UI change is needed for a new brand.
+The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`, `pointer`, `keyboard`); no UI change is needed for a new brand. Cards carry `data-brand`, so a brand can get its own look in CSS (Apple TV: a glossy puck and a cool glow in each skin).
 
 ## Pairing, per brand
 
 - **LG:** `pair()` = Allow prompt (lgtv2, PROMPT). `pair({ mode: 'pin' })` → `{ needsPin }` (the TV shows a number), then `pair({ pin })` finishes. The API passes `{ mode, pin }` through `POST /api/tvs/:id/pair`.
 - **Samsung:** 2018+ asks Allow and returns a token; 2016-17 connects with no prompt and no token → credentials `{ legacy: true }`.
 - **Roku:** `{ ecp: true }` after device-info answers. A 403 means "Control by mobile apps" blocks network access.
+- **Apple TV:** two codes, one protocol at a time, through the same `{ mode: 'pin' }` / `{ pin }` API as LG. `pair({ mode: 'pin' })` asks the bridge which protocols need pairing (`info`), begins the first → `{ needsPin, step: 1, steps: 2, label }` (the TV shows 4 digits). `pair({ pin })` finishes it, saves `credentials.companion` (remote works from here), and begins AirPlay → `{ needsPin, step: 2 }`. The second `pair({ pin })` saves `credentials.airplay` (MRP: now playing). `Hub.pair` passes `step/steps/label` through; the wizard shows "Step n of 2". A wrong/expired code → 401 "Show the number again" (the bridge drops the session; asking again shows a new code). If AirPlay can't start, Companion-only still works. Pairing name on the TV: "Hearth".
 - **Google TV:** `{ cast: true }` after a RECEIVER_STATUS arrives. No code. The optional full remote (Google's remote protocol v2, ports 6466/6467, needs the on-screen code) is roadmap.
 - Unpaired TVs get a reachability watch (TCP connect to the brand's control port every 10 s), so the app knows on/off and offers Wake-on-LAN before pairing.
 
 ## Touch model (keep it consistent)
 
 - Every pressable element declares `data-press`. Remote keys use `down` (fire instantly), volume/channel/seek use `repeat` (it speeds up), lists use `up` (scrolling never fires a tap), and OK/A/power/TV cards use `long`. Destructive or house-wide actions use `confirm` (hold about 0.75 s while a bar fills).
-- A long OK is sent as `{ key: 'ok', hold: ms }`. Samsung (Press/Release) and Roku (keydown/keyup) do a real hold; LG has no network hold, so it's a click. Google TV over Cast has no keys except volume/mute (other keys → 409 with an explanation).
+- A long OK is sent as `{ key: 'ok', hold: ms }`. Samsung (Press/Release) and Roku (keydown/keyup) do a real hold; LG has no network hold, so it's a click. Google TV over Cast has no keys except volume/mute (other keys → 409 with an explanation). Apple TV holds use pyatv `InputAction.Hold` (~1 s) for arrows/OK/back/home; a held Home is Control Center. Apple TV play/pause sends the toggle unless the pushed `state.playing` says it's already in the asked state; mute/source → 501.
 - The D-pad is a gesture surface: tap a zone, hold to repeat, or drag to step every 34 px.
 - Power: tap toggles this TV, hold turns every TV off. A long-press on a TV card opens its settings.
 - Skins are pure CSS. The 8-bit LCD text comes from `renderLcd()`. `?skin=8bit|classic` overrides the saved preference, and `?embed=1` hides the demo banner.
+
+## Live state must match the TV
+
+The app only ever shows what the TV last said; nothing optimistic sticks.
+
+- **After every command** (key, power, volume, launch, input, bulk) `Hub.settle(id)` calls `driver.refresh()` ~0.7 s and ~2.5 s later. Drivers with no `refresh()` rely on their own push/poll.
+- **Pollers speed up while someone looks:** the server reports SSE clients to `Hub.setViewers()`, which calls `driver.setActive(bool)`. Samsung polls every 3 s with the app open, 15 s idle.
+- **Samsung:** `state.app` = the app whose REST `/api/v2/applications/<id>` says `visible: true` (last-seen app first, then catalog ids, then the installed list; a few per poll in batches of 4, ids that 404 are skipped for an hour). `appTitle` is its REST name. Volume/mute from UPnP RenderingControl (`capabilities.volumeLevel` turns true once it answers); mute uses SetMute, not a blind toggle. Power: 2018+ `PowerState`; 2016-17 → an app visible or `:9119` open = `on`, `:9119` closed = `standby`, unreachable = `off` (see the nuance below). After Hearth sends power-off it reports `standby` for 15 s.
+- **LG:** subscriptions push power/app/volume; `refresh()` re-reads them. Any non-`on` power clears `app`/`inputLabel`.
+- **Roku:** 5 s poll. Standby and the home screen (`<app>Roku</app>` or *Roku Dynamic Menu*, id 562859) mean `app: null`.
+- **Google TV:** `RECEIVER_STATUS.isStandBy` → `power: 'standby'`, `app: null`. No message for 20 s (5 s heartbeats) → the socket is dropped and the TV shows off until Cast answers again.
+- **Web:** `.current` app, "now playing" and LEDs all read `state`. Play/pause shows a state only when the TV reports one (Apple TV `state.playing`).
+
+## The app launcher (catalog)
+
+- `src/catalog.js` lists apps as `{ key, title, aliases?, mark, color, ids: { samsung, lg, roku, androidtv, appletv }, note? }`. ids are arrays, newest first; each has a source comment ("seen" = read off this house's TVs).
+- Resolution per TV (`resolveApp`): the first catalog id in the TV's installed list (`Hub.apps()`, cached 10 min) → exact title/alias → fuzzy: an installed app belongs to the catalog entry whose name is its longest whole-word prefix, so "YouTube TV" can never satisfy "YouTube" and vice versa. A TV that can't list apps gets the first catalog id blind. Free titles (scenes: "Pandora") use `matchTitle`, same rule.
+- Google TV opens only apps with a Cast receiver; entries with `androidtv: []` carry a `note` and resolve to reason `unsupported`.
+- One vocabulary everywhere: `POST /api/launch { app: 'youtubetv' | 'YouTube TV', tvs: 'all' | [ids], wake }`, bulk/scene action `launch` with `{ app }`, `{ title }` or `{ id }` (+ `wake`). Results: `{ id, name, ok, appId?, title?, via?, woke?, reason?, error? }`, reasons `not-installed`, `unsupported`, `off`, `offline`, `unpaired`, `failed`.
+- `wake: true` powers on TVs that are off/asleep first and waits (25 s) for them; it never toggles a TV whose power is `unknown`. Rokus and Google TVs open apps from standby by themselves.
 
 ## Invariants
 
@@ -81,6 +117,14 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`)
 - The icon proxy only fetches from the TV's own IP.
 - Drivers throw `HearthError` with a status (`unsupported()` → 501, `offline()` → 503), never HTTP-aware code.
 - Unpaired TVs are never connected to automatically, because connecting pops a prompt on the TV.
+
+## Apple TV state (pushed, never polled)
+
+- `power`: Companion SystemStatus push (`on`/`off`; asleep Apple TVs stay connected, so `online: true, power: 'off'`).
+- `app`/`appTitle`: MRP now-playing app (bundle id + name), so it's the app *playing*, not merely focused (pyatv exposes no focus-app). After `launch()` the driver sets it at once; the next push refines it. Needs the AirPlay credential.
+- `nowPlaying` (title, "Series: Episode"), `playing` (`playing`/`paused`/`loading`).
+- `volume` + `capabilities.volumeLevel` only when pyatv reports a level (Apple TV driving HomePods). With a TV over HDMI-CEC, volume up/down are HID presses with no level.
+- `unavailable`: set when the bridge can't start (no Python/pyatv); the app shows "Needs setup" and the reason.
 
 ## Environment nuances
 
@@ -110,10 +154,21 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`)
 | Roku active-app gives an id and a title | `<app id="12">Netflix</app>`: `state.app` = id (matches the app shelf) and `state.appTitle` = title (shown on cards). The home screen has no id. |
 | A Roku stick reports `supports-wake-on-wlan: false` | It can't be woken over Wi-Fi when unpowered; `PowerOn` works from standby. |
 | Wake-on-LAN sent to `x.y.z.255` never reached the LG on an eero mesh | eero hands out a /22 (192.168.4.0–7.255). `wol.js` computes the broadcast from the real netmask and also unicasts to the TV's IP on ports 9 and 7. The LG then woke in 3.6 s. |
-| 2016-17 Samsungs answer REST and the websocket even in standby, with no PowerState | Hearth can't know if they're on: state `unknown` ("Ready"), and power acts as a toggle (WOL + KEY_POWER), like the TV's own remote. |
+| 2016-17 Samsungs have no PowerState. Probed 2026-10-21 on the UN55KU6290, read-only, through a real off/on by the family: REST :8001, ws :8001, UPnP :9197 and :9119 all answer while on; on power-off :9119 closed first (~20 s), then the whole set left the network ~40-50 s in (no ping, EHOSTDOWN) and stayed silent for 11 min until switched on, when everything came back at once. No periodic wake-ups seen. | Power = app visible or :9119 open → `on`; :9119 closed but REST answering → `standby` (going down); unreachable → `off`. The old "answers in standby → `unknown`" note was wrong for this set (maybe true with *Power On with Mobile* on). HA uses websocket reachability; openHAB uses the DMR's SSDP alive/byebye; neither has a better signal. |
+| Samsung REST `/api/v2/applications/<id>` | `{ name, running, visible, version }`; 404 = not installed. `running` stays true in the background, so only `visible` means on screen. POST to it launches the app (the REST fallback). Both the store id (YouTube TV `3201707014489`) and the Tizen package id (`PvWgqxV3Xa.YouTubeTV`) answer. |
+| Samsung UPnP renderer :9197 (`/dmr`) | RenderingControl GetVolume/GetMute/SetVolume/SetMute work on the 2016 set (SOAP to `/upnp/control/RenderingControl1`); AVTransport is idle (`NO_MEDIA_PRESENT`) unless something is cast to it. |
+| Google TV keeps Cast alive in standby | RECEIVER_STATUS carries `isStandBy: true`; Hearth used to show such a TV as "on". `GET_APP_AVAILABILITY` says which Cast apps it can open (Netflix `CA5E8412` is APP_UNAVAILABLE on the TCL: Netflix uses its own protocol on Android TV). |
+| The D-pad's OK button is `class="ok"` | Global `.ok` (absolute, round) also hit `.chip-result.ok` result chips; launcher.css resets them for `.launch-results` and `.bulk-results`. Don't give new elements a bare `.ok` class. |
 | Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
 | `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
+| Apple TV needs Python: pyatv is Python-only | `npm run up` creates `~/.hearth/py` (override `HEARTH_VENV`; shared by every HEARTH_HOME, so a scratch server reuses it) and pins `pyatv==PYATV_VERSION` (src/atv-bridge.js). No python3 ≥ 3.10 → it prints a skip line and Hearth runs; Apple TVs answer 503 "needs Python 3 and pyatv". The bridge isn't cached as failed, so installing later works without a restart. |
+| `brew upgrade python` leaves a venv whose `bin/python` symlink dangles | `up.mjs` runs the venv's python; if it fails it rebuilds with `venv --clear` and reinstalls pyatv. |
+| Macs, iPads and HomePods announce `_companion-link`/`_airplay` too; so do LG/TCL/Roku TVs with AirPlay built in | `appleTvsFrom()` keeps only `rpMd`/`model` = `AppleTV*`. Seen here: MacBookPro18,2 ("YLQ51F65YV"), Denon AVR-S960H ("Home Theater"). HomePods are `AudioAccessory*`. |
+| An Apple TV's AirPlay `deviceid` looks like a MAC but is randomised (locally administered bit) | Stored as `tv.atvId` (pyatv's identifier, used to find it if DHCP moves it), never in `macs`. Apple TVs wake over Companion, not WOL. |
+| pyatv `connect()` with a protocol that needs pairing but has no credentials fails or prompts | The bridge disables unpaired Mandatory services plus RAOP/DMAP before connecting, so Companion-only works between the two codes. |
+| A paired Apple TV's Companion port isn't fixed (49153 here, varies) | Reachability/diagnostics use AirPlay :7000; the bridge re-resolves the device by unicast mDNS to its IP, then by identifier. |
+| pyatv logs to stdout by default would corrupt the JSON-lines protocol | The bridge logs to stderr only (Node prefixes and forwards it to hearth.log); stdout is protocol. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 
 ## Definition of done

@@ -1,0 +1,184 @@
+/* Activity at a glance + the remote modes (Trackpad, Gamepad). Works in all
+   three skins; Aurora gets the glow. Accent per activity: */
+:root {
+  --act-game: #ff3fa4;
+  --act-browser: #5ee7ff;
+  --act-stream: #ff6a2b;
+  --act-music: #3fd36f;
+  --act-live: #f5a524;
+}
+
+/* ── House: "Right now" + card badges ───────────── */
+.right-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 0; font-size: 15px; color: var(--ink-soft); }
+.right-now b { color: var(--ink); font-weight: 650; }
+.right-now .mono { font-size: 11px; text-transform: uppercase; }
+.pulse-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--act-game); box-shadow: 0 0 0 0 var(--act-game); animation: actpulse 1.8s infinite; }
+@keyframes actpulse { 70% { box-shadow: 0 0 0 10px transparent; } }
+
+.act-badge {
+  position: absolute; z-index: 2; left: 10px; top: 10px; max-width: calc(100% - 80px);
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+  background: #000000a6; color: #fff; font-size: 12px; line-height: 1; white-space: nowrap;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 0 0 1px #ffffff22;
+}
+.act-badge i { font-style: normal; font-size: 14px; }
+.act-badge b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
+.act-badge small { opacity: .7; font-family: var(--mono); font-size: 10px; }
+.act-badge.act-game, .act-badge.act-console { box-shadow: 0 0 0 1px var(--act-game), 0 0 18px -2px var(--act-game); }
+.act-badge.act-browser { box-shadow: 0 0 0 1px var(--act-browser), 0 0 18px -2px var(--act-browser); }
+.act-badge.act-music { box-shadow: 0 0 0 1px var(--act-music); }
+.act-badge.act-home, .act-badge.act-idle { opacity: .75; }
+.unit .screen { position: relative; }
+/* Each kind lights the card's screen its own way. */
+.unit.act-game .screen, .unit.act-console .screen {
+  background: radial-gradient(80% 120% at 25% 110%, #ff3fa466, transparent 60%), radial-gradient(70% 90% at 90% -10%, #5ee7ff40, transparent 70%), #0a0712 !important;
+  animation: gameglow 2.4s ease-in-out infinite;
+}
+@keyframes gameglow { 50% { filter: hue-rotate(-25deg) brightness(1.2); } }
+.unit.act-browser .screen {
+  background: radial-gradient(90% 120% at 50% 110%, #5ee7ff55, transparent 60%), repeating-linear-gradient(0deg, #5ee7ff0a 0 2px, transparent 2px 6px), #06101a !important;
+}
+.unit.act-music .screen { background: radial-gradient(80% 120% at 50% 110%, #3fd36f55, transparent 60%), #06100a !important; }
+.unit.act-game, .unit.act-console { border-color: #ff3fa455 !important; }
+.unit.act-browser { border-color: #5ee7ff55 !important; }
+[data-skin="8bit"] .act-badge { border-radius: 0; font-family: var(--display); font-size: 7px; background: var(--lcd-0); color: var(--lcd-3); box-shadow: 0 0 0 3px #0c0b10; }
+[data-skin="8bit"] .act-badge small { font-size: 6px; }
+[data-skin="8bit"] .right-now { font-size: 9px; line-height: 1.8; }
+
+/* ── Remote: mode bar ────────────────────────────── */
+.mode-bar { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 10px; min-width: 0; }
+.act-chip {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px; border-radius: 999px;
+  background: var(--body); border: 1px solid var(--body-edge); font-size: 13px; color: var(--ink);
+}
+.act-chip i { font-style: normal; font-size: 15px; }
+.act-chip b { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-chip small { flex: none; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); }
+.act-chip.act-game, .act-chip.act-console { border-color: var(--act-game); box-shadow: 0 0 22px -8px var(--act-game); }
+.act-chip.act-browser { border-color: var(--act-browser); box-shadow: 0 0 22px -8px var(--act-browser); }
+.mode-seg { flex: none; display: flex; padding: 3px; border-radius: 999px; background: var(--body); border: 1px solid var(--body-edge); }
+.mode-seg button { height: 34px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 650; color: var(--ink-soft); transition: background .15s, color .15s; }
+.mode-seg button[aria-selected="true"] { background: var(--key); color: var(--key-ink); }
+.kb-btn { flex: none; width: 40px; height: 40px; border-radius: 50%; font-weight: 750; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); }
+@media (max-width: 400px) {
+  .mode-seg button { padding: 0 8px; font-size: 11px; }
+  .act-chip { padding: 0 10px; font-size: 12px; }
+}
+
+/* Swap the remote for the right mode (no fighting the app's tabs). */
+.mode-panel { display: none; }
+#remote[data-mode="trackpad"] #p-trackpad,
+#remote[data-mode="gamepad"] #p-gamepad { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; animation: fadein .25s ease-out; }
+#remote[data-mode="trackpad"] #p-remote,
+#remote[data-mode="gamepad"] #p-remote,
+#remote[data-mode="trackpad"] .tabs,
+#remote[data-mode="gamepad"] .tabs { display: none !important; }
+#remote[data-mode="trackpad"] .panels,
+#remote[data-mode="gamepad"] .panels { display: flex; flex-direction: column; overflow: hidden; padding-bottom: calc(12px + var(--safe-b)); }
+.mode-note { margin: 0; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.45; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink-soft); }
+
+/* ── Trackpad + keyboard ─────────────────────────── */
+.trackpad {
+  position: relative; flex: 1; min-height: 220px; border-radius: 26px; overflow: hidden; touch-action: none; cursor: crosshair;
+  background: radial-gradient(120% 80% at 50% 120%, #5ee7ff1f, transparent 60%), var(--body);
+  border: 1px solid var(--body-edge);
+  background-image: radial-gradient(circle, #ffffff10 1px, transparent 1.5px), radial-gradient(120% 80% at 50% 120%, #5ee7ff1f, transparent 60%);
+  background-size: 22px 22px, auto;
+  -webkit-user-select: none; user-select: none;
+}
+.trackpad.touching, .trackpad.locked { border-color: var(--act-browser); box-shadow: 0 0 40px -14px var(--act-browser), inset 0 0 0 1px var(--act-browser); }
+.trackpad.locked { cursor: none; }
+.tp-hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-faint); pointer-events: none; }
+.tp-dot {
+  position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #fff 0 12%, #5ee7ffaa 30%, transparent 70%); transition: opacity .15s;
+}
+.trackpad.touching .tp-dot { opacity: 1; }
+.tp-dot.tap { animation: tptap .35s ease-out; }
+@keyframes tptap { 0% { opacity: 1; box-shadow: 0 0 0 0 #5ee7ffaa; } 100% { opacity: 0; box-shadow: 0 0 0 26px transparent; } }
+.tp-keys { flex: none; display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; }
+.tp-key { height: 50px; border-radius: 16px; font-weight: 650; font-size: 14px; background: var(--key); color: var(--key-ink); transition: transform .08s; }
+.tp-key.pressed, .tp-key:active { transform: scale(.95); }
+.kb-bar { flex: none; display: flex; gap: 8px; }
+.kb-bar input {
+  flex: 1; min-width: 0; height: 54px; padding: 0 16px; border-radius: 16px; font-size: 17px;
+  background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); outline: none; -webkit-user-select: text; user-select: text;
+}
+.kb-bar input:focus { border-color: var(--act-browser); box-shadow: 0 0 0 4px #5ee7ff22; }
+.kb-bar button { width: 54px; height: 54px; border-radius: 16px; font-size: 20px; background: var(--key); color: var(--key-ink); }
+
+/* ── Gamepad ─────────────────────────────────────── */
+.gamepad { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+.gp-shoulders { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+.gp-shoulders button { height: 44px; border-radius: 14px 14px 8px 8px; font-weight: 700; font-size: 13px; background: var(--key); color: var(--key-ink); }
+.gp-main { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'dpad face' 'mid mid'; align-items: center; gap: 18px 8px; }
+.gp-dpad { grid-area: dpad; justify-self: center; display: grid; grid-template-columns: repeat(3, var(--gp, 58px)); grid-template-rows: repeat(3, var(--gp, 58px)); --gp: min(13.5vw, 62px); }
+.gp-dpad button, .gp-dpad .c { background: var(--key); color: var(--key-ink); font-size: 18px; }
+.gp-dpad .u { grid-area: 1 / 2; border-radius: 12px 12px 0 0; }
+.gp-dpad .l { grid-area: 2 / 1; border-radius: 12px 0 0 12px; }
+.gp-dpad .c { grid-area: 2 / 2; }
+.gp-dpad .r { grid-area: 2 / 3; border-radius: 0 12px 12px 0; }
+.gp-dpad .d { grid-area: 3 / 2; border-radius: 0 0 12px 12px; }
+.gp-mid { grid-area: mid; display: flex; justify-content: center; gap: 22px; }
+.gp-mid button { height: 26px; padding: 0 12px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .08em; background: var(--key); color: var(--key-ink); opacity: .85; }
+.gp-face { grid-area: face; justify-self: center; position: relative; width: calc(var(--gb, 62px) * 2.6); height: calc(var(--gb, 62px) * 2.6); --gb: min(14.5vw, 64px); }
+.gp-face button {
+  position: absolute; width: var(--gb); height: var(--gb); border-radius: 50%; font-weight: 800; font-size: 20px; color: #fff;
+  box-shadow: 0 4px 0 #0006, inset 0 2px 0 #ffffff33; transition: transform .07s, box-shadow .07s;
+}
+.gp-face .y { left: 50%; top: 0; transform: translateX(-50%); background: #e2b714; }
+.gp-face .x { left: 0; top: 50%; transform: translateY(-50%); background: #2f7de1; }
+.gp-face .b { right: 0; top: 50%; transform: translateY(-50%); background: #e0412f; }
+.gp-face .a { left: 50%; bottom: 0; transform: translateX(-50%); background: #3fb950; }
+.gp-face .y.pressed { transform: translateX(-50%) translateY(3px); }
+.gp-face .a.pressed { transform: translateX(-50%) translateY(3px); }
+.gp-face .x.pressed, .gp-face .b.pressed { transform: translateY(calc(-50% + 3px)); }
+.gp-face button.pressed { box-shadow: 0 1px 0 #0006; }
+.gp-face .a.charged { box-shadow: 0 0 0 4px #3fb95077, 0 4px 0 #0006; }
+.gp-dpad button.pressed, .gp-shoulders button.pressed, .gp-mid button.pressed { background: var(--act-game); color: #fff; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .gamepad { flex-direction: row; align-items: center; }
+  .gp-shoulders { grid-template-columns: 1fr; width: 90px; }
+  .gp-main { flex: 1; }
+}
+
+/* ── Shortcuts overlay (computers) ───────────────── */
+.kb-overlay { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: #000b; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.kb-card { width: min(100%, 760px); max-height: 90dvh; overflow: auto; padding: 22px; border-radius: 26px; background: var(--bg); color: var(--ink); border: 1px solid var(--body-edge); }
+.kb-card h3 { margin: 0 0 14px; font-size: 22px; letter-spacing: -.02em; }
+.kb-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+.kb-cols h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); }
+.kb-cols p { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
+kbd { display: inline-block; min-width: 22px; padding: 2px 6px; margin: 0 2px; border-radius: 6px; font-family: var(--mono); font-size: 11px; text-align: center; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); }
+.kb-foot { margin: 14px 0; font-size: 11px; color: var(--ink-soft); }
+
+/* ── Aurora ──────────────────────────────────────── */
+[data-skin="aurora"] .act-chip, [data-skin="aurora"] .mode-seg, [data-skin="aurora"] .kb-btn,
+[data-skin="aurora"] .mode-note, [data-skin="aurora"] .kb-bar input {
+  background: var(--glass-1); border-color: var(--hair); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+[data-skin="aurora"] .mode-seg button[aria-selected="true"] { background: linear-gradient(135deg, #ffffff26, #ffffff0c); color: #fff; }
+[data-skin="aurora"] .trackpad { background-color: #0b0e16; border-color: var(--hair); }
+[data-skin="aurora"] .tp-key, [data-skin="aurora"] .kb-bar button, [data-skin="aurora"] .gp-shoulders button,
+[data-skin="aurora"] .gp-dpad button, [data-skin="aurora"] .gp-dpad .c, [data-skin="aurora"] .gp-mid button {
+  background: var(--glass-1); border: 1px solid var(--hair); color: var(--ink);
+}
+[data-skin="aurora"] .gp-face button { box-shadow: 0 0 26px -6px currentColor, inset 0 1px 0 #ffffff44; }
+/* The orb and strip tint with what's on. */
+[data-skin="aurora"] #remote[data-activity="game"] .pad,
+[data-skin="aurora"] #remote[data-activity="console"] .pad { box-shadow: 0 0 90px -16px var(--act-game), inset 0 0 40px #ffffff08; }
+[data-skin="aurora"] #remote[data-activity="browser"] .pad { box-shadow: 0 0 90px -16px var(--act-browser), inset 0 0 40px #ffffff08; }
+[data-skin="aurora"] #remote[data-activity="game"] .hud,
+[data-skin="aurora"] #remote[data-activity="console"] .hud { border-color: #ff3fa455; }
+[data-skin="aurora"] #remote[data-activity="browser"] .hud { border-color: #5ee7ff55; }
+[data-skin="aurora"] .kb-card { background: #0d0f17; }
+
+/* ── 8-bit ───────────────────────────────────────── */
+[data-skin="8bit"] :is(.act-chip, .mode-seg, .mode-seg button, .kb-btn, .trackpad, .tp-key, .kb-bar input, .kb-bar button, .gp-shoulders button, .gp-mid button, .mode-note, .kb-card) { border-radius: 0; }
+[data-skin="8bit"] .act-chip, [data-skin="8bit"] .mode-seg button, [data-skin="8bit"] .tp-key, [data-skin="8bit"] .mode-note { font-size: 8px; line-height: 1.6; }
+[data-skin="8bit"] .act-chip { background: var(--lcd-3); color: var(--lcd-0); border: 0; box-shadow: 0 0 0 4px #0c0b10; }
+[data-skin="8bit"] .act-chip small { color: var(--lcd-1); font-size: 7px; }
+[data-skin="8bit"] .trackpad { background: var(--lcd-2); border: 0; box-shadow: inset 0 0 0 4px var(--lcd-1); }
+[data-skin="8bit"] .tp-hint { color: var(--lcd-0); font-size: 7px; }
+[data-skin="8bit"] kbd { border-radius: 0; font-size: 7px; background: #3a3946; color: #e9e6f2; border-color: #0c0b10; }
+[data-skin="8bit"] .gp-face button { border-radius: 50%; font-family: var(--display); font-size: 12px; background: var(--signal); }

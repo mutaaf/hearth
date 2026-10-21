@@ -9,6 +9,7 @@ import { badRequest, HearthError } from './errors.js';
 // Awake enough to take a launch. 'unknown' = a 2016-17 Samsung that answers
 // but can't say whether its panel is on; never toggle those blindly.
 const LAUNCH_WAKES = new Set(['roku', 'androidtv']);
+const LISTS_ASLEEP = new Set(['roku', 'androidtv', 'appletv']); // can say what's installed from standby
 const awake = (state) => Boolean(state?.online && (state.power === 'on' || state.power === 'unknown'));
 
 class LaunchError extends HearthError {
@@ -105,9 +106,9 @@ export async function catalogStatus(hub, { fresh = false } = {}) {
     hub.tvs.filter((t) => t.credentials).map(async (tv) => {
       const state = hub.view(tv).state;
       let apps = hub.cachedApps(tv.id);
-      // Rokus and Google TVs list apps from standby; LG/Samsung only when awake
+      // Rokus, Google TVs and Apple TVs list apps from standby; LG/Samsung only when awake
       // (opening a Samsung's remote socket can wake some sets).
-      const canAsk = LAUNCH_WAKES.has(tv.brand) ? state?.online : awake(state);
+      const canAsk = LISTS_ASLEEP.has(tv.brand) ? state?.online : awake(state);
       if ((fresh || !apps) && canAsk) apps = await hub.apps(tv.id, { fresh }).catch(() => apps);
       const row = {};
       for (const e of CATALOG) {

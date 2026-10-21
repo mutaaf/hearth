@@ -26,6 +26,9 @@ const SSAP = {
   network: 'ssap://com.webos.service.connectionmanager/getinfo',
   pointer: 'ssap://com.webos.service.networkinput/getPointerInputSocket',
   power: 'ssap://com.webos.service.tvpower/power/getPowerState',
+  insertText: 'ssap://com.webos.service.ime/insertText',
+  deleteText: 'ssap://com.webos.service.ime/deleteCharacters',
+  enter: 'ssap://com.webos.service.ime/sendEnterKey',
 };
 
 const PAIR_TIMEOUT = 60_000;
@@ -39,19 +42,22 @@ const UNREACHABLE = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ETIMEDOUT', 'ENETU
 
 export class LgDriver extends Driver {
   static brand = 'lg';
-  capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: true };
+  capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: true, pointer: true, keyboard: true };
+  // HDMI app id → the CEC name of what's plugged in ("PlayStation 5").
+  #inputLabels = new Map();
   #client = null;
   #pointer = null;
 
   constructor(tv, opts = {}) {
     super(tv, opts);
     this.pinUrls = opts.pinUrls; // tests point PIN pairing at a fake TV
+    this.url = opts.url; // tests point the main connection at a fake TV
   }
 
   start() {
     if (this.#client) return;
     const client = new LGTV({
-      host: this.tv.ip,
+      ...(this.url ? { url: this.url } : { host: this.tv.ip }),
       // '' rather than undefined so lgtv2 never reads a stray ~/.lgtv2 key file.
       clientKey: this.tv.credentials?.clientKey ?? '',
       keyFile: path.join(hearthHome(), 'lg', this.tv.id),
@@ -213,16 +219,28 @@ export class LgDriver extends Driver {
       this.setState({ volume: v.volume ?? null, muted: v.muteStatus ?? v.muted ?? null });
     });
     client.subscribe(SSAP.foreground, (err, res) => {
-      if (!err && res) this.setState({ app: this.state.power === 'on' ? res.appId || null : null });
+      if (err || !res) return;
+      const on = this.state.power === 'on';
+      // Asleep: nothing is "playing", whatever the launcher last had up.
+      this.setState({ app: on ? res.appId || null : null, inputLabel: on ? (this.#inputLabels.get(res.appId) ?? null) : null });
     });
     client.subscribePowerState((err, res) => {
       if (err || !res) return;
       const power = res.state === 'unknown' ? 'on' : res.state;
       const was = this.state.power;
       // Asleep (Active Standby / Screen Off): nothing is "playing" any more.
-      this.setState(power === 'on' ? { power } : { power, app: null });
+      this.setState(power === 'on' ? { power } : { power, app: null, inputLabel: null });
       if (power === 'on' && was !== 'on') this.refresh();
     });
+
+    // Learn what's plugged into each HDMI port (CEC names) for activity.
+    client
+      .request(SSAP.inputs)
+      .then((res) => {
+        for (const d of res?.devices ?? []) if (d.appId && d.label) this.#inputLabels.set(d.appId, d.label);
+        if (this.state.app) this.setState({ inputLabel: this.#inputLabels.get(this.state.app) ?? null });
+      })
+      .catch(() => {});
 
     const info = {};
     if (!this.tv.model) {
@@ -250,8 +268,11 @@ export class LgDriver extends Driver {
     const patch = {};
     const power = pw?.state ? (POWER_STATES[pw.state] ?? 'on') : this.state.power;
     if (pw?.state) patch.power = power;
-    if (fg && power === 'on') patch.app = fg.appId || null;
-    if (power !== 'on') patch.app = null;
+    if (fg && power === 'on') {
+      patch.app = fg.appId || null;
+      patch.inputLabel = this.#inputLabels.get(fg.appId) ?? null;
+    }
+    if (power !== 'on') Object.assign(patch, { app: null, inputLabel: null });
     const v = vol?.volumeStatus ?? vol;
     if (v && (v.volume != null || v.muteStatus != null || v.muted != null)) {
       patch.volume = v.volume ?? this.state.volume;
@@ -266,11 +287,16 @@ export class LgDriver extends Driver {
   }
 
   async #button(name) {
+    return this.#input('button', { name });
+  }
+
+  // Everything on the pointer-input socket: buttons, moves, clicks, scrolls.
+  async #input(type, payload) {
     if (!this.#client?.connected) throw offline();
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         this.#pointer ??= await this.#client.getSocket(SSAP.pointer);
-        this.#pointer.send('button', { name });
+        this.#pointer.send(type, payload);
         return;
       } catch (err) {
         // The input socket can go stale while the main one stays up; reopen once.
@@ -322,7 +348,50 @@ export class LgDriver extends Driver {
     await this.#request(SSAP.switchInput, { inputId: id });
   }
 
+  async pointer({ type, dx = 0, dy = 0 } = {}) {
+    const x = Math.round(Number(dx) || 0);
+    const y = Math.round(Number(dy) || 0);
+    if (type === 'move') return this.#input('move', { dx: x, dy: y, down: 0 });
+    if (type === 'click') return this.#input('click');
+    if (type === 'scroll') return this.#input('scroll', { dx: x, dy: y });
+    throw unsupported(`Pointer "${type}"`);
+  }
+
+  async text({ text, backspace, enter } = {}) {
+    if (text) await this.#request(SSAP.insertText, { text: String(text).slice(0, 500), replace: 0 });
+    if (backspace) await this.#request(SSAP.deleteText, { count: Math.min(100, Number(backspace) || 1) });
+    if (enter) await this.#request(SSAP.enter);
+  }
+
   async toast(message) {
     await this.#request(SSAP.toast, { message: String(message).slice(0, 120) });
+  }
+
+  // ── Health & diagnostics (read-only SSAP queries) ──
+  async diagnostics() {
+    if (!this.#client?.connected) return { connected: false };
+    const ask = (uri) => this.#client.request(uri).catch((err) => ({ error: err.message }));
+    const [system, software, network, volume, power, launchPoints, inputs, foreground] = await Promise.all([
+      ask(SSAP.systemInfo),
+      ask('ssap://com.webos.service.update/getCurrentSWInformation'),
+      ask(SSAP.network),
+      ask(SSAP.volume),
+      ask('ssap://com.webos.service.tvpower/power/getPowerState'),
+      ask(SSAP.launchPoints),
+      ask(SSAP.inputs),
+      ask(SSAP.foreground),
+    ]);
+    return {
+      connected: true,
+      url: this.#client.urls?.[0] ?? null,
+      system,
+      software,
+      network,
+      volume,
+      power,
+      launchPointCount: launchPoints?.launchPoints?.length ?? null,
+      inputs: inputs?.devices?.map((d) => ({ id: d.id, label: d.label, connected: d.connected })) ?? inputs,
+      foreground,
+    };
   }
 }

@@ -168,6 +168,14 @@ svg { width: 1em; height: 1em; }
 .unit.on .screen { background: radial-gradient(90% 120% at 50% 110%, #f2541b55, transparent 60%), radial-gradient(70% 90% at 20% 0%, #3b2a6033, transparent 70%), #141210; }
 .unit.on .screen .now { opacity: 1; }
 .screen .scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 3px); }
+.unit[data-brand="appletv"] .screen::after {
+  /* Apple TV: the little glossy puck under the screen, and a cool frosted glow when on. */
+  content: ''; position: absolute; right: 12px; bottom: 10px; width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(160deg, #3a3a3e 0 18%, #0b0b0c 19% 100%); box-shadow: 0 1px 0 #ffffff26 inset, 0 4px 10px #0009;
+}
+.unit.on[data-brand="appletv"] .screen {
+  background: radial-gradient(90% 120% at 50% 115%, #9ecbff40, transparent 60%), radial-gradient(70% 90% at 15% -5%, #e8e8f033, transparent 70%), #101114;
+}
 .unit-meta { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4px 12px; padding: 0 2px; }
 .unit-name { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.05; }
 .unit-sub { margin: 0; font-size: 10px; color: var(--ink-soft); text-transform: uppercase; grid-column: 1; }

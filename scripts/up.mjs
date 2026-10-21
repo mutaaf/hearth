@@ -33,6 +33,47 @@ if (stale) {
   if (npm.status !== 0) process.exit(npm.status ?? 1);
 } else step('Dependencies up to date');
 
+// 2b. Apple TV support: a private Python venv with a pinned pyatv. Optional:
+//     without python3 Hearth still runs, and Apple TVs say how to fix it.
+//     Prevents: "pyatv is not installed", a venv broken by `brew upgrade
+//     python` (its interpreter symlink dangles), and drifting pyatv versions.
+const { PYATV_VERSION, venvDir, venvPython } = await import('../src/atv-bridge.js');
+appleTvSetup();
+
+function appleTvSetup() {
+  const run = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', timeout: 300_000, ...opts });
+  const VENV = venvDir();
+  const PY = venvPython();
+  const pyatvVersion = () => {
+    const r = run(PY, ['-c', 'from importlib.metadata import version; print(version("pyatv"))']);
+    return r.status === 0 ? r.stdout.trim() : null;
+  };
+  if (existsSync(PY) && pyatvVersion() === PYATV_VERSION) return step(`Apple TV support ready (pyatv ${PYATV_VERSION})`);
+
+  const python = ['python3', 'python'].find((p) => {
+    const r = run(p, ['-c', 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)']);
+    return r.status === 0;
+  });
+  if (!python) {
+    return step('Apple TV support skipped: needs Python 3.10+ (macOS: `brew install python`). Everything else works.');
+  }
+  // A venv whose interpreter no longer runs (Python upgraded underneath it)
+  // is rebuilt from scratch.
+  const broken = existsSync(PY) && run(PY, ['-c', 'pass']).status !== 0;
+  if (!existsSync(PY) || broken) {
+    step(`${broken ? 'Rebuilding' : 'Creating'} the Apple TV Python environment (${VENV})…`);
+    mkdirSync(path.dirname(VENV), { recursive: true });
+    const made = run(python, ['-m', 'venv', ...(broken ? ['--clear'] : []), VENV]);
+    if (made.status !== 0) return step(`Apple TV support skipped: couldn't create a venv (${(made.stderr || '').trim().split('\n').pop()})`);
+  }
+  step(`Installing pyatv ${PYATV_VERSION} for Apple TV…`);
+  const pip = run(PY, ['-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', `pyatv==${PYATV_VERSION}`]);
+  if (pip.status !== 0 || pyatvVersion() !== PYATV_VERSION) {
+    return step(`Apple TV support skipped: pip couldn't install pyatv (${(pip.stderr || '').trim().split('\n').pop() || 'unknown error'})`);
+  }
+  step(`Apple TV support ready (pyatv ${PYATV_VERSION})`);
+}
+
 const health = () =>
   fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(1000) })
     .then((r) => r.json())

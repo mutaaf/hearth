@@ -7,6 +7,7 @@ import { bulk } from './bulk.js';
 import { catalogView } from './catalog.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { badRequest, HearthError, notFound } from './errors.js';
+import { qrSvg } from './qr.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -32,6 +33,9 @@ function routes(hub) {
   const r = (method, pattern, fn) => [method, new RegExp(`^/api${pattern}$`), fn];
   return [
     r('GET', '/health', () => ({ ok: true, name: 'hearth', version })),
+    // The address to hand family members (e.g. a home portal's /tv), for the
+    // app's "Share Hearth" and install screens.
+    r('GET', '/info', (_, __, url) => ({ name: 'hearth', version, friendlyUrl: process.env.HEARTH_FRIENDLY_URL || null })),
     r('GET', '/tvs', () => hub.list()),
     r('GET', '/nearby', () => hub.nearby),
     r('POST', '/scan', () => hub.scan()),
@@ -79,6 +83,33 @@ function routes(hub) {
       scenesOf(hub).run(sc).catch((err) => console.error('[hearth] scene failed:', err.message));
       return { ok: true, started: true };
     }),
+    // ── health: report card, diagnostics, AI insights (keys pass through, never stored) ──
+    r('GET', '/report', () => hub.report()),
+    r('GET', `/tvs/${id}/health`, ([tv]) => hub.health(tv)),
+    r('GET', `/tvs/${id}/diagnostics`, ([tv]) => hub.diagnostics(tv)),
+    r('POST', `/tvs/${id}/insights`, ([tv], body, _url, req) =>
+      hub.aiInsights(tv, {
+        provider: String(body.provider ?? 'edge'),
+        model: body.model ? String(body.model).slice(0, 120) : null,
+        key: req.headers['x-hearth-key'] ?? '',
+        refresh: Boolean(body.refresh),
+      })),
+    r('POST', '/ai/models', (_, body, _url, req) => hub.insights.models(String(body.provider ?? 'auto'), req.headers['x-hearth-key'] ?? '')),
+    // ── trackpad + keyboard (browser / search) ──
+    r('POST', `/tvs/${id}/pointer`, ([tv], body) => {
+      if (!['move', 'click', 'scroll'].includes(body.type)) throw badRequest('type must be move, click or scroll');
+      const clamp = (n) => Math.max(-2000, Math.min(2000, Number(n) || 0));
+      return hub.driver(tv).pointer({ type: body.type, dx: clamp(body.dx), dy: clamp(body.dy) }).then(() => ({ ok: true }));
+    }),
+    r('POST', `/tvs/${id}/text`, ([tv], body) => {
+      const input = {
+        text: typeof body.text === 'string' ? body.text.slice(0, 500) : '',
+        backspace: Math.max(0, Math.min(100, Number(body.backspace) || 0)),
+        enter: Boolean(body.enter),
+      };
+      if (!input.text && !input.backspace && !input.enter) throw badRequest('Send text, backspace or enter');
+      return hub.driver(tv).text(input).then(() => ({ ok: true }));
+    }),
   ];
 }
 
@@ -117,6 +148,7 @@ function sendJson(res, status, data) {
 // Third-party browser files served straight from node_modules.
 const VENDOR = {
   'vendor/aurora-field.min.js': path.join(ROOT, 'node_modules', 'aurora-field', 'dist', 'aurora-field.min.js'),
+  'vendor/insight-schema.js': path.join(ROOT, 'src', 'insight-schema.js'),
 };
 
 async function serveStatic(res, pathname) {
@@ -191,6 +223,12 @@ export function createServer(hub) {
         });
         return;
       }
+      if (url.pathname === '/api/qr.svg' && req.method === 'GET') {
+        const text = url.searchParams.get('u') ?? '';
+        if (!/^https?:\/\/[^\s]{1,200}$/.test(text)) throw badRequest('u must be an http(s) link');
+        res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'max-age=3600' });
+        return res.end(qrSvg(text));
+      }
       const icon = url.pathname.match(/^\/api\/tvs\/([\w-]+)\/icon$/);
       if (icon && req.method === 'GET') return proxyIcon(hub, icon[1], url.searchParams.get('u') ?? '', res);
 
@@ -199,7 +237,7 @@ export function createServer(hub) {
           const m = url.pathname.match(pattern);
           if (!m || method !== req.method) continue;
           const body = method === 'GET' || method === 'DELETE' ? {} : await readJson(req);
-          return sendJson(res, 200, await handler(m.slice(1), body, url));
+          return sendJson(res, 200, await handler(m.slice(1), body, url, req));
         }
         throw notFound('API route');
       }

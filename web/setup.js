@@ -4,7 +4,7 @@
 import { feedback, haptic } from './feel.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const brandName = (b) => (b === 'lg' ? 'LG' : 'Samsung');
+const brandName = (b) => ({ lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' })[b] ?? 'TV';
 const DOTS = ['on', 'search', 'pair', 'name', 'done'];
 // Steps that sit under another step's progress dot.
 const DOT_OF = { pick: 'search', none: 'search', manual: 'search', pairfail: 'pair', wake: 'on', lgchoose: 'pair', pin: 'pair' };
@@ -63,10 +63,11 @@ export function createSetup({ root, api, onTv, onClose, note }) {
 
   // Each brand has its own front door. LG: a number on screen (no remote) or
   // Allow. Samsung: Allow if it asks (older ones don't). Roku/Google TV: none.
+  // Apple TV: a 4-digit code on screen, twice (remote, then what's playing).
   function startPair(extra = {}) {
     Object.assign(state, extra);
     const brand = state.candidate?.brand;
-    go(brand === 'lg' ? 'lgchoose' : 'pair');
+    go(brand === 'lg' ? 'lgchoose' : brand === 'appletv' ? 'pin' : 'pair');
   }
 
   async function ensureAdded() {
@@ -131,12 +132,13 @@ export function createSetup({ root, api, onTv, onClose, note }) {
 
     async pin() {
       const tv = state.candidate;
+      const apple = tv?.brand === 'appletv';
       frame('pair', `
         <div class="setup-art"><div class="field-art"></div></div>
         <h2 id="pinTitle">Look at the TV…</h2>
         <p class="say-it" id="pinSub">A number is about to appear on ${esc(tv?.name ?? 'the screen')}.</p>
         <form class="fields" id="pinForm" hidden>
-          <input class="ip-input" id="pinInput" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••••" aria-label="Number on the TV">
+          <input class="ip-input" id="pinInput" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="${apple ? '••••' : '••••••'}" aria-label="Number on the TV">
           <div class="setup-actions">
             <button type="submit" class="cta">Connect</button>
             <button type="button" class="ghost" data-press="up" data-setup="pin">Show the number again</button>
@@ -144,9 +146,10 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         </form>`);
       mountField('hearth-tv');
       const mine = run;
+      let res;
       try {
         const id = await ensureAdded();
-        const res = await api('POST', `/tvs/${id}/pair`, { mode: 'pin' });
+        res = await api('POST', `/tvs/${id}/pair`, { mode: 'pin' });
         if (mine !== run) return;
         if (!res.needsPin) {
           onTv(res);
@@ -158,12 +161,23 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         feedback('error');
         return go('pairfail', { error: err.message });
       }
-      haptic('press');
-      root.querySelector('#pinTitle').textContent = 'Type the number on the TV.';
-      root.querySelector('#pinSub').textContent = 'It’s on the screen right now.';
+      const ask = (r) => {
+        haptic('press');
+        // Apple TV asks twice: once for the remote, once for "what's playing".
+        const of = r.steps > 1 ? `Step ${r.step} of ${r.steps}: ` : '';
+        root.querySelector('#pinTitle').textContent = r.step > 1 ? `${of}One more number.` : `${of}Type the number on the TV.`;
+        root.querySelector('#pinSub').textContent = !apple
+          ? 'It’s on the screen right now.'
+          : r.step > 1
+            ? 'The remote works already. This new code lets Hearth see what’s playing.'
+            : `${tv?.name ?? 'The Apple TV'} is showing 4 numbers. No remote needed.`;
+        const input = root.querySelector('#pinInput');
+        input.value = '';
+        setTimeout(() => input.focus(), 200);
+      };
+      ask(res);
       const form = root.querySelector('#pinForm');
       form.hidden = false;
-      setTimeout(() => root.querySelector('#pinInput')?.focus(), 200);
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const pin = root.querySelector('#pinInput').value.replace(/\D/g, '');
@@ -172,6 +186,7 @@ export function createSetup({ root, api, onTv, onClose, note }) {
           const paired = await api('POST', `/tvs/${state.tvId}/pair`, { pin });
           onTv(paired);
           if (mine !== run) return;
+          if (paired.needsPin) return ask(paired);
           feedback('success');
           go('name', { tv: paired });
         } catch (err) {
@@ -288,13 +303,17 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       const brand = state.candidate?.brand ?? state.tv?.brand;
       const tip = brand === 'samsung'
         ? 'On the TV: Settings → General → External Device Manager → Device Connection Manager → turn it on.'
-        : 'On the TV: Settings → General → Devices → External Devices → <b>LG Connect Apps</b> → On (older TVs: Settings → Network).';
+        : brand === 'appletv'
+          ? 'On the Apple TV: Settings → AirPlay and HomeKit → Allow Access → <b>Anyone on the Same Network</b>. Still stuck? Run <b>npm run up</b> on the Hearth computer (it sets up Apple TV support).'
+          : 'On the TV: Settings → General → Devices → External Devices → <b>LG Connect Apps</b> → On (older TVs: Settings → Network).';
       frame('pairfail', `
         <h2>Almost! Let’s try again.</h2>
         <ul class="checklist">
-          <li><i>📺</i><span>Is the TV still on? The question box only shows while it’s on.</span></li>
-          <li><i>🎯</i><span>Press <b>OK</b> on <b>Allow</b> (not Deny) with the TV’s own remote.</span></li>
-          <li><i>⚙️</i><span>No box at all? ${tip}</span></li>
+          <li><i>📺</i><span>Is the TV still on? The ${brand === 'appletv' ? 'code' : 'question box'} only shows while it’s on.</span></li>
+          ${brand === 'appletv'
+            ? '<li><i>🔢</i><span>Type the 4 numbers quickly; the Apple TV only shows them for a minute.</span></li>'
+            : '<li><i>🎯</i><span>Press <b>OK</b> on <b>Allow</b> (not Deny) with the TV’s own remote.</span></li>'}
+          <li><i>⚙️</i><span>${brand === 'appletv' ? 'No numbers at all?' : 'No box at all?'} ${tip}</span></li>
         </ul>
         <p class="say-it" style="font-size:13px">${esc(state.error ?? '')}</p>
         <div class="setup-actions">

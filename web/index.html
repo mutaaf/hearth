@@ -5,22 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Hearth</title>
   <meta name="description" content="One remote for every TV in the house.">
-  <meta name="theme-color" content="#e9e3d7">
+  <meta name="theme-color" content="#07080c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Hearth">
   <meta name="format-detection" content="telephone=no">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wdth,wght@87.5,400..600&family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="skin-8bit.css">
   <link rel="stylesheet" href="skin-aurora.css">
+  <link rel="stylesheet" href="install.css">
   <link rel="stylesheet" href="scenes.css">
+  <link rel="stylesheet" href="health.css">
+  <link rel="stylesheet" href="modes.css">
   <link rel="stylesheet" href="launcher.css">
 </head>
 <body>
@@ -39,6 +44,7 @@
     <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-pad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -57,6 +63,8 @@
       <div class="masthead-right">
         <p class="clock mono" id="clock">—</p>
         <button type="button" class="select-btn mono" data-press="up" data-action="select">Select</button>
+        <!-- health -->
+        <button type="button" class="icon-btn" data-press="up" data-action="health" aria-label="Health and diagnostics"><svg><use href="#i-pulse"/></svg></button>
         <button type="button" class="icon-btn" data-press="up" data-action="settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
       </div>
     </header>
@@ -262,6 +270,8 @@
 
   <!-- Scene editor (scenes.js) -->
   <section id="sceneEditor" class="setup scene-editor" hidden aria-label="Scene editor"></section>
+  <!-- health: report cards, diagnostics, AI notes (health.js) -->
+  <section id="health" class="health" hidden aria-label="Health and diagnostics"></section>
 
   <!-- ─────────── Sheets ─────────── -->
   <dialog class="sheet" id="bulkSheet"></dialog>
@@ -272,6 +282,8 @@
       <label><span class="mono">Name</span><input id="editName" maxlength="60" required></label>
       <label><span class="mono">Room</span><input id="editRoom" maxlength="60" placeholder="Living room, Kids’ room…"></label>
       <p class="mono sub left" id="editMeta"></p>
+      <!-- health -->
+      <button type="button" class="chip big" data-press="up" data-action="tv-health"><svg><use href="#i-pulse"/></svg> Health &amp; diagnostics</button>
       <div class="sheet-actions">
         <button type="button" class="danger hold" data-press="confirm" data-action="forget"><span class="charge" aria-hidden="true"></span>Hold to forget</button>
         <button type="submit" class="cta small">Save</button>
@@ -300,6 +312,12 @@
     <div class="toggles">
       <label class="toggle"><span><b>Haptics</b><small class="mono">Feel every press</small></span><input type="checkbox" id="prefHaptics"></label>
       <label class="toggle"><span><b>Sounds</b><small class="mono">Clicks and chip blips</small></span><input type="checkbox" id="prefSound"></label>
+    </div>
+    <!-- health: AI insights settings (rendered by health.js) -->
+    <div class="toggles" id="aiSettings"></div>
+    <div class="toggles">
+      <button type="button" class="toggle" data-press="up" data-install="share"><span><b>Get Hearth on another phone or iPad</b><small class="mono">Link · QR code · Send with Messages</small></span><span aria-hidden="true">📲</span></button>
+      <button type="button" class="toggle" data-press="up" data-install="open"><span><b>Put Hearth on this home screen</b><small class="mono">Opens like a real app</small></span><span aria-hidden="true">➕</span></button>
     </div>
     <div class="sheet-actions">
       <button type="button" class="ghost" data-press="up" data-action="test-feel">Test the feel</button>

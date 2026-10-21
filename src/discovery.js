@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import dgram from 'node:dgram';
 import net from 'node:net';
+import { appleTvModel } from './drivers/appletv.js';
 import { rokuFromInfo, rokuInfo } from './drivers/roku.js';
 import { browse } from './mdns.js';
 
@@ -116,10 +117,48 @@ async function identify(ip, answer) {
 }
 
 export async function discover({ timeout = 2500 } = {}) {
-  const [ssdp, cast] = await Promise.all([discoverSsdp({ timeout }), discoverGoogleTvs().catch(() => [])]);
+  const [ssdp, mdns] = await Promise.all([discoverSsdp({ timeout }), discoverMdns().catch(() => [])]);
   // A device found both ways keeps its SSDP identity (LG/Samsung/Roku).
   const seen = new Set(ssdp.map((t) => t.ip));
-  return [...ssdp, ...cast.filter((t) => !seen.has(t.ip))];
+  return [...ssdp, ...mdns.filter((t) => !seen.has(t.ip))];
+}
+
+// Apple TVs announce _companion-link (rpMd=AppleTV6,2) and _airplay
+// (model=AppleTV6,2). Macs, iPads, HomePods (AudioAccessory*), and TVs with
+// AirPlay built in (LG, TCL, Roku) answer too; only AppleTV* models count.
+const isAppleTvModel = (m) => /^AppleTV\d/i.test(m ?? '');
+export function appleTvsFrom(entries) {
+  const byIp = new Map();
+  for (const e of entries) {
+    const companion = e.service.startsWith('_companion-link');
+    const airplay = e.service.startsWith('_airplay');
+    if (!companion && !airplay) continue;
+    const model = companion ? e.txt.rpmd : e.txt.model;
+    if (!isAppleTvModel(model)) continue;
+    const tv = byIp.get(e.ip) ?? { brand: 'appletv', name: '', model: '', rawModel: model, ip: e.ip, macs: [] };
+    // Both services carry the user's name for it ("Media Room").
+    tv.name ||= e.name;
+    // AirPlay's deviceid is what pyatv calls the identifier. Apple TVs
+    // randomise it (locally administered bit), so it's not a MAC for WOL.
+    if (airplay && e.txt.deviceid) tv.atvId = e.txt.deviceid.toUpperCase();
+    byIp.set(e.ip, tv);
+  }
+  return [...byIp.values()].map(({ rawModel, ...tv }) => ({
+    ...tv,
+    name: tv.name || 'Apple TV',
+    model: appleTvModel(rawModel),
+    id: tvId('appletv', tv.atvId ? [tv.atvId] : [], tv.ip),
+  }));
+}
+
+async function discoverMdns() {
+  const entries = await browse([
+    '_googlecast._tcp.local',
+    '_androidtvremote2._tcp.local',
+    '_airplay._tcp.local',
+    '_companion-link._tcp.local',
+  ]);
+  return [...(await googleTvsWithMacs(googleTvsFrom(entries))), ...appleTvsFrom(entries)];
 }
 
 // Google TV / Android TV / Chromecast announce over mDNS. Nest Hubs and
@@ -140,9 +179,7 @@ export function googleTvsFrom(entries) {
     });
 }
 
-async function discoverGoogleTvs() {
-  const entries = await browse(['_googlecast._tcp.local', '_androidtvremote2._tcp.local', '_airplay._tcp.local']);
-  const tvs = googleTvsFrom(entries);
+async function googleTvsWithMacs(tvs) {
   for (const tv of tvs) {
     await portOpen(tv.ip, 8009, 800); // say hello so the OS learns its MAC
     const mac = await macFor(tv.ip);
@@ -232,5 +269,22 @@ export async function probe(ip) {
   if (await portOpen(ip, 8009)) {
     return { id: tvId('androidtv', macs, ip), brand: 'androidtv', name: 'Google TV', model: '', ip, macs };
   }
+  const atv = await appleTvInfo(ip).catch(() => null);
+  if (atv) return { id: tvId('appletv', [], ip), brand: 'appletv', name: atv.name || 'Apple TV', model: appleTvModel(atv.model), ip, macs: [] };
   return null;
+}
+
+// AirPlay's GET /info is a binary plist; the strings we need sit in it as
+// plain ASCII, so a regex is enough (no plist parser). Smart TVs with AirPlay
+// answer too, with their own model, which doesn't match.
+export function appleTvFromAirplayInfo(buf) {
+  const text = Buffer.from(buf).toString('latin1');
+  const model = text.match(/AppleTV\d+,\d+/)?.[0];
+  return model ? { model, name: '' } : null;
+}
+
+export async function appleTvInfo(ip, timeout = 2000) {
+  const res = await fetch(`http://${ip}:7000/info`, { signal: AbortSignal.timeout(timeout) });
+  if (!res.ok) return null;
+  return appleTvFromAirplayInfo(Buffer.from(await res.arrayBuffer()));
 }

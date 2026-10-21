@@ -62,7 +62,7 @@ function parseApps(xml) {
 
 export class RokuDriver extends Driver {
   static brand = 'roku';
-  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: true };
+  capabilities = { volumeLevel: false, inputs: false, toast: false, appIcons: true, pointer: false, keyboard: true };
   #poll = null;
   #isTv = null;
 
@@ -168,6 +168,13 @@ export class RokuDriver extends Driver {
 
   async apps() {
     return (await this.#allApps()).map((a) => ({ id: a.id, title: a.title, icon: `${this.base}/query/icon/${encodeURIComponent(a.id)}` }));
+  }
+
+  // Roku has no pointer, but it types: one Lit_<char> keypress per character.
+  async text({ text, backspace, enter } = {}) {
+    for (const ch of String(text ?? '').slice(0, 200)) await this.#ecp('POST', `/keypress/Lit_${encodeURIComponent(ch)}`);
+    for (let i = 0; i < Math.min(100, Number(backspace) || 0); i++) await this.#ecp('POST', '/keypress/Backspace');
+    if (enter) await this.#ecp('POST', '/keypress/Enter');
   }
 
   async launch(id) {
