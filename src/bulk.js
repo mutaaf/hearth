@@ -1,0 +1,78 @@
+import { badRequest, unsupported } from './errors.js';
+
+// One action on one TV, in the same vocabulary for bulk select and scenes.
+// Returns nothing on success; throws (with a friendly message) on failure.
+export const ACTIONS = ['power', 'volume', 'mute', 'launch', 'input', 'say', 'key', 'room', 'forget'];
+
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function runAction(hub, id, action, args = {}) {
+  const tv = hub.get(id);
+  const driver = hub.driver(id);
+  const view = hub.view(tv);
+  switch (action) {
+    case 'power':
+      return hub.power(id, args.on !== false);
+    case 'volume': {
+      if (Number.isFinite(args.level) && view.capabilities?.volumeLevel) return driver.setVolume(args.level);
+      // No absolute level on this TV: nudge it instead.
+      const delta = Number.isFinite(args.delta)
+        ? args.delta
+        : Number.isFinite(args.level) && view.state?.volume != null
+          ? args.level - view.state.volume
+          : 0;
+      if (!delta) throw badRequest('This TV only does volume up/down; pick + or −');
+      for (let i = 0; i < Math.min(Math.abs(delta), 20); i++) {
+        await driver.key(delta > 0 ? 'volup' : 'voldown');
+        await pause(120);
+      }
+      return;
+    }
+    case 'mute': {
+      const want = args.on !== false;
+      // Only toggle when the TV says it's in the other state (or can't say).
+      if (view.state?.muted === want) return;
+      return driver.key('mute');
+    }
+    case 'launch': {
+      let appId = args.id;
+      if (!appId && args.title) {
+        const apps = await driver.apps();
+        const title = String(args.title).toLowerCase();
+        appId = apps.find((a) => a.title.toLowerCase() === title)?.id ?? apps.find((a) => a.title.toLowerCase().includes(title))?.id;
+        if (!appId) throw badRequest(`${args.title} isn’t installed on this TV`);
+      }
+      if (!appId) throw badRequest('Which app?');
+      return driver.launch(String(appId));
+    }
+    case 'input':
+      return driver.setInput(String(args.id ?? ''));
+    case 'say':
+      if (!view.capabilities?.toast) throw unsupported('On-screen messages');
+      return driver.toast(String(args.message ?? '').trim() || 'Hello from Hearth 👋');
+    case 'key':
+      return driver.key(String(args.key ?? ''), args.hold ? { hold: args.hold } : {});
+    case 'room':
+      return hub.update(id, { ...(args.name ? { name: args.name } : {}), ...(args.room !== undefined ? { room: args.room } : {}) });
+    case 'forget':
+      return hub.remove(id);
+    default:
+      throw badRequest(`Unknown action: ${action}`);
+  }
+}
+
+// The same action on many TVs at once, in parallel. Never throws: every TV
+// gets its own result so the app can show ✓ / ✕ chips.
+export async function bulk(hub, ids, action, args = {}) {
+  if (!Array.isArray(ids) || !ids.length) throw badRequest('Pick at least one TV');
+  if (!ACTIONS.includes(action)) throw badRequest(`Unknown action: ${action}`);
+  const known = ids.filter((id) => hub.tvs.some((t) => t.id === id));
+  const names = new Map(known.map((id) => [id, hub.tvs.find((t) => t.id === id).name])); // before a forget removes them
+  const results = await Promise.allSettled(known.map((id) => runAction(hub, id, action, args)));
+  return known.map((id, i) => ({
+    id,
+    name: names.get(id),
+    ok: results[i].status === 'fulfilled',
+    ...(results[i].status === 'rejected' ? { error: results[i].reason?.message ?? 'Failed' } : {}),
+  }));
+}

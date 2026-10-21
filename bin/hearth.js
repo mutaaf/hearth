@@ -3,6 +3,7 @@ import os from 'node:os';
 import qrcode from 'qrcode-terminal';
 import { discover } from '../src/discovery.js';
 import { Hub } from '../src/hub.js';
+import { Scenes } from '../src/scenes.js';
 import { createServer } from '../src/server.js';
 import { Store } from '../src/store.js';
 
@@ -29,6 +30,8 @@ async function scan() {
 async function serve() {
   const hub = await new Hub({ store: new Store() }).init();
   hub.startAutoDiscovery();
+  hub.scenes = await new Scenes({ hub }).init();
+  hub.scenes.start();
   const server = createServer(hub);
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is busy. Is Hearth already running? Try: npm run down`);
@@ -46,6 +49,7 @@ async function serve() {
     console.log(`  ${hub.tvs.length} TV${hub.tvs.length === 1 ? '' : 's'} remembered. Ctrl+C to stop.\n`);
   });
   const shutdown = async () => {
+    hub.scenes?.stop();
     server.close();
     await hub.close();
     process.exit(0);

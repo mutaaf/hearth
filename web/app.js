@@ -3,6 +3,8 @@
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
 import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
+import { createBulk } from './bulk.js';
+import { createScenes } from './scenes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const tvs = new Map();
@@ -111,7 +113,7 @@ function renderHouse() {
     : on === 0 ? 'All quiet. Every screen is off.'
     : on === list.length ? `All ${on} screen${on === 1 ? ' is' : 's are'} on.`
     : `${on} of ${list.length} screens are on.`;
-  $('#onCount').textContent = list.length ? `${on} on · ${list.length} total · long-press a TV for options` : '';
+  $('#onCount').textContent = list.length ? `${on} on · ${list.length} total · long-press a TV to select` : '';
 
   const banner = $('#nearby');
   banner.hidden = !nearby.length;
@@ -123,7 +125,8 @@ function renderHouse() {
   units.classList.toggle('settled', !firstPaint);
   units.innerHTML = list
     .map((t, i) => `
-      <article class="unit ${ledClass(t)}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press for options.">
+      <article class="unit ${ledClass(t)} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
+        <span class="sel-check" aria-hidden="true"></span>
         <div class="screen"><div class="scan"></div><span class="now">${esc(appName(t))}</span></div>
         ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
         <div class="unit-meta">
@@ -622,6 +625,20 @@ const setup = createSetup({
   onClose: () => render(),
 });
 
+// ── Bulk select + scenes ─────────────────────────────────
+const scenes = createScenes({ api, note, getTvs: () => [...tvs.values()] });
+const bulk = createBulk({
+  api,
+  note,
+  getTvs: () => [...tvs.values()],
+  render: () => !current && renderHouse(),
+  openEdit: (id) => openEdit(id),
+  saveAsScene: (prefill) => {
+    bulk.exit();
+    scenes.openEditor(null, { name: 'My scene', ...prefill });
+  },
+});
+
 // ── Routing ──────────────────────────────────────────────
 function route() {
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
@@ -675,7 +692,9 @@ function connectEvents() {
     route();
     // First visit with no TVs: go straight into setup.
     if (!greeted && !tvs.size && !setup.isOpen) setup.open();
+    if (!greeted) scenes.load();
     greeted = true;
+    bulk.prune();
   });
   es.addEventListener('tv', (e) => {
     const t = JSON.parse(e.data);
@@ -688,9 +707,12 @@ function connectEvents() {
   es.addEventListener('removed', (e) => {
     const { id } = JSON.parse(e.data);
     tvs.delete(id);
+    bulk.prune();
     if (current === id) location.hash = '#/';
     else render();
   });
+  es.addEventListener('scene', (e) => scenes.onEvent('scene', JSON.parse(e.data)));
+  es.addEventListener('scenes', (e) => scenes.onEvent('scenes', JSON.parse(e.data)));
   es.addEventListener('nearby', (e) => {
     const was = nearby.length;
     nearby = JSON.parse(e.data);
@@ -707,6 +729,9 @@ function tickClock() {
 function onPress(el, info) {
   const d = el.dataset;
   if (d.setup) return setup.handle(el, info);
+  // ── bulk select + scenes ──
+  if (d.bulk) return bulk.handle(el, info);
+  if (d.ed !== undefined || d.scene || d.sceneNew) return scenes.handle(el, info);
   if (d.key) return sendKey(d.key, { ...(info.long ? { hold: info.held } : {}), repeat: info.repeat });
   if (d.quick) {
     const t = tvs.get(d.quick);
@@ -714,7 +739,8 @@ function onPress(el, info) {
   }
   if (d.open) {
     const t = tvs.get(d.open);
-    if (info.long) return openEdit(t.id);
+    if (bulk.selecting) return bulk.toggle(t.id);
+    if (info.long) return bulk.enter(t.id);
     haptic('tap');
     if (!t.paired) return setup.open({ tvId: t.id, candidate: t });
     location.hash = `#/tv/${t.id}`;
@@ -764,6 +790,8 @@ function onPress(el, info) {
     case 'settings':
       haptic('tap');
       return openSettings();
+    case 'select':
+      return bulk.selecting ? bulk.exit() : bulk.enter();
     case 'edit':
       haptic('tap');
       return openEdit();
@@ -820,11 +848,17 @@ function wire() {
   document.addEventListener('confirm-short', (e) => {
     haptic('tick');
     const forgetting = e.target.closest('[data-action="forget"]');
-    note(forgetting ? 'Keep holding to forget this TV' : 'Keep holding to turn every TV off');
+    note(
+      e.target.closest('[data-bulk="forget"]') ? 'Keep holding to forget the selected TVs'
+      : e.target.closest('[data-ed="delete"]') ? 'Keep holding to delete this scene'
+      : forgetting ? 'Keep holding to forget this TV'
+      : 'Keep holding to turn every TV off',
+    );
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, dialog, #setup')) return;
+    if (e.key === 'Escape' && bulk.selecting) return bulk.exit();
+    if (e.target.closest('input, dialog, #setup, #sceneEditor')) return;
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('button, [role="button"]')) {
       if (e.target.matches('.unit')) e.target.click();
       return;

@@ -81,7 +81,124 @@
     }
   }
 
+  // ── Bulk select + scenes, in memory ──
+  function appsOf(t) {
+    return { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand];
+  }
+  function act(t, action, args) {
+    args = args || {};
+    if (action === 'power') {
+      if (args.on !== false) change(t, { online: true, power: 'on', app: t.brand === 'lg' ? 'com.webos.app.home' : null });
+      else change(t, { online: t.brand === 'samsung', power: t.brand === 'samsung' ? 'standby' : 'off', app: null, appTitle: null });
+      return;
+    }
+    if (action === 'room') {
+      if (args.name) t.name = String(args.name).trim() || t.name;
+      if (args.room !== undefined) t.room = String(args.room).trim();
+      emit('tv', t);
+      return;
+    }
+    if (action === 'forget') {
+      tvs = tvs.filter(function (x) { return x !== t; });
+      emit('removed', { id: t.id });
+      return;
+    }
+    needsOn(t);
+    if (action === 'volume') {
+      var level = args.level != null ? args.level : (t.state.volume || 15) + (args.delta || 0);
+      change(t, { volume: Math.max(0, Math.min(100, level)), muted: false });
+    } else if (action === 'mute') {
+      change(t, { muted: args.on !== false });
+    } else if (action === 'launch') {
+      var hit = appsOf(t).filter(function (a) { return a[1].toLowerCase() === String(args.title || '').toLowerCase() || a[0] === args.id; })[0];
+      if (!hit) throw new Error((args.title || 'That app') + ' isn’t installed on this TV');
+      change(t, { app: hit[0], appTitle: hit[1] });
+    } else if (action === 'say') {
+      if (t.brand !== 'lg') throw new Error('On-screen messages isn’t supported on this TV');
+    } else if (action === 'key') {
+      key(t, args.key);
+    }
+  }
+  var scenes = [
+    { id: 'everything-off', name: 'Everything off', emoji: '🌙', steps: [{ target: 'all', action: 'power', args: { on: false } }], schedule: null },
+    { id: 'movie-night', name: 'Movie night', emoji: '🍿', steps: [
+      { target: ['demo-living'], action: 'power', args: { on: true } },
+      { target: ['demo-living'], action: 'volume', args: { level: 20 } },
+      { target: ['demo-living'], action: 'launch', args: { title: 'Netflix' } }], schedule: null },
+    { id: 'school-night', name: 'School night', emoji: '📚', steps: [{ target: 'all', action: 'power', args: { on: false } }], schedule: { days: [0, 1, 2, 3, 4], time: '21:00', enabled: true } },
+  ];
+  function nextRunOf(sc) {
+    var s = sc.schedule;
+    if (!s || !s.enabled || !s.days.length) return null;
+    var hm = s.time.split(':');
+    var now = new Date();
+    for (var i = 0; i <= 7; i++) {
+      var d = new Date(now);
+      d.setDate(now.getDate() + i);
+      d.setHours(+hm[0], +hm[1], 0, 0);
+      if (s.days.indexOf(d.getDay()) >= 0 && d > now) return d.toISOString();
+    }
+    return null;
+  }
+  function sceneView(sc) { return Object.assign({}, sc, { nextRun: nextRunOf(sc) }); }
+  function scenesChanged() { emit('scenes', scenes.map(sceneView)); }
+  function runScene(sc) {
+    var total = sc.steps.length;
+    var allOk = true;
+    emit('scene', { id: sc.id, name: sc.name, step: 0, total: total, done: false });
+    sc.steps.forEach(function (st, i) {
+      setTimeout(function () {
+        var targets = st.target === 'all' ? tvs.filter(function (t) { return t.paired; }) : tvs.filter(function (t) { return st.target.indexOf(t.id) >= 0; });
+        targets.forEach(function (t) {
+          try { if (st.action !== 'wait') act(t, st.action, st.args); } catch (e) { allOk = false; }
+        });
+        emit('scene', { id: sc.id, name: sc.name, step: i + 1, total: total, done: false });
+        if (i === total - 1) {
+          sc.lastRun = new Date().toISOString();
+          emit('scene', { id: sc.id, name: sc.name, step: total, total: total, done: true, ok: allOk });
+        }
+      }, 700 * (i + 1));
+    });
+    if (!total) emit('scene', { id: sc.id, name: sc.name, step: 0, total: 0, done: true, ok: true });
+  }
+  function findScene(id) {
+    var sc = scenes.filter(function (x) { return x.id === id; })[0];
+    if (!sc) throw new Error('Scene not found');
+    return sc;
+  }
+
   var routes = [
+    ['POST', /^\/bulk$/, function (_, body) {
+      return {
+        results: (body.ids || []).map(function (id) {
+          var t = tvs.filter(function (x) { return x.id === id; })[0];
+          if (!t) return { id: id, name: id, ok: false, error: 'Not found' };
+          var name = t.name;
+          try { act(t, body.action, body.args); return { id: id, name: name, ok: true }; }
+          catch (e) { return { id: id, name: name, ok: false, error: e.message }; }
+        }),
+      };
+    }],
+    ['GET', /^\/scenes$/, function () { return scenes.map(sceneView); }],
+    ['POST', /^\/scenes$/, function (_, body) {
+      var sc = { id: 'scene-' + Date.now().toString(36), name: body.name || 'Scene', emoji: body.emoji || '✨', steps: body.steps || [], schedule: body.schedule || null };
+      scenes.push(sc);
+      scenesChanged();
+      return sceneView(sc);
+    }],
+    ['PATCH', /^\/scenes\/([\w-]+)$/, function (m, body) {
+      var sc = findScene(m[1]);
+      ['name', 'emoji', 'steps', 'schedule'].forEach(function (k) { if (body[k] !== undefined) sc[k] = body[k]; });
+      scenesChanged();
+      return sceneView(sc);
+    }],
+    ['DELETE', /^\/scenes\/([\w-]+)$/, function (m) {
+      var sc = findScene(m[1]);
+      scenes = scenes.filter(function (x) { return x !== sc; });
+      scenesChanged();
+      return { ok: true };
+    }],
+    ['POST', /^\/scenes\/([\w-]+)\/run$/, function (m) { runScene(findScene(m[1])); return { ok: true, started: true }; }],
     ['GET', /^\/tvs$/, function () { return tvs; }],
     ['POST', /^\/scan$/, function () {
       return wait(2400).then(function () {

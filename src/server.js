@@ -3,6 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bulk } from './bulk.js';
 import { badRequest, HearthError, notFound } from './errors.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,8 +56,25 @@ function routes(hub) {
       return hub.driver(tv).toast(message).then(() => ({ ok: true }));
     }),
     r('POST', '/all/power', (_, body) => hub.powerAll(Boolean(body.on))),
+    // ── bulk select + scenes ──
+    r('POST', '/bulk', (_, body) => bulk(hub, body.ids, String(body.action ?? ''), body.args ?? {}).then((results) => ({ results }))),
+    r('GET', '/scenes', () => scenesOf(hub).list()),
+    r('POST', '/scenes', (_, body) => scenesOf(hub).create(body)),
+    r('PATCH', `/scenes/${id}`, ([sc], body) => scenesOf(hub).update(sc, body)),
+    r('DELETE', `/scenes/${id}`, ([sc]) => scenesOf(hub).remove(sc)),
+    r('POST', `/scenes/${id}/run`, ([sc]) => {
+      // Reply at once; progress streams over SSE ('scene' events).
+      scenesOf(hub).get(sc);
+      scenesOf(hub).run(sc).catch((err) => console.error('[hearth] scene failed:', err.message));
+      return { ok: true, started: true };
+    }),
   ];
 }
+
+const scenesOf = (hub) => {
+  if (!hub.scenes) throw new HearthError(503, 'Scenes aren’t available');
+  return hub.scenes;
+};
 
 async function readJson(req) {
   // Requiring JSON forces a CORS preflight, so a random web page open on
@@ -142,6 +160,8 @@ export function createServer(hub) {
   hub.on('change', (tv) => broadcast('tv', tv));
   hub.on('removed', (info) => broadcast('removed', info));
   hub.on('nearby', (list) => broadcast('nearby', list));
+  hub.scenes?.on('progress', (p) => broadcast('scene', p));
+  hub.scenes?.on('changed', (list) => broadcast('scenes', list));
 
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://hearth.local');
