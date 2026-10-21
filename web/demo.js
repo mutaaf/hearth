@@ -11,10 +11,10 @@
     ['3201907018807', 'Netflix'], ['111299001912', 'YouTube'], ['3201910019365', 'Prime Video'],
     ['3201901017640', 'Disney+'], ['3201601007625', 'Hulu'], ['3201606009684', 'Spotify'],
   ];
-  var LG_CAPS = { volumeLevel: true, inputs: true, toast: true, appIcons: false };
-  var SAMSUNG_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
-  var ROKU_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
-  var GTV_CAPS = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false };
+  var LG_CAPS = { volumeLevel: true, inputs: true, toast: true, appIcons: false, pointer: true, keyboard: true };
+  var SAMSUNG_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false, pointer: true, keyboard: true };
+  var ROKU_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false, pointer: false, keyboard: true };
+  var GTV_CAPS = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false, pointer: false, keyboard: false };
   var ROKU_APPS = [['12', 'Netflix'], ['837', 'YouTube'], ['291097', 'Disney+'], ['2285', 'Hulu'], ['13', 'Prime Video'], ['22297', 'Spotify']];
   var GTV_APPS = [['233637DE', 'YouTube'], ['CA5E8412', 'Netflix'], ['CC32E753', 'Spotify'], ['9AC194DC', 'Plex']];
   var CAPS = { lg: null, samsung: null, roku: null, androidtv: null };
@@ -37,8 +37,10 @@
       { online: true, power: 'on', app: null }),
     tv('demo-basement', 'roku', 'Basement', 'Downstairs', 'Streaming Stick 3840R', '192.168.1.53', true,
       { online: true, power: 'standby', app: null }),
+    tv('demo-gameroom', 'lg', 'Game Room', 'Basement', 'OLED55C2PUA', '192.168.1.44', true,
+      { online: true, power: 'on', volume: 32, muted: false, app: 'com.webos.app.hdmi2', inputLabel: 'PlayStation 5' }),
     tv('demo-bedroom', 'lg', 'Bedroom', 'Upstairs', '55UP7000PUA', '192.168.1.42', true,
-      { online: false, power: 'off' }),
+      { online: true, power: 'on', volume: 12, muted: false, app: 'com.webos.app.browser', appTitle: 'Web Browser' }),
   ];
   var discoverable = [
     { id: 'demo-office', brand: 'samsung', name: 'Office TV', model: 'QN50Q60A', ip: '192.168.1.43', macs: [] },
@@ -157,13 +159,27 @@
     ['POST', /^\/tvs\/([\w-]+)\/input$/, function (m, body) {
       var t = find(m[1]);
       needsOn(t);
-      change(t, { app: 'com.webos.app.hdmi' + String(body.id).replace(/\D/g, '') });
+      var labels = { HDMI_1: 'Apple TV', HDMI_2: 'PlayStation 5', HDMI_3: 'HDMI 3' };
+      change(t, { app: 'com.webos.app.hdmi' + String(body.id).replace(/\D/g, ''), appTitle: null, inputLabel: labels[body.id] || null });
       return { ok: true };
     }],
     ['POST', /^\/tvs\/([\w-]+)\/toast$/, function (m) {
       var t = find(m[1]);
       if (t.brand !== 'lg') throw new Error('On-screen messages isn\'t supported on this TV');
       needsOn(t);
+      return { ok: true };
+    }],
+    ['POST', /^\/tvs\/([\w-]+)\/pointer$/, function (m) {
+      var t = find(m[1]);
+      needsOn(t);
+      if (!t.capabilities.pointer) throw new Error('A pointer isn\'t supported on this TV');
+      return { ok: true };
+    }],
+    ['POST', /^\/tvs\/([\w-]+)\/text$/, function (m, body) {
+      var t = find(m[1]);
+      needsOn(t);
+      if (!t.capabilities.keyboard) throw new Error('Typing isn\'t supported on this TV');
+      if (body.backspace && t.brand === 'samsung') throw new Error('Deleting text on this Samsung isn\'t supported (type it again from the start)');
       return { ok: true };
     }],
     ['POST', /^\/all\/power$/, function () {
