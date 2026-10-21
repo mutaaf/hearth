@@ -1,5 +1,7 @@
 # 🔥 Hearth
 
+**[mutaafaziz.com/hearth](https://mutaafaziz.com/hearth/)** · **[try the demo](https://mutaafaziz.com/hearth/demo/)**
+
 **One remote for every TV in the house.** Hearth finds the LG and Samsung smart TVs on your Wi-Fi and gives every phone in the house a fast, tactile remote: power, D-pad, volume, apps, inputs, and "Dinner's ready!" on screen. No accounts, no cloud, no ads. It runs on any always-on computer at home.
 
 ```

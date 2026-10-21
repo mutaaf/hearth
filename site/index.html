@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hearth: one remote for every TV in the house</title>
+  <meta name="description" content="Hearth finds the LG and Samsung smart TVs on your Wi-Fi and turns every phone in the house into a fast, ad-free remote. One command to install. Nothing leaves your home.">
+  <meta property="og:title" content="Hearth: one remote for every TV in the house">
+  <meta property="og:description" content="Finds your LG and Samsung TVs. Every phone becomes the remote. No accounts, no cloud, no ads.">
+  <meta property="og:url" content="https://mutaafaziz.com/hearth/">
+  <meta name="theme-color" content="#0e0c0a">
+  <link rel="icon" href="demo/icon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://mutaafaziz.com/hearth/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wdth,wght@87.5,400..600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="wordmark" href="./"><span class="ember"></span>hearth</a>
+    <nav class="mono">
+      <a href="demo/">Demo</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/mutaaf/hearth">Source</a>
+    </nav>
+  </header>
+
+  <!-- The night-time living room: aurora-field particles become the house,
+       a TV, the remote, the flame. -->
+  <section class="hero">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="stage" id="stage" aria-hidden="true"></div>
+    <div class="hero-copy">
+      <p class="kicker mono">For the house full of slow smart TVs</p>
+      <h1>One remote for every TV in the house.</h1>
+      <p class="lede">Hearth finds the LG and Samsung TVs on your Wi-Fi and turns every phone into a fast, ad-free remote. No accounts, no cloud. It runs at home, on your network.</p>
+      <div class="ctas">
+        <a class="cta" href="demo/">Try the demo</a>
+        <a class="ghost mono" href="#install">Install in one command ↓</a>
+      </div>
+    </div>
+    <p class="shape-label mono" id="shapeLabel" aria-hidden="true">the house</p>
+  </section>
+
+  <main>
+    <section class="steps" aria-label="How it works">
+      <article data-shape="hearth-house">
+        <span class="n mono">01</span>
+        <h2>Find</h2>
+        <p>Hearth listens on your Wi-Fi and finds every LG webOS and Samsung Tizen TV. No model numbers, no IP addresses.</p>
+      </article>
+      <article data-shape="hearth-tv">
+        <span class="n mono">02</span>
+        <h2>Pair</h2>
+        <p>Each TV asks once: press <b>Allow</b> with its own remote. After that, every phone in the house can drive it.</p>
+      </article>
+      <article data-shape="hearth-remote">
+        <span class="n mono">03</span>
+        <h2>Control</h2>
+        <p>Swipe-pad, volume, apps, inputs, “Dinner’s ready!” on screen, and one button that turns every TV in the house off.</p>
+      </article>
+    </section>
+
+    <section class="install" id="install">
+      <div>
+        <p class="kicker mono">Install</p>
+        <h2>One command on a computer that stays on.</h2>
+        <p>A Mac mini, an old laptop, a Raspberry Pi. You need <a href="https://nodejs.org">Node.js 20.19+</a>. Then:</p>
+      </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><button type="button" class="copy mono" id="copy">copy</button></div>
+        <pre class="mono" id="cmd"><span class="p">$</span> git clone https://github.com/mutaaf/hearth
+<span class="p">$</span> cd hearth && npm run up</pre>
+        <p class="term-out mono">🔥 Hearth is ready · scan the QR code with your phone</p>
+      </div>
+    </section>
+
+    <section class="why">
+      <div class="why-card">
+        <h3>Why doesn’t it just run on this website?</h3>
+        <p>On purpose. Browsers, rightly, won’t let a website reach the devices on your home network. Hearth runs inside your house, so your TVs, pairing keys and viewing habits never leave it. The <a href="demo/">demo</a> uses pretend TVs.</p>
+      </div>
+      <div class="why-card">
+        <h3>Old TV, new life</h3>
+        <p>Four years in, smart TVs drown in ads, tracking and bloat. The <a href="https://github.com/mutaaf/hearth/blob/main/docs/TUNEUP.md">tune-up guide</a> fixes that in about 20 minutes per TV: settings, whole-house ad blocking, a factory reset done right, LG homebrew, or a cheap box that turns the TV into a plain screen.</p>
+      </div>
+    </section>
+
+    <section class="matrix" aria-label="What works">
+      <table>
+        <thead><tr><th></th><th class="mono">LG webOS</th><th class="mono">Samsung Tizen</th></tr></thead>
+        <tbody>
+          <tr><td>Finds itself on your Wi-Fi</td><td>●</td><td>●</td></tr>
+          <tr><td>Pad, back, home, media keys</td><td>●</td><td>●</td></tr>
+          <tr><td>Volume with live level</td><td>●</td><td>○</td></tr>
+          <tr><td>Power off · wake on LAN</td><td>●</td><td>●</td></tr>
+          <tr><td>App shelf</td><td>●</td><td>●</td></tr>
+          <tr><td>Named inputs</td><td>●</td><td>○</td></tr>
+          <tr><td>Message on screen</td><td>●</td><td>—</td></tr>
+          <tr><td>Everything off</td><td>●</td><td>●</td></tr>
+        </tbody>
+      </table>
+      <p class="mono legend">● full · ○ basic · — not possible on that TV</p>
+    </section>
+  </main>
+
+  <footer class="foot mono">
+    <a href="/">← mutaafaziz.com</a>
+    <span>MIT · <a href="https://github.com/mutaaf/hearth">github.com/mutaaf/hearth</a> · particles by <a href="https://github.com/mutaaf/aurora-field">aurora-field</a></span>
+  </footer>
+
+  <script src="demo/vendor/aurora-field.min.js"></script>
+  <script src="demo/shapes.js"></script>
+  <script src="site.js"></script>
+</body>
+</html>

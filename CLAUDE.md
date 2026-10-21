@@ -9,6 +9,15 @@ Universal remote for the house's smart TVs. A Node server on the LAN discovers T
 - Dev loop: `npm start` in the foreground, edit `web/*`, reload the browser. Server changes need a restart.
 - To experiment without touching your real setup: `HEARTH_HOME=/tmp/h HEARTH_PORT=8771 npm start`.
 
+## The public site (mutaafaziz.com/hearth)
+
+- `site/` is the landing page. Its aurora-field hero (the user's own npm lib) builds Hearth's shapes from `web/shapes.js`.
+- `/hearth/demo/` is the real `web/` app with `web/demo.js` injected, which stands in pretend TVs for the server. App code reads `window.HearthDemo`; keep that seam when changing `api()` or events.
+- `npm run build:site` → `dist/`. `npm run deploy:site` builds, then runs `wrangler deploy` to the Worker `hearth` on the route `mutaafaziz.com/hearth*`. Assets only, no Worker code.
+- `dist/_headers` sets `Cache-Control: no-transform` so Cloudflare's zone analytics isn't injected, which keeps the "nothing leaves your home" promise.
+- Web assets use **relative** paths so the same files work at `/` at home and at `/hearth/demo/`.
+- URLs the launchers may deep-link to: `/hearth/` and `/hearth/demo/`. There are no query parameters.
+
 ## Layout
 
 ```
@@ -23,7 +32,10 @@ src/drivers/lg.js      webOS via lgtv2 (SSAP over wss:3001 → ws:3000 fallback)
 src/drivers/samsung.js Tizen via samsung.remote.control websocket on wss:8002
 src/keys.js            unified key names → brand key codes
 src/wol.js             Wake-on-LAN magic packet
-web/                   vanilla JS app (index.html, style.css, app.js), no framework
+web/                   vanilla JS app (index.html, style.css, app.js, shapes.js), no framework
+web/demo.js            pretend TVs for the public demo only
+site/                  landing page for mutaafaziz.com/hearth
+scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
 ```
 
 ## Adding a brand
@@ -54,6 +66,8 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`)
 | LG firmware from 2023 on only accepts `wss://:3001` with a self-signed cert | lgtv2 tries wss first and falls back to ws; app icons may be https on the TV, hence the server-side icon proxy. |
 | Two saves in the same tick raced on one temp file (ENOENT on rename) | `Store.save` is queued; `Hub.pair` awaits a save so the key is on disk before success is reported. |
 | Headless Chrome `--screenshot` hangs with `--virtual-time-budget` | The SSE stream keeps the network busy forever. Use `--timeout` and kill the process; window widths under ~500px are clamped. |
+| aurora-field sizes its canvas from the container, not the canvas's own CSS box | Position the shape with the `stage` option (an invisible box), never by moving the canvas. |
+| Headless SwiftShader screenshots catch aurora particles mid-flight (looks like stars only) | Verify the hero in real Chrome; shapes take about 2.6 s of intro before they form. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 

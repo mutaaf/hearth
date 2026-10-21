@@ -342,6 +342,9 @@ svg { width: 1em; height: 1em; }
     var(--glass);
 }
 .radar .sweep { position: absolute; inset: 0; background: conic-gradient(from 0deg, transparent 0 70%, #f2541b10 80%, #f2541bcc 100%); animation: spin 2.2s linear infinite; }
+.radar-field { position: absolute; inset: 0; width: 100%; height: 100%; }
+.radar.aurora { background: radial-gradient(circle at 50% 60%, #2a140a, var(--glass) 70%); }
+.radar.aurora .sweep, .radar.aurora .blip { display: none; }
 .radar.done .sweep { animation-play-state: paused; opacity: .25; }
 .blip { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 12px var(--signal); opacity: 0; }
 .radar.hit .blip { animation: blip 2.2s ease-out infinite; }
@@ -408,3 +411,11 @@ svg { width: 1em; height: 1em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+/* ── Demo banner (mutaafaziz.com/hearth/demo only) ── */
+.demo-bar {
+  position: sticky; top: 0; z-index: 60; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: max(8px, env(safe-area-inset-top)) 16px 8px; background: var(--key); color: var(--key-ink);
+  font-size: 10px; text-transform: uppercase; text-decoration: none; letter-spacing: .06em;
+}
+.demo-bar b { color: var(--signal); font-weight: 600; }

@@ -79,10 +79,15 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// Third-party browser files served straight from node_modules.
+const VENDOR = {
+  'vendor/aurora-field.min.js': path.join(ROOT, 'node_modules', 'aurora-field', 'dist', 'aurora-field.min.js'),
+};
+
 async function serveStatic(res, pathname) {
   const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
-  const file = path.resolve(WEB, rel);
-  if (!file.startsWith(WEB + path.sep)) throw notFound('Page');
+  const file = VENDOR[rel] ?? path.resolve(WEB, rel);
+  if (!VENDOR[rel] && !file.startsWith(WEB + path.sep)) throw notFound('Page');
   let body;
   try {
     body = await readFile(file);

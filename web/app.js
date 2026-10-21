@@ -29,7 +29,12 @@ const APP_NAMES = {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const haptic = () => navigator.vibrate?.(8);
 
+// The demo on mutaafaziz.com/hearth/demo swaps the server for simulated TVs
+// (web/demo.js); everything else in the app is identical.
+const demo = window.HearthDemo;
+
 async function api(method, path, body) {
+  if (demo) return demo.api(method, path, body);
   const init = { method };
   if (method !== 'GET' && method !== 'DELETE') {
     init.headers = { 'content-type': 'application/json' };
@@ -303,9 +308,43 @@ function openSheet(id) {
   return dlg;
 }
 
+// While scanning, an aurora field "listens" (the neural sphere) and gathers
+// into a TV when one answers. Falls back to the CSS radar without WebGL/JS.
+let scanField = null;
+function startScanField() {
+  const AF = window.AuroraField;
+  if (scanField || !AF || !window.HearthShapes) return;
+  window.HearthShapes.register(AF);
+  const canvas = document.createElement('canvas');
+  canvas.className = 'radar-field';
+  $('#radar').append(canvas);
+  try {
+    scanField = AF.create(canvas, {
+      shapes: ['mind', 'hearth-tv', 'hearth-house'],
+      initial: 'mind',
+      cycle: 0,
+      palette: 'ember',
+      stars: 24,
+      count: 1100,
+      interactive: false,
+    });
+    $('#radar').classList.add('aurora');
+  } catch {
+    canvas.remove();
+  }
+}
+
+function stopScanField() {
+  scanField?.destroy();
+  scanField = null;
+  $('#radar .radar-field')?.remove();
+  $('#radar').classList.remove('aurora');
+}
+
 async function runScan() {
   const radar = $('#radar');
-  radar.className = 'radar';
+  radar.className = `radar${scanField ? ' aurora' : ''}`;
+  scanField?.setShape('mind', { pin: true });
   $('#scanTitle').textContent = 'Listening for TVs…';
   $('#scanSub').textContent = 'This takes a few seconds.';
   $('#found').innerHTML = '';
@@ -314,6 +353,7 @@ async function runScan() {
     const found = await api('POST', '/scan');
     radar.classList.add('done');
     if (found.length) radar.classList.add('hit');
+    scanField?.setShape(found.length > 1 ? 'hearth-house' : found.length ? 'hearth-tv' : 'mind', { pin: true });
     $('#scanTitle').textContent = found.length ? `Found ${found.length} TV${found.length === 1 ? '' : 's'}` : 'No TVs answered';
     $('#scanSub').textContent = found.length
       ? 'Add the ones you want to control.'
@@ -422,7 +462,7 @@ function render() {
 
 // ── Live updates ─────────────────────────────────────────
 function connectEvents() {
-  const es = new EventSource('/api/events');
+  const es = demo ? demo.events() : new EventSource('/api/events');
   es.addEventListener('hello', (e) => {
     tvs.clear();
     for (const t of JSON.parse(e.data)) tvs.set(t.id, t);
@@ -463,6 +503,7 @@ function wire() {
     }
     if (el.dataset.action === 'scan') {
       openSheet('#scanSheet');
+      startScanField();
       return runScan();
     }
     if (el.dataset.open) {
@@ -574,6 +615,7 @@ function wire() {
     });
   }
 
+  $('#scanSheet').addEventListener('close', stopScanField);
   window.addEventListener('hashchange', route);
 }
 

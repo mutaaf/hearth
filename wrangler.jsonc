@@ -1,0 +1,12 @@
+{
+  // hearth: the public landing page + demo at mutaafaziz.com/hearth/.
+  // Static assets only; the real Hearth runs on each family's home network.
+  // The route takes precedence over the mutaafaziz.com Custom Domain (the personal site).
+  "name": "hearth",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": true,
+  "previews": {},
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "mutaafaziz.com/hearth*", "zone_name": "mutaafaziz.com" }]
+}

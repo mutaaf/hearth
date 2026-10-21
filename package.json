@@ -15,11 +15,19 @@
     "down": "node scripts/down.mjs",
     "start": "node bin/hearth.js",
     "scan": "node bin/hearth.js scan",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "build:site": "node scripts/build-site.mjs",
+    "deploy:site": "node scripts/build-site.mjs && npx --yes wrangler deploy"
   },
   "dependencies": {
+    "aurora-field": "^3.3.0",
     "lgtv2": "^2.1.0",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.0"
+  },
+  "homepage": "https://mutaafaziz.com/hearth/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mutaaf/hearth.git"
   }
 }
