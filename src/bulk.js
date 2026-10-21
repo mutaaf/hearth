@@ -1,8 +1,9 @@
 import { badRequest, unsupported } from './errors.js';
+import { runDoctor } from './doctor.js';
 
 // One action on one TV, in the same vocabulary for bulk select and scenes.
 // Returns nothing on success; throws (with a friendly message) on failure.
-export const ACTIONS = ['power', 'volume', 'mute', 'launch', 'input', 'say', 'key', 'room', 'forget'];
+export const ACTIONS = ['power', 'volume', 'mute', 'launch', 'input', 'say', 'key', 'room', 'forget', 'doctor'];
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -56,6 +57,13 @@ export async function runAction(hub, id, action, args = {}) {
       return hub.update(id, { ...(args.name ? { name: args.name } : {}), ...(args.room !== undefined ? { room: args.room } : {}) });
     case 'forget':
       return hub.remove(id);
+    case 'doctor': {
+      // "Fix connections": run the doctor; a TV that still isn't right fails
+      // with the doctor's own one-line reason.
+      const report = await runDoctor(hub, id);
+      if (!report.ok) throw new Error(report.summary);
+      return;
+    }
     default:
       throw badRequest(`Unknown action: ${action}`);
   }

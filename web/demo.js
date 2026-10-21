@@ -184,8 +184,63 @@
     return sc;
   }
 
+  // ── doctor demo: the Basement Roku "moved" and heals; Upstairs needs its
+  // full-remote code again; everyone else is fine. Steps stream like the real one.
+  var movedOnce = false;
+  function demoDoctor(t) {
+    var steps = [];
+    function step(name, label, status, detail, nerd) {
+      var e = { id: t.id, step: name, label: label, status: status, detail: detail, nerd: nerd || null };
+      var i = steps.findIndex(function (s) { return s.step === name; });
+      if (i >= 0) steps[i] = e; else steps.push(e);
+      emit('doctor', e);
+    }
+    var moved = t.id === 'demo-basement' && !movedOnce;
+    var needsCode = t.id === 'demo-upstairs' && !(t.capabilities && t.capabilities.remote);
+    var oldIp = t.ip;
+    step('network', 'On the network?', 'running', 'Looking for it on your Wi-Fi…');
+    return wait(700).then(function () {
+      step('network', 'On the network?', moved ? 'warn' : 'ok', moved ? 'Not answering at ' + oldIp : 'Answering at ' + t.ip, { ip: oldIp, ports: [{ port: 8060, ok: !moved, ms: 6 }] });
+      step('wake', 'Wake it up', moved ? 'running' : 'ok', moved ? 'Sending the wake-up signal…' : 'Not needed: it’s awake');
+      return wait(moved ? 1500 : 300);
+    }).then(function () {
+      if (moved) step('wake', 'Wake it up', 'warn', 'It didn’t wake up at the old address.');
+      step('find', 'Look for it again', moved ? 'running' : 'ok', moved ? 'Searching the whole network…' : 'Not needed: same address as before');
+      return wait(moved ? 1400 : 200);
+    }).then(function () {
+      if (moved) {
+        movedOnce = true;
+        t.ip = '192.168.1.61';
+        step('find', 'Look for it again', 'ok', 'Found it at a new address: ' + t.ip, { from: oldIp, to: t.ip });
+        emit('healed', { id: t.id, name: t.name, from: oldIp, to: t.ip, message: t.name + ' moved to ' + t.ip + ' — reconnected' });
+        emit('tv', t);
+      }
+      step('reconnect', 'Reconnect', 'running', 'Restarting Hearth’s connection…');
+      return wait(600);
+    }).then(function () {
+      step('reconnect', 'Reconnect', 'ok', 'Reconnected');
+      step('verify', 'Check it answers', 'running', 'Asking it a harmless question…');
+      return wait(700);
+    }).then(function () {
+      step('verify', 'Check it answers', 'ok', t.model + ' answered in ' + (8 + Math.round(Math.random() * 30)) + ' ms', { auth: needsCode ? 'rejected' : 'ok' });
+      if (needsCode) step('pair', 'Trust', 'warn', 'Unlock the full remote again: type the code shown on the TV.', { auth: 'rejected' });
+      else step('pair', 'Trust', 'ok', 'It still trusts Hearth');
+      var report = { id: t.id, name: t.name, brand: t.brand, ok: !needsCode, steps: steps, needsPairing: needsCode, how: needsCode ? 'googletv-code' : null, healed: moved ? { from: oldIp, to: t.ip } : null };
+      report.summary = needsCode ? 'Unlock the full remote again: type the code shown on the TV.' : moved ? 'Fixed: it had moved to ' + t.ip + '.' : 'All good: connected and answering.';
+      return report;
+    });
+  }
+
   var routes = [
     ['POST', /^\/bulk$/, function (_, body) {
+      // ── doctor: "Fix connections" runs the pretend doctor on each TV
+      if (body.action === 'doctor') {
+        return Promise.all((body.ids || []).map(function (id) {
+          var t = tvs.filter(function (x) { return x.id === id; })[0];
+          if (!t) return { id: id, name: id, ok: false, error: 'Not found' };
+          return demoDoctor(t).then(function (r) { return { id: id, name: t.name, ok: r.ok, error: r.ok ? undefined : r.summary }; });
+        })).then(function (results) { return { results: results }; });
+      }
       return {
         results: (body.ids || []).map(function (id) {
           var t = tvs.filter(function (x) { return x.id === id; })[0];
@@ -234,8 +289,18 @@
       emit('nearby', discoverable);
       return t;
     }],
+    // ── doctor demo: Google TV code unlock (the "TV" shows 1A2B3C) ──
     ['POST', /^\/tvs\/([\w-]+)\/pair$/, function (m, body) {
       var t = find(m[1]);
+      if (body && body.mode === 'code') return wait(900).then(function () { return Object.assign({}, t, { needsCode: true }); });
+      if (body && body.code !== undefined) {
+        return wait(600).then(function () {
+          if (String(body.code).toUpperCase() !== '1A2B3C') throw new Error('That code doesn’t match the TV. (Demo code: 1A2B3C)');
+          t.capabilities = Object.assign({}, t.capabilities, { remote: true });
+          emit('tv', t);
+          return t;
+        });
+      }
       // Apple TV: a code for the remote, then one for "what's playing".
       // Any 4 digits will do in the demo.
       if (t.brand === 'appletv' && !(body && body.pin)) {
@@ -253,6 +318,16 @@
         change(t, { online: true, power: 'on' });
         return t;
       });
+    }],
+    ['POST', /^\/tvs\/([\w-]+)\/unpair$/, function (m) {
+      var t = find(m[1]);
+      t.paired = false;
+      emit('tv', t);
+      return t;
+    }],
+    ['POST', /^\/tvs\/([\w-]+)\/doctor$/, function (m) { return demoDoctor(find(m[1])); }],
+    ['POST', /^\/doctor$/, function () {
+      return Promise.all(tvs.map(demoDoctor)).then(function (reports) { return { reports: reports }; });
     }],
     ['PATCH', /^\/tvs\/([\w-]+)$/, function (m, body) {
       var t = find(m[1]);

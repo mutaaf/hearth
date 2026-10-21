@@ -89,6 +89,19 @@ export class RokuDriver extends Driver {
     this.emit('state', this.state);
   }
 
+  // Connection doctor: read-only device-info. A 403 means the Roku's
+  // "Control by mobile apps" is set to limit network control.
+  async verify() {
+    const t0 = Date.now();
+    try {
+      const info = await this.#info();
+      return { ok: true, auth: 'ok', detail: `${info.model || 'Roku'} answered in ${Date.now() - t0} ms` };
+    } catch (err) {
+      if (err.status === 403) return { ok: true, auth: 'rejected', how: 'roku-network-access', detail: err.message };
+      return { ok: false, auth: 'ok', detail: err.message };
+    }
+  }
+
   async #info() {
     const info = parseRokuDeviceInfo(await this.#ecp('GET', '/query/device-info'));
     this.#learn(info);

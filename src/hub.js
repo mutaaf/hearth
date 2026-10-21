@@ -26,8 +26,9 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
-  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights } = {}) {
+  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights, macForFn = macFor } = {}) {
     super();
+    this.macForFn = macForFn; // ── doctor: self-healing addresses
     // ── health ──
     this.telemetry = telemetry ?? new Telemetry({ dir: store?.dir ?? null });
     this.insights = insights ?? new Insights();
@@ -162,7 +163,9 @@ export class Hub extends EventEmitter {
   }
 
   async scan() {
-    const found = (await this.discoverFn()).map((tv) => ({
+    const raw = await this.discoverFn();
+    for (const f of raw) await this.#heal(f).catch(() => null); // ── doctor
+    const found = raw.map((tv) => ({
       ...tv,
       added: this.tvs.some((t) => t.id === tv.id || t.ip === tv.ip),
     }));
@@ -174,6 +177,51 @@ export class Hub extends EventEmitter {
     }
     return found;
   }
+
+  // ── doctor: self-healing addresses ──
+  // A known TV (same id, or any shared MAC) answering at a new IP has simply
+  // been given a new address by the router: follow it.
+  async #heal(f) {
+    if (!f?.ip) return null;
+    const sameBrand = (t) => t.brand === f.brand;
+    let known = this.tvs.find((t) => t.id === f.id && sameBrand(t)) ?? this.tvs.find((t) => sameBrand(t) && t.macs?.some((m) => f.macs?.includes(m)));
+    if (!known && !f.macs?.length) {
+      const mac = await this.macForFn(f.ip);
+      if (mac) known = this.tvs.find((t) => sameBrand(t) && t.macs?.includes(mac));
+    }
+    if (!known || known.ip === f.ip) return null;
+    // Someone else already lives there: don't steal their address.
+    if (this.tvs.some((t) => t !== known && t.ip === f.ip)) return null;
+    return this.relocate(known.id, f.ip);
+  }
+
+  async relocate(id, ip) {
+    const tv = this.get(id);
+    if (!isIPv4(ip) || tv.ip === ip) return null;
+    const from = tv.ip;
+    await this.#drivers.get(id)?.stop();
+    this.#unwatch(id);
+    tv.ip = ip;
+    this.#attach(tv);
+    await this.store.save(this.tvs);
+    const healed = { id, name: tv.name, from, to: ip, message: `${tv.name} moved to ${ip} — reconnected` };
+    this.emit('change', this.view(tv));
+    this.emit('healed', healed);
+    return healed;
+  }
+
+  // Forget the pairing (not the TV) so it can be paired again.
+  async unpair(id) {
+    const tv = this.get(id);
+    await this.#drivers.get(id)?.stop();
+    this.#drivers.delete(id);
+    delete tv.credentials;
+    this.#attach(tv);
+    await this.store.save(this.tvs);
+    this.emit('change', this.view(tv));
+    return this.view(tv);
+  }
+  // ── end doctor ──
 
   // TVs on the network that haven't been added yet. The app shows them as a
   // "New TV nearby — add it?" banner, so nobody has to go looking.
@@ -279,6 +327,7 @@ export class Hub extends EventEmitter {
       const { step, steps, label } = result;
       return { ...this.view(tv), needsPin: true, ...(steps ? { step, steps, label } : {}) };
     }
+    if (result?.needsCode) return { ...this.view(tv), needsCode: true }; // Google TV full remote
     this.#unwatch(id);
     // Make sure the new pairing key is on disk before we report success.
     await this.store.save(this.tvs);

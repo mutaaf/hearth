@@ -45,8 +45,8 @@ body.selecting .colophon { padding-bottom: 300px; }
 .bulk-act.danger .charge { background: #c8341a66; }
 .bulk-results { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
 .chip-result { padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; animation: fadein .3s; }
-.chip-result.ok { background: #3fd36f26; color: #8ff0b0; }
-.chip-result.bad { background: #ff5a4a26; color: #ffb0a6; }
+.chip-result.res-ok { background: #3fd36f26; color: #8ff0b0; }
+.chip-result.res-bad { background: #ff5a4a26; color: #ffb0a6; }
 .vol-pick { display: grid; justify-items: center; gap: 10px; }
 .vol-pick output { font-size: 56px; font-weight: 750; letter-spacing: -.04em; line-height: 1; }
 .vol-pick input[type="range"] { width: 100%; accent-color: var(--signal); height: 40px; }

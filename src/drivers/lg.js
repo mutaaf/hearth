@@ -332,6 +332,43 @@ export class LgDriver extends Driver {
     await this.#request(SSAP.toast, { message: String(message).slice(0, 120) });
   }
 
+  // ── Connection doctor: read-only. Waits for the websocket to either
+  // connect with our key, ask the TV for permission again (key no longer
+  // accepted), or be refused. Never sends a button.
+  async verify(timeout = 8000) {
+    if (!this.tv.credentials?.clientKey) return { ok: false, auth: 'missing', how: 'lg-pin', detail: 'Not paired yet' };
+    this.start();
+    if (!this.#client.connected) {
+      const outcome = await new Promise((resolve) => {
+        const done = (v) => {
+          clearTimeout(timer);
+          this.off('connect', onConnect);
+          this.off('prompt', onPrompt);
+          this.off('connection-error', onError);
+          resolve(v);
+        };
+        const onConnect = () => done('ok');
+        const onPrompt = () => done('prompt');
+        const onError = (err) => {
+          if (/reject|denied|cancel|403/i.test(err.message)) done('rejected');
+        };
+        const timer = setTimeout(() => done('timeout'), timeout);
+        this.on('connect', onConnect);
+        this.on('prompt', onPrompt);
+        this.on('connection-error', onError);
+      });
+      if (outcome === 'prompt' || outcome === 'rejected') {
+        return { ok: true, auth: outcome, how: 'lg-pin', detail: outcome === 'prompt' ? 'The TV no longer recognises Hearth’s key and is asking again' : 'The TV refused Hearth’s key' };
+      }
+      if (outcome === 'timeout') return { ok: false, auth: 'ok', detail: 'The TV didn’t answer on ports 3001/3000' };
+    }
+    const t0 = Date.now();
+    const sys = await this.#client.request(SSAP.systemInfo).catch((err) => ({ error: err.message }));
+    const power = await this.#client.request('ssap://com.webos.service.tvpower/power/getPowerState').catch(() => null);
+    if (sys?.error) return { ok: true, auth: /401|403|denied/i.test(sys.error) ? 'rejected' : 'ok', how: 'lg-pin', detail: sys.error };
+    return { ok: true, auth: 'ok', detail: `${sys?.modelName ?? 'LG'} answered in ${Date.now() - t0} ms${power?.state ? ` · ${power.state}` : ''}` };
+  }
+
   // ── Health & diagnostics (read-only SSAP queries) ──
   async diagnostics() {
     if (!this.#client?.connected) return { connected: false };
