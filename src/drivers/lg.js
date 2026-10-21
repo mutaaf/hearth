@@ -77,7 +77,12 @@ export class LgDriver extends Driver {
     });
     // Connection errors are expected whenever the TV is off; the reconnect
     // loop retries and 'close' already marks the TV offline.
-    client.on('error', (err) => this.emit('connection-error', err));
+    // A TV that was already off when Hearth started never connects, so 'close' never fires: say so
+    // instead of leaving the first-boot 'unknown' up (webOS drops Wi-Fi when fully off).
+    client.on('error', (err) => {
+      if (!client.connected) this.setState({ online: false, power: 'off', app: null, inputLabel: null });
+      this.emit('connection-error', err);
+    });
     this.#client = client;
   }
 

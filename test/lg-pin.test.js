@@ -50,3 +50,20 @@ test('PIN pairing: a wrong number is a friendly 400 and you can retry', async ()
   assert.equal(saved.length, 1);
   await driver.stop();
 });
+
+test('a TV that is already off when Hearth starts shows off, not unknown', async () => {
+  // A port nothing listens on: the first connect fails and 'close' never fires.
+  const spare = new WebSocketServer({ port: 0 });
+  await new Promise((r) => spare.once('listening', r));
+  const port = spare.address().port;
+  await new Promise((r) => spare.close(r));
+  const tv = { id: 'lg-off', brand: 'lg', name: 'Den', ip: '127.0.0.1', macs: [], credentials: { clientKey: 'k' } };
+  const driver = new LgDriver(tv, { url: `ws://127.0.0.1:${port}` });
+  assert.equal(driver.state.power, 'unknown');
+  const off = new Promise((r) => driver.on('state', (s) => s.power === 'off' && r(s)));
+  driver.start();
+  const s = await off;
+  assert.equal(s.online, false);
+  assert.equal(s.app, null);
+  await driver.stop();
+});
