@@ -3,7 +3,7 @@
 
 // ── Preferences ─────────────────────────────────────────
 const PREFS_KEY = 'hearth.prefs';
-const defaults = { skin: 'classic', haptics: true, sound: null }; // sound null = on for 8-bit only
+const defaults = { skin: 'aurora', haptics: true, sound: null }; // sound null = on for 8-bit only
 
 function loadPrefs() {
   try {
@@ -14,7 +14,7 @@ function loadPrefs() {
 }
 export const prefs = loadPrefs();
 const fromUrl = new URLSearchParams(location.search).get('skin');
-if (fromUrl === '8bit' || fromUrl === 'classic') prefs.skin = fromUrl;
+if (['aurora', '8bit', 'classic'].includes(fromUrl)) prefs.skin = fromUrl;
 
 export function savePrefs(patch) {
   Object.assign(prefs, patch);
@@ -28,7 +28,7 @@ export const soundOn = () => (prefs.sound ?? prefs.skin === '8bit');
 export function applySkin() {
   document.documentElement.dataset.skin = prefs.skin;
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.content = prefs.skin === '8bit' ? '#1b1a24' : '#e9e3d7';
+  if (meta) meta.content = { '8bit': '#1b1a24', aurora: '#07080c' }[prefs.skin] ?? '#e9e3d7';
 }
 
 // ── Haptics ─────────────────────────────────────────────
@@ -239,38 +239,68 @@ export function pressable(root, handler) {
   });
 }
 
-// ── The D-pad: tap, hold to repeat, or swipe like a trackpad ──
-// Tap a zone = one press. Hold a direction = repeat. Hold the centre = long OK.
-// Drag anywhere = a step every STEP px in the drag's direction, so a long
-// swipe scrolls through a row of tiles.
-const STEP = 34;
-export function gesturePad(pad, { send, flash }) {
+// ── The D-pad: push, hold, swipe, joystick ──
+// • Push a zone            → one press (the centre is OK)
+// • Hold a zone            → repeats, faster and faster
+// • Hold the centre        → long OK (a real press-and-hold where the TV supports it)
+// • Drag off-centre        → joystick: one step at once, then repeats while you
+//                            stay out there — the further out, the faster
+// • Flick and let go       → swipe: a quick flick adds momentum steps
+const DEADZONE = 18;
+export function gesturePad(pad, { send, flash, onPointer = () => {} }) {
   let g = null;
-
-  const zoneAt = (e) => {
+  const knob = pad.querySelector('.pad-knob');
+  const local = (e) => {
     const r = pad.getBoundingClientRect();
-    const cx = e.clientX - (r.left + r.width / 2);
-    const cy = e.clientY - (r.top + r.height / 2);
-    const dist = Math.hypot(cx, cy) / (r.width / 2);
-    if (dist < 0.36) return 'ok';
+    return { x: e.clientX - r.left, y: e.clientY - r.top, r };
+  };
+  const zoneAt = (e) => {
+    const { x, y, r } = local(e);
+    const cx = x - r.width / 2;
+    const cy = y - r.height / 2;
+    if (Math.hypot(cx, cy) / (r.width / 2) < 0.36) return 'ok';
     return Math.abs(cx) > Math.abs(cy) ? (cx > 0 ? 'right' : 'left') : cy > 0 ? 'down' : 'up';
   };
+  const dirOf = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up');
 
   const stop = () => {
     if (!g) return;
     clearTimeout(g.timer);
     pad.querySelectorAll('.pressed').forEach((b) => b.classList.remove('pressed'));
-    pad.classList.remove('swiping', 'charged');
+    pad.classList.remove('swiping', 'charged', 'stick');
+    pad.style.removeProperty('--aim');
+    if (knob) knob.style.transform = '';
     g = null;
+  };
+
+  const step = (dir, repeat = false) => {
+    send(dir, repeat ? { repeat: true } : {});
+    flash(dir);
+    g && (g.lastStep = performance.now());
+  };
+
+  // Joystick repeat: interval shrinks with deflection (520 ms → 70 ms).
+  const stickLoop = () => {
+    if (!g || g.mode !== 'stick') return;
+    const reach = Math.min(1, Math.max(0, (g.dist - DEADZONE) / (g.radius - DEADZONE)));
+    g.timer = setTimeout(() => {
+      if (!g || g.mode !== 'stick') return;
+      if (g.dir) step(g.dir, true);
+      stickLoop();
+    }, 520 - 410 * reach);
   };
 
   pad.addEventListener('pointerdown', (e) => {
     stop();
-    pad.setPointerCapture(e.pointerId);
+    try {
+      pad.setPointerCapture(e.pointerId);
+    } catch {}
     const zone = zoneAt(e);
-    g = { zone, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'tap', timer: 0 };
+    const { x, y, r } = local(e);
+    g = { zone, x0: e.clientX, y0: e.clientY, t0: performance.now(), downAt: performance.now(), mode: 'tap', timer: 0, dir: null, dist: 0, radius: r.width * 0.3, samples: [], lastStep: 0 };
     flash(zone, true);
     haptic('tick');
+    onPointer('down', x, y);
     if (zone === 'ok') {
       g.timer = setTimeout(() => {
         if (g?.mode === 'tap') {
@@ -282,9 +312,9 @@ export function gesturePad(pad, { send, flash }) {
     } else {
       let delay = 420;
       const again = () => {
-        if (!g || (g.mode !== 'tap' && g.mode !== 'repeat')) return;
-        g.mode = 'repeat';
-        send(zone);
+        if (!g || (g.mode !== 'tap' && g.mode !== 'hold')) return;
+        g.mode = 'hold';
+        step(zone, true);
         delay = Math.max(80, delay * 0.75);
         g.timer = setTimeout(again, delay);
       };
@@ -294,33 +324,61 @@ export function gesturePad(pad, { send, flash }) {
 
   pad.addEventListener('pointermove', (e) => {
     if (!g) return;
-    const dx = e.clientX - g.x;
-    const dy = e.clientY - g.y;
-    if (g.mode !== 'swipe' && Math.hypot(dx, dy) < 22) return;
-    if (g.mode !== 'swipe') {
+    const { x, y } = local(e);
+    onPointer('move', x, y);
+    const dx = e.clientX - g.x0;
+    const dy = e.clientY - g.y0;
+    g.dist = Math.hypot(dx, dy);
+    const now = performance.now();
+    g.samples.push({ t: now, x: e.clientX, y: e.clientY });
+    while (g.samples.length > 2 && now - g.samples[0].t > 90) g.samples.shift();
+
+    if (g.mode !== 'stick') {
+      if (g.dist < DEADZONE || g.mode === 'hold') return;
       clearTimeout(g.timer);
-      if (g.mode === 'repeat') return; // already repeating a held direction
-      g.mode = 'swipe';
-      pad.classList.add('swiping');
+      g.mode = 'stick';
+      pad.classList.add('stick', 'swiping');
       pad.querySelectorAll('.pressed').forEach((b) => b.classList.remove('pressed'));
+      g.dir = dirOf(dx, dy);
+      step(g.dir);
+      stickLoop();
     }
-    const horizontal = Math.abs(dx) > Math.abs(dy);
-    const d = horizontal ? dx : dy;
-    if (Math.abs(d) >= STEP) {
-      const dir = horizontal ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
-      send(dir);
-      flash(dir);
-      g.x = e.clientX;
-      g.y = e.clientY;
+    // The knob follows the thumb, clamped to the ring.
+    const k = Math.min(1, g.radius / Math.max(g.dist, 1));
+    if (knob) knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    pad.style.setProperty('--aim', `${Math.atan2(dy, dx) + Math.PI / 2}rad`);
+    const dir = g.dist >= DEADZONE ? dirOf(dx, dy) : null;
+    if (dir !== g.dir) {
+      g.dir = dir;
+      clearTimeout(g.timer);
+      if (dir) step(dir);
+      stickLoop();
     }
   });
 
   pad.addEventListener('pointerup', (e) => {
     if (!g) return;
-    const held = performance.now() - g.t;
-    if (g.mode === 'tap') send(g.zone);
-    else if (g.mode === 'long') send('ok', { hold: held });
-    if (g.mode === 'tap' || g.mode === 'long') ripple(pad, e);
+    const { x, y } = local(e);
+    onPointer('up', x, y);
+    const held = performance.now() - g.t0;
+    if (g.mode === 'tap') {
+      send(g.zone);
+      ripple(pad, e);
+      onPointer('pulse', x, y);
+    } else if (g.mode === 'long') {
+      send('ok', { hold: performance.now() - (g.downAt ?? performance.now() - LONG_MS) });
+      ripple(pad, e);
+      onPointer('pulse', x, y);
+    } else if (g.mode === 'stick' && g.dir) {
+      // Swipe momentum: a fast flick adds up to 3 extra steps.
+      const a = g.samples[0];
+      const b = g.samples[g.samples.length - 1];
+      const v = a && b && b.t > a.t ? Math.hypot(b.x - a.x, b.y - a.y) / (b.t - a.t) : 0;
+      const extra = Math.min(3, Math.floor((v - 0.8) * 2));
+      const dir = g.dir;
+      for (let i = 1; i <= extra; i++) setTimeout(() => (send(dir, { repeat: true }), flash(dir)), i * 80);
+    }
+    void held;
     stop();
   });
   pad.addEventListener('pointercancel', stop);

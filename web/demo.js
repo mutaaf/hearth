@@ -13,11 +13,17 @@
   ];
   var LG_CAPS = { volumeLevel: true, inputs: true, toast: true, appIcons: false };
   var SAMSUNG_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  var ROKU_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  var GTV_CAPS = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false };
+  var ROKU_APPS = [['12', 'Netflix'], ['837', 'YouTube'], ['291097', 'Disney+'], ['2285', 'Hulu'], ['13', 'Prime Video'], ['22297', 'Spotify']];
+  var GTV_APPS = [['233637DE', 'YouTube'], ['CA5E8412', 'Netflix'], ['CC32E753', 'Spotify'], ['9AC194DC', 'Plex']];
+  var CAPS = { lg: null, samsung: null, roku: null, androidtv: null };
 
   function tv(id, brand, name, room, model, ip, paired, state) {
     return {
       id: id, brand: brand, name: name, room: room, model: model, ip: ip, paired: paired, canWake: true,
-      capabilities: brand === 'lg' ? LG_CAPS : SAMSUNG_CAPS,
+      capabilities: { lg: LG_CAPS, samsung: SAMSUNG_CAPS, roku: ROKU_CAPS, androidtv: GTV_CAPS }[brand],
+      since: Date.now() - Math.round(Math.random() * 3 * 3600e3),
       state: Object.assign({ online: false, power: 'off', volume: null, muted: null, app: null }, state),
     };
   }
@@ -25,8 +31,12 @@
   var tvs = [
     tv('demo-living', 'lg', 'Living Room', 'Downstairs', 'OLED65C1PUB', '192.168.1.40', true,
       { online: true, power: 'on', volume: 18, muted: false, app: 'netflix' }),
+    tv('demo-upstairs', 'androidtv', 'Upstairs TV', 'Upstairs', 'TCL 65A300W', '192.168.1.48', true,
+      { online: true, power: 'on', volume: 53, muted: false, app: null }),
     tv('demo-kids', 'samsung', 'Kids’ Room', 'Upstairs', 'UN43TU7000', '192.168.1.41', true,
       { online: true, power: 'on', app: null }),
+    tv('demo-basement', 'roku', 'Basement', 'Downstairs', 'Streaming Stick 3840R', '192.168.1.53', true,
+      { online: true, power: 'standby', app: null }),
     tv('demo-bedroom', 'lg', 'Bedroom', 'Upstairs', '55UP7000PUA', '192.168.1.42', true,
       { online: false, power: 'off' }),
   ];
@@ -55,6 +65,9 @@
 
   function key(t, name) {
     needsOn(t);
+    if (t.brand === 'androidtv' && ['volup', 'voldown', 'mute', 'home', 'back'].indexOf(name) < 0) {
+      throw new Error('Google TVs only allow volume, mute and apps without pairing. Arrow keys need Google’s one-time code.');
+    }
     var s = t.state;
     if (name === 'volup' || name === 'voldown') {
       if (s.volume == null) return;
@@ -124,12 +137,14 @@
     ['GET', /^\/tvs\/([\w-]+)\/apps$/, function (m) {
       var t = find(m[1]);
       needsOn(t);
-      return (t.brand === 'lg' ? LG_APPS : SAMSUNG_APPS).map(function (a) { return { id: a[0], title: a[1], icon: null }; });
+      return ({ lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand]).map(function (a) { return { id: a[0], title: a[1], icon: null }; });
     }],
     ['POST', /^\/tvs\/([\w-]+)\/launch$/, function (m, body) {
       var t = find(m[1]);
       needsOn(t);
-      if (t.brand === 'lg') change(t, { app: body.id });
+      var list = { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand];
+      var hit = list.filter(function (a) { return a[0] === body.id; })[0];
+      if (t.brand !== 'samsung') change(t, { app: body.id, appTitle: hit ? hit[1] : null });
       return { ok: true };
     }],
     ['GET', /^\/tvs\/([\w-]+)\/inputs$/, function () {
@@ -188,6 +203,7 @@
   // (hidden when the landing page embeds the demo in a phone frame).
   document.addEventListener('DOMContentLoaded', function () {
     if (/[?&]embed=1/.test(location.search)) return;
+    document.documentElement.style.setProperty('--demo-bar', '28px');
     var bar = document.createElement('a');
     bar.className = 'demo-bar mono';
     bar.href = '../';

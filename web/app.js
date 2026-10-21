@@ -71,10 +71,12 @@ function note(message, error = false) {
 }
 
 const isOn = (t) => t.state?.online && t.state.power === 'on';
+// Older Samsungs answer the network even asleep, so we can't know: "Ready".
+const isUnknown = (t) => t.state?.online && t.state.power === 'unknown';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
 const statusWord = (t) =>
-  !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isStandby(t) ? 'Standby' : 'Off';
+  !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
 const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV' };
 const brandName = (b) => BRANDS[b] ?? 'TV';
 
@@ -133,6 +135,7 @@ function renderHouse() {
       </article>`)
     .join('');
   if (list.length) firstPaint = false;
+  houseField?.setShape(on ? 'hearth-house' : 'hearth-flame', { pin: true });
 }
 
 // ── Remote view ──────────────────────────────────────────
@@ -175,6 +178,7 @@ function renderRemote() {
   $('#sourceKey').hidden = t.brand !== 'samsung';
   for (const el of document.querySelectorAll('#apps .app')) el.classList.toggle('current', el.dataset.app === t.state?.app);
   renderLcd(t);
+  renderAurora(t);
 }
 
 // 8-bit skin: the dot-matrix screen narrates the TV.
@@ -202,8 +206,11 @@ function lcdKey(key) {
 
 function setTab(name) {
   tab = name;
-  for (const b of document.querySelectorAll('#tabs .tab')) b.classList.toggle('active', b.dataset.tab === name);
-  for (const p of document.querySelectorAll('.panel')) p.hidden = p.dataset.panel !== name;
+  const aurora = prefs.skin === 'aurora';
+  for (const b of document.querySelectorAll('#tabs .tab, .sheet-bar [data-tab]')) b.classList.toggle('active', b.dataset.tab === name);
+  // Aurora keeps the orb on screen and slides the other panels up over it.
+  for (const p of document.querySelectorAll('.panel')) p.hidden = p.dataset.panel !== name && !(aurora && p.dataset.panel === 'remote');
+  $('#scrim').hidden = !(aurora && name !== 'remote');
   $('.panels').scrollTop = 0;
 }
 
@@ -262,6 +269,255 @@ function renderInputs(inputs) {
     : '<p class="hint mono">No inputs reported.</p>';
 }
 
+
+// ── Aurora: the smart strip, edge sliders, smart dock, living fields ──
+const latency = [];
+function noteLatency(ms) {
+  latency.push(ms);
+  if (latency.length > 12) latency.shift();
+}
+const avgLatency = () => (latency.length ? Math.round(latency.reduce((a, b) => a + b, 0) / latency.length) : null);
+
+function ago(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+// Things worth knowing right now, in priority order. Cycles in the ticker.
+function insights(t) {
+  const out = [];
+  const others = [...tvs.values()].filter((o) => o.id !== t.id && isOn(o));
+  const hour = new Date().getHours();
+  if (!t.paired) out.push('Not connected yet — tap Connect above');
+  else if (!t.state?.online) out.push(t.canWake ? 'Off · tap ⏻ to wake it' : 'Off · turn it on with its own remote once');
+  if (t.state?.muted) out.push('Muted · tap the ring to unmute');
+  if ((t.state?.volume ?? 0) >= 60) out.push(`Loud · volume ${t.state.volume}`);
+  if (isOn(t) && t.since && Date.now() - t.since > 2 * 3600e3) out.push(`On for ${ago(Date.now() - t.since)} · time for a break?`);
+  if ((hour >= 22 || hour < 5) && (isOn(t) || others.length)) out.push('Late night · hold ⏻ to turn every TV off');
+  if (others.length) out.push(`${others.length} other screen${others.length > 1 ? 's' : ''} on: ${others.map((o) => `${o.name}${appName(o) && appName(o) !== 'On' ? ` (${appName(o)})` : ''}`).join(', ')}`);
+  if (t.capabilities?.remote === false) out.push('Google TV: volume, mute and apps work · arrows need Google’s code');
+  out.push('Drag the orb like a joystick · flick to swipe · hold OK for a long press');
+  return out;
+}
+
+let tickerTimer = 0;
+let tickerIndex = 0;
+function renderAurora(t) {
+  if (prefs.skin !== 'aurora') return;
+  const on = isOn(t);
+  $('#hudKicker span').textContent = `${t.name} · ${brandName(t.brand)}${t.model ? ` ${t.model}` : ''}`;
+  $('#hudTitle').textContent = !t.paired ? 'Not connected' : on ? (t.state.app || t.state.appTitle ? appName(t) : 'Home screen') : isStandby(t) ? 'Standby' : 'Off';
+  const chips = [];
+  if (t.paired && t.since) chips.push(`<span class="${on ? 'hot' : ''}">${on ? 'On' : 'Off'} ${ago(Date.now() - t.since)}</span>`);
+  const ms = avgLatency();
+  if (ms != null && t.state?.online) chips.push(`<span>${ms < 80 ? '◉' : '◎'} ${ms} ms</span>`);
+  if (t.state?.muted) chips.push('<span class="hot">Muted</span>');
+  if (t.capabilities?.remote === false) chips.push('<span>Cast</span>');
+  $('#hudChips').innerHTML = chips.join('');
+
+  const v = t.state?.volume;
+  const vol = $('.hud-vol');
+  vol.classList.toggle('muted', Boolean(t.state?.muted));
+  $('#hudVol').textContent = v == null ? '±' : t.state.muted ? '×' : v;
+  $('#hudVolLabel').textContent = t.state?.muted ? 'muted' : 'vol';
+  $('#hudVolArc').setAttribute('stroke-dasharray', `${v == null ? 0 : t.state.muted ? 0 : v} 100`);
+  $('#volFill').style.height = `${v == null || t.state.muted ? 0 : v}%`;
+
+  const lines = insights(t);
+  const ticker = $('#hudTicker');
+  if (!tickerTimer) {
+    tickerTimer = setInterval(() => {
+      const tv = tvs.get(current);
+      if (!tv || prefs.skin !== 'aurora') return;
+      const all = insights(tv);
+      tickerIndex = (tickerIndex + 1) % all.length;
+      ticker.textContent = all[tickerIndex];
+      ticker.classList.remove('swap');
+      void ticker.offsetWidth;
+      ticker.classList.add('swap');
+    }, 5000);
+  }
+  if (!ticker.textContent || !lines.includes(ticker.textContent)) ticker.textContent = lines[0];
+  renderDock(t);
+  orbMood(t);
+}
+
+// Most-used apps per TV, remembered on this phone.
+function usage() {
+  try {
+    return JSON.parse(localStorage.getItem('hearth.usage') || '{}');
+  } catch {
+    return {};
+  }
+}
+function countUse(tvIdValue, appId) {
+  const u = usage();
+  u[tvIdValue] ??= {};
+  u[tvIdValue][appId] = (u[tvIdValue][appId] ?? 0) + 1;
+  try {
+    localStorage.setItem('hearth.usage', JSON.stringify(u));
+  } catch {}
+}
+
+const playing = new Map();
+function renderDock(t) {
+  const apps = appCache.get(t.id) ?? [];
+  const counts = usage()[t.id] ?? {};
+  const top = [...apps].sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0)).slice(0, 3);
+  const caps = t.capabilities ?? {};
+  const html = [
+    `<button type="button" class="dock-item ${t.state?.muted ? 'on' : ''}" data-press="down" data-key="mute" aria-label="Mute"><svg><use href="#i-mute"/></svg><small>${t.state?.muted ? 'Unmute' : 'Mute'}</small></button>`,
+    caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-${playing.get(t.id) === false ? 'play' : 'pause'}"/></svg><small>${playing.get(t.id) === false ? 'Play' : 'Pause'}</small></button>`,
+    ...top.map((a) => `<button type="button" class="dock-item app ${a.id === t.state?.app ? 'current' : ''}" data-press="up" data-app="${esc(a.id)}"><i style="--tint:${tint(a.title)}">${
+      t.capabilities?.appIcons && a.icon ? `<img alt="" src="api/tvs/${encodeURIComponent(t.id)}/icon?u=${encodeURIComponent(a.icon)}">` : esc((a.title.match(/[A-Za-z0-9+]/) ?? ['•'])[0].toUpperCase())
+    }</i><small>${esc(a.title)}</small></button>`),
+    `<button type="button" class="dock-item" data-press="up" data-tab="apps" aria-label="All apps"><svg><use href="#i-grid"/></svg><small>Apps</small></button>`,
+    caps.inputs || t.brand === 'samsung' || caps.toast ? `<button type="button" class="dock-item" data-press="up" data-tab="${caps.inputs || t.brand === 'samsung' ? 'inputs' : 'say'}" aria-label="More"><svg><use href="#i-dots"/></svg><small>More</small></button>` : '',
+  ].join('');
+  const dock = $('#smartDock');
+  if (dock.innerHTML !== html) dock.innerHTML = html;
+}
+
+// Edge sliders: tap the top/bottom half, hold to repeat, or drag to scrub.
+function setupSliders() {
+  for (const el of document.querySelectorAll('.slider')) {
+    const keys = el.dataset.slider === 'vol' ? ['volup', 'voldown'] : ['chup', 'chdown'];
+    let s = null;
+    const end = () => {
+      if (!s) return;
+      clearTimeout(s.timer);
+      el.classList.remove('active');
+      el.querySelectorAll('.hit').forEach((h) => h.classList.remove('hit'));
+      s = null;
+    };
+    const hit = (up) => {
+      const h = el.querySelector(up ? '.up' : '.down');
+      h.classList.add('hit');
+      setTimeout(() => h.classList.remove('hit'), 120);
+    };
+    el.addEventListener('pointerdown', (e) => {
+      end();
+      el.setPointerCapture(e.pointerId);
+      const r = el.getBoundingClientRect();
+      const up = e.clientY < r.top + r.height / 2;
+      s = { y: e.clientY, up, dragging: false, timer: 0, delay: 380 };
+      el.classList.add('active');
+      sendKey(keys[up ? 0 : 1]);
+      hit(up);
+      const again = () => {
+        if (!s || s.dragging) return;
+        sendKey(keys[s.up ? 0 : 1], { repeat: true });
+        hit(s.up);
+        s.delay = Math.max(70, s.delay * 0.72);
+        s.timer = setTimeout(again, s.delay);
+      };
+      s.timer = setTimeout(again, s.delay);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!s) return;
+      const dy = e.clientY - s.y;
+      if (!s.dragging && Math.abs(dy) < 12) return;
+      if (!s.dragging) {
+        s.dragging = true;
+        clearTimeout(s.timer);
+      }
+      if (Math.abs(dy) >= 20) {
+        const up = dy < 0;
+        sendKey(keys[up ? 0 : 1], { repeat: true });
+        hit(up);
+        s.y = e.clientY;
+      }
+    });
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+}
+
+// Sheets over the orb get a segmented bar + a scrim to tap away.
+function setupSheets() {
+  const scrim = document.createElement('div');
+  scrim.className = 'scrim';
+  scrim.id = 'scrim';
+  scrim.hidden = true;
+  scrim.addEventListener('click', () => setTab('remote'));
+  $('#remote').append(scrim);
+  for (const panel of document.querySelectorAll('.panel:not(.device)')) {
+    panel.insertAdjacentHTML('afterbegin', `<div class="sheet-bar">
+      <button type="button" data-press="up" data-tab="apps">Apps</button>
+      <button type="button" data-press="up" data-tab="inputs">Inputs</button>
+      <button type="button" data-press="up" data-tab="say" class="say-tab">Say</button>
+      <button type="button" class="close" data-press="up" data-tab="remote" aria-label="Close">✕</button>
+    </div>`);
+  }
+}
+
+// The living fields: one behind the orb, one behind the house.
+let orbField = null;
+let houseField = null;
+function makeField(canvas, stage, opts) {
+  const AF = window.AuroraField;
+  if (!AF || !window.HearthShapes || !canvas) return null;
+  window.HearthShapes.register(AF);
+  try {
+    return AF.create(canvas, { palette: 'ember', cycle: 0, interactive: false, stage, ...opts });
+  } catch {
+    return null;
+  }
+}
+function mountOrb() {
+  if (prefs.skin !== 'aurora' || orbField) return;
+  const small = innerWidth < 500;
+  orbField = makeField($('#orbField'), $('#orbStage'), {
+    shapes: ['mind', 'hearth-tv', 'hearth-remote', 'hearth-flame'], initial: 'mind', count: small ? 1800 : 3200, stars: 70, depth: 2.4,
+    // A halo just outside the orb's ring, so the particles frame the pad.
+    radius: (w) => w * 0.66,
+  });
+  if (orbField) requestAnimationFrame(() => orbField?.resize());
+}
+function unmountOrb() {
+  orbField?.destroy();
+  orbField = null;
+}
+let mood = '';
+function orbMood(t) {
+  if (!orbField) return;
+  const next = !t.paired ? 'hearth-tv' : !t.state?.online ? 'hearth-flame' : 'mind';
+  if (next !== mood) {
+    mood = next;
+    orbField.setShape(next, { pin: true });
+    orbField.set({ autonomy: next === 'hearth-flame' ? 0.35 : 1 });
+  }
+}
+function orbPointer(type, x, y) {
+  if (!orbField) return;
+  const zone = $('.orb-zone').getBoundingClientRect();
+  const pad = $('#pad').getBoundingClientRect();
+  const canvas = $('#orbField').getBoundingClientRect();
+  orbField.pointer(type, x + pad.left - canvas.left, y + pad.top - canvas.top);
+  void zone;
+}
+function mountHouseField() {
+  if (prefs.skin !== 'aurora' || houseField || current) return;
+  const anyOn = [...tvs.values()].some(isOn);
+  houseField = makeField($('#houseField'), $('#houseStage'), {
+    shapes: ['hearth-house', 'hearth-flame', 'mind'], initial: anyOn ? 'hearth-house' : 'hearth-flame', count: innerWidth < 500 ? 1600 : 2600, stars: 90,
+  });
+}
+function unmountHouseField() {
+  houseField?.destroy();
+  houseField = null;
+}
+function refreshFields() {
+  unmountOrb();
+  unmountHouseField();
+  mood = '';
+  if (current) mountOrb();
+  else mountHouseField();
+}
+
 // ── Commands ─────────────────────────────────────────────
 // Keys go through one queue so a fast swipe-swipe-tap arrives in order.
 let keyQueue = Promise.resolve();
@@ -277,7 +533,10 @@ function sendKey(key, opts = {}) {
     m.classList.add('bump');
   }
   const body = { key, ...(opts.hold ? { hold: Math.round(opts.hold) } : {}) };
-  keyQueue = keyQueue.then(() => api('POST', `/tvs/${id}/key`, body)).catch((err) => {
+  keyQueue = keyQueue.then(() => {
+    const t0 = performance.now();
+    return api('POST', `/tvs/${id}/key`, body).then(() => noteLatency(performance.now() - t0));
+  }).catch((err) => {
     feedback('error');
     note(err.message, true);
   });
@@ -285,6 +544,7 @@ function sendKey(key, opts = {}) {
 
 async function power(id, on) {
   const t = tvs.get(id);
+  if (isUnknown(t)) on = true; // a toggle: powerOn sends WOL + POWER
   haptic('heavy');
   sound(on ? 'on' : 'off');
   try {
@@ -388,11 +648,15 @@ function route() {
     }
     renderRemote();
     keepAwake(true);
+    unmountHouseField();
+    mountOrb();
   } else {
     current = null;
     $('#remote').hidden = true;
     $('#house').hidden = false;
     keepAwake(false);
+    unmountOrb();
+    mountHouseField();
     renderHouse();
   }
 }
@@ -461,11 +725,17 @@ function onPress(el, info) {
     location.hash = `#/tv/${d.switch}`;
     return;
   }
+  if (d.dock === 'playpause') {
+    const t = tvs.get(current);
+    playing.set(current, !(playing.get(current) ?? true));
+    return sendKey(playing.get(current) ? 'play' : 'pause');
+  }
   if (d.tab) {
     haptic('tick');
     return setTab(d.tab);
   }
   if (d.app) {
+    countUse(current, d.app);
     feedback('key', 'ok');
     return api('POST', `/tvs/${current}/launch`, { id: d.app }).catch((err) => note(err.message, true));
   }
@@ -476,6 +746,7 @@ function onPress(el, info) {
   if (d.msg) return say(d.msg);
   if (d.skinPick) {
     savePrefs({ skin: d.skinPick });
+    refreshFields();
     feedback('success');
     openSettings();
     render();
@@ -534,8 +805,11 @@ const KEYBOARD = {
 
 function wire() {
   pressable(document, onPress);
+  setupSliders();
+  setupSheets();
   gesturePad($('#pad'), {
     send: (key, opts) => sendKey(key, opts),
+    onPointer: orbPointer,
     flash: (zone, hold) => {
       const el = $(`#pad [data-key="${zone}"]`);
       el?.classList.add('pressed');

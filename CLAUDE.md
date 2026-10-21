@@ -109,6 +109,10 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`)
 | iOS only plays the switch-haptic during user activation | pointerdown/touchstart aren't activation; pointerup/touchend/click are. `feel.js` queues the buzz and plays it on finger-up; buzzes during holds are dropped on iOS. |
 | Roku active-app gives an id and a title | `<app id="12">Netflix</app>`: `state.app` = id (matches the app shelf) and `state.appTitle` = title (shown on cards). The home screen has no id. |
 | A Roku stick reports `supports-wake-on-wlan: false` | It can't be woken over Wi-Fi when unpowered; `PowerOn` works from standby. |
+| Wake-on-LAN sent to `x.y.z.255` never reached the LG on an eero mesh | eero hands out a /22 (192.168.4.0–7.255). `wol.js` computes the broadcast from the real netmask and also unicasts to the TV's IP on ports 9 and 7. The LG then woke in 3.6 s. |
+| 2016-17 Samsungs answer REST and the websocket even in standby, with no PowerState | Hearth can't know if they're on: state `unknown` ("Ready"), and power acts as a toggle (WOL + KEY_POWER), like the TV's own remote. |
+| Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
+| `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 

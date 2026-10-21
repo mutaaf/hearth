@@ -53,7 +53,15 @@ export class Hub extends EventEmitter {
         this.emit('change', this.view(tv));
       },
     });
-    driver.on('state', () => this.emit('change', this.view(tv)));
+    driver.on('state', (state) => {
+      // Remember when the TV last turned on/off ("On for 1h 12m" in the app).
+      const on = state.online && state.power === 'on';
+      if (on !== this.#wasOn.get(tv.id)) {
+        this.#wasOn.set(tv.id, on);
+        this.#since.set(tv.id, Date.now());
+      }
+      this.emit('change', this.view(tv));
+    });
     driver.on('connection-error', () => {});
     this.#drivers.set(tv.id, driver);
     if (tv.credentials) driver.start();
@@ -63,6 +71,8 @@ export class Hub extends EventEmitter {
   // Unpaired TVs have no live connection, so peek at their control port now
   // and then. Stops on its own once the TV is paired.
   #watchers = new Map();
+  #since = new Map();
+  #wasOn = new Map();
   #watch(tv, driver, everyMs = this.watchMs ?? 10_000) {
     const ports = REACH_PORTS[tv.brand] ?? [];
     if (!ports.length) return;
@@ -99,8 +109,10 @@ export class Hub extends EventEmitter {
       ip: tv.ip,
       paired: Boolean(tv.credentials),
       canWake: Boolean(tv.macs?.length),
+      powerToggles: Boolean(driver?.powerToggles),
       capabilities: driver?.capabilities ?? {},
       state: driver?.state ?? { online: false, power: 'unknown' },
+      since: this.#since.get(tv.id) ?? null,
     };
   }
 

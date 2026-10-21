@@ -109,3 +109,13 @@ test('Google TVs: the TCL is kept, Nest Hubs are not, model comes from AirPlay',
   ]);
   assert.deepEqual(tvs, [{ brand: 'androidtv', name: 'Upstairs TV', model: 'TCL 65A300W', ip: '10.0.0.48', macs: [] }]);
 });
+
+test('Wake-on-LAN targets the real subnet broadcast (eero /22, home /24)', async () => {
+  const { broadcastFor } = await import('../src/wol.js');
+  const eero = { en0: [{ family: 'IPv4', internal: false, address: '192.168.4.29', netmask: '255.255.252.0' }] };
+  assert.equal(broadcastFor('192.168.4.45', eero), '192.168.7.255');
+  assert.equal(broadcastFor('192.168.6.10', eero), '192.168.7.255');
+  const home = { en0: [{ family: 'IPv4', internal: false, address: '10.0.0.20', netmask: '255.255.255.0' }] };
+  assert.equal(broadcastFor('10.0.0.77', home), '10.0.0.255');
+  assert.equal(broadcastFor('172.16.0.5', home), null, 'not on any local network');
+});

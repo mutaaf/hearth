@@ -41,8 +41,9 @@ export class SamsungDriver extends Driver {
     const tick = async () => {
       try {
         const info = await this.fetchInfo();
-        // PowerState only exists on 2018+ models; answering at all means it's on.
-        const power = info?.device?.PowerState ?? 'on';
+        // PowerState only exists on 2018+ models. Older sets keep answering
+        // in standby, so "answering" can't tell asleep from awake: 'unknown'.
+        const power = info?.device?.PowerState ?? 'unknown';
         this.setState({ online: true, power });
       } catch {
         this.setState({ online: false, power: 'off', app: null });
@@ -178,14 +179,26 @@ export class SamsungDriver extends Driver {
   }
 
   async powerOn() {
-    // Frame/2018+ sets keep the network alive in standby: a POWER key wakes them.
-    if (this.state.online && this.state.power === 'standby') return this.#sendKey('KEY_POWER');
-    await super.powerOn();
+    // Wake-on-LAN first (harmless if it's already on)…
+    if (this.tv.macs?.length) await super.powerOn().catch(() => {});
+    // …then, if the set still answers: 2018+ in standby take a POWER key;
+    // older sets can't say whether they're asleep, so POWER acts as a toggle,
+    // exactly like the TV's own remote.
+    if (this.state.online && (this.state.power === 'standby' || this.state.power === 'unknown')) {
+      await this.#sendKey('KEY_POWER').catch(() => {});
+    } else if (!this.tv.macs?.length) {
+      await super.powerOn();
+    }
   }
 
   async powerOff() {
     if (!this.state.online || this.state.power === 'standby') return;
     await this.#sendKey('KEY_POWER');
+  }
+
+  // Older sets: one button, one toggle.
+  get powerToggles() {
+    return this.state.power === 'unknown';
   }
 
   async apps() {
