@@ -14,7 +14,7 @@
 import { complete, costUsd, describeError, EDGE_MODELS, listModels, pickModel, PROVIDERS } from './ai/providers.js';
 import { detectProvider, extractJson, sanitizePayload, SYSTEM, userPrompt, validateInsight } from '../insight-schema.js';
 
-const EDGE_DAILY_CAP = 200; // free-allowance insights per UTC day (~40 neurons each, 10k free)
+const EDGE_DAILY_CAP = 150; // free insights per UTC day (~17 neurons each); the 10k free allowance is shared with COLD GAS
 const EDGE_HOURLY_PER_IP = 15;
 const BYOK_HOURLY_PER_IP = 60;
 const MODELS_HOURLY_PER_IP = 30;
