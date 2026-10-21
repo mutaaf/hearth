@@ -19,8 +19,8 @@ before(async () => {
     assert.equal(url.pathname, '/api/v2/channels/samsung.remote.control');
     assert.equal(Buffer.from(url.searchParams.get('name'), 'base64').toString(), 'Hearth');
     if (mode === 'deny') return ws.send(JSON.stringify({ event: 'ms.channel.unauthorized' }));
-    const token = url.searchParams.get('token') ?? 'tok-123';
-    ws.send(JSON.stringify({ event: 'ms.channel.connect', data: { token } }));
+    const token = mode === 'notoken' ? undefined : url.searchParams.get('token') ?? 'tok-123';
+    ws.send(JSON.stringify({ event: 'ms.channel.connect', data: token ? { token } : {} }));
     ws.on('message', (raw) => {
       const msg = JSON.parse(raw.toString());
       received.push(msg);
@@ -101,6 +101,28 @@ test('apps are listed and launched with the right action type', async () => {
   const launch = received.find((m) => m.params?.event === 'ed.apps.launch');
   assert.deepEqual(launch.params.data, { appId: '3201907018807', action_type: 'DEEP_LINK' });
   await driver.stop();
+});
+
+test('older sets that give no token still count as connected', async () => {
+  mode = 'notoken';
+  const tv = makeTv();
+  const saved = [];
+  const driver = makeDriver(tv, saved);
+  await driver.pair();
+  assert.deepEqual(saved, [{ legacy: true }]);
+  await driver.stop();
+});
+
+test('2016-17 sets (no TokenAuthSupport) are reached on ws :8001', async () => {
+  const driver = new SamsungDriver(makeTv(), { fetchInfo: async () => ({ device: { TokenAuthSupport: 'false' } }) });
+  driver.port ?? (await driver.key('ok').catch(() => {}));
+  assert.equal(driver.port, 8001);
+  assert.equal(driver.secure, false);
+  const modern = new SamsungDriver(makeTv(), { fetchInfo: async () => ({ device: { TokenAuthSupport: 'true' } }) });
+  await modern.key('ok').catch(() => {});
+  assert.equal(modern.port, 8002);
+  await driver.stop();
+  await modern.stop();
 });
 
 test('a declined prompt surfaces as a 403', async () => {

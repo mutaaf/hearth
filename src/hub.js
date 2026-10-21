@@ -1,10 +1,16 @@
 import { EventEmitter } from 'node:events';
 import { badRequest, HearthError, notFound } from './errors.js';
-import { discover, isIPv4, isMac, probe, tvId } from './discovery.js';
+import { discover, isIPv4, isMac, portOpen, probe, tvId } from './discovery.js';
 import { LgDriver } from './drivers/lg.js';
+import { GoogleTvDriver } from './drivers/googletv.js';
+import { RokuDriver } from './drivers/roku.js';
 import { SamsungDriver } from './drivers/samsung.js';
 
-export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver };
+export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver, roku: RokuDriver, androidtv: GoogleTvDriver };
+
+// Ports a TV listens on even before it's paired: enough to tell "on" from
+// "off" so the app can offer to wake it.
+const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv: [8009] };
 
 // The hub owns the list of TVs and one live driver per TV. The HTTP server is
 // a thin layer over it; tests drive it directly with fake drivers.
@@ -28,6 +34,7 @@ export class Hub extends EventEmitter {
 
   async close() {
     clearInterval(this.#discoveryTimer);
+    for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
   }
 
@@ -50,6 +57,30 @@ export class Hub extends EventEmitter {
     driver.on('connection-error', () => {});
     this.#drivers.set(tv.id, driver);
     if (tv.credentials) driver.start();
+    else this.#watch(tv, driver);
+  }
+
+  // Unpaired TVs have no live connection, so peek at their control port now
+  // and then. Stops on its own once the TV is paired.
+  #watchers = new Map();
+  #watch(tv, driver, everyMs = this.watchMs ?? 10_000) {
+    const ports = REACH_PORTS[tv.brand] ?? [];
+    if (!ports.length) return;
+    const check = async () => {
+      if (tv.credentials || !this.#drivers.has(tv.id)) return this.#unwatch(tv.id);
+      let up = false;
+      for (const port of ports) if (!up) up = await portOpen(tv.ip, port, 1200);
+      driver.setState({ online: up, power: up ? 'on' : 'off' });
+    };
+    check();
+    const timer = setInterval(check, everyMs);
+    timer.unref?.();
+    this.#watchers.set(tv.id, timer);
+  }
+
+  #unwatch(id) {
+    clearInterval(this.#watchers.get(id));
+    this.#watchers.delete(id);
   }
 
   #persist() {
@@ -136,7 +167,7 @@ export class Hub extends EventEmitter {
     const tv = {
       id: tvId(found.brand, found.macs, ip),
       brand: found.brand,
-      name: clean(found.name) || (found.brand === 'lg' ? 'LG TV' : 'Samsung TV'),
+      name: clean(found.name) || BRAND_NAMES[found.brand] || 'TV',
       model: clean(found.model),
       room: clean(input.room),
       ip,
@@ -174,15 +205,19 @@ export class Hub extends EventEmitter {
     const tv = this.get(id);
     await this.#drivers.get(id)?.stop();
     this.#drivers.delete(id);
+    this.#unwatch(id);
     this.tvs = this.tvs.filter((t) => t !== tv);
     await this.store.save(this.tvs);
     this.emit('removed', { id });
     return { ok: true };
   }
 
-  async pair(id) {
+  async pair(id, opts = {}) {
     const tv = this.get(id);
-    await this.driver(id).pair();
+    const result = await this.driver(id).pair(opts);
+    // Some TVs (LG in PIN mode) show a number first and finish on a 2nd call.
+    if (result?.needsPin) return { ...this.view(tv), needsPin: true };
+    this.#unwatch(id);
     // Make sure the new pairing key is on disk before we report success.
     await this.store.save(this.tvs);
     return this.view(tv);
@@ -209,4 +244,5 @@ export class Hub extends EventEmitter {
   }
 }
 
+const BRAND_NAMES = { lg: 'LG TV', samsung: 'Samsung TV', roku: 'Roku', androidtv: 'Google TV' };
 const clean = (s) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60);

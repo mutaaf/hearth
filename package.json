@@ -1,7 +1,7 @@
 {
   "name": "hearth",
-  "version": "0.1.0",
-  "description": "One remote for every TV in the house. Finds your LG and Samsung TVs on the Wi-Fi and gives every phone a fast, ad-free remote.",
+  "version": "0.3.0",
+  "description": "One remote for every TV in the house. Finds your LG, Samsung, Roku and Google TV devices on the Wi-Fi and gives every phone a fast, ad-free remote.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -22,6 +22,8 @@
   "dependencies": {
     "aurora-field": "^3.3.0",
     "lgtv2": "^2.1.0",
+    "multicast-dns": "^7.2.5",
+    "node-forge": "^1.4.0",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.0"
   },

@@ -39,7 +39,9 @@ async function serve() {
     const [ip] = lanAddresses();
     const url = `http://${ip ?? 'localhost'}:${PORT}`;
     console.log(`\n  🔥 Hearth is running\n\n  On this computer:   http://localhost:${PORT}`);
-    console.log(`  On your phone:      ${url}   (same Wi-Fi)\n`);
+    console.log(`  On your phone:      ${url}   (same Wi-Fi)`);
+    if (process.env.HEARTH_FRIENDLY_URL) console.log(`  Friendly address:   ${process.env.HEARTH_FRIENDLY_URL}`);
+    console.log('');
     if (ip) qrcode.generate(url, { small: true }, (qr) => console.log(qr.replace(/^/gm, '  ')));
     console.log(`  ${hub.tvs.length} TV${hub.tvs.length === 1 ? '' : 's'} remembered. Ctrl+C to stop.\n`);
   });

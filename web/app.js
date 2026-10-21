@@ -73,10 +73,13 @@ function note(message, error = false) {
 const isOn = (t) => t.state?.online && t.state.power === 'on';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
-const statusWord = (t) => (!t.paired ? 'Tap to connect' : isOn(t) ? 'On' : isStandby(t) ? 'Standby' : 'Off');
-const brandName = (b) => (b === 'lg' ? 'LG' : 'Samsung');
+const statusWord = (t) =>
+  !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isStandby(t) ? 'Standby' : 'Off';
+const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV' };
+const brandName = (b) => BRANDS[b] ?? 'TV';
 
 function appName(t) {
+  if (t.state?.appTitle) return t.state.appTitle;
   const id = t.state?.app;
   if (!id) return isOn(t) ? 'On' : '';
   const cached = appCache.get(t.id)?.find((a) => a.id === id);
@@ -120,7 +123,7 @@ function renderHouse() {
     .map((t, i) => `
       <article class="unit ${ledClass(t)}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press for options.">
         <div class="screen"><div class="scan"></div><span class="now">${esc(appName(t))}</span></div>
-        ${t.paired ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
+        ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
         <div class="unit-meta">
           <h3 class="unit-name">${esc(t.name)}</h3>
           <p class="unit-sub mono">${esc([t.room !== t.name ? t.room : '', brandName(t.brand), t.model].filter(Boolean).join(' · '))}</p>

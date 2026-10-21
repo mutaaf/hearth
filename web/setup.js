@@ -6,6 +6,8 @@ import { feedback, haptic } from './feel.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const brandName = (b) => (b === 'lg' ? 'LG' : 'Samsung');
 const DOTS = ['on', 'search', 'pair', 'name', 'done'];
+// Steps that sit under another step's progress dot.
+const DOT_OF = { pick: 'search', none: 'search', manual: 'search', pairfail: 'pair', wake: 'on', lgchoose: 'pair', pin: 'pair' };
 const PAIR_SECONDS = 60;
 const ROOMS = [
   ['🛋️', 'Living Room'], ['🛏️', 'Bedroom'], ['🧸', 'Kids’ Room'], ['🍳', 'Kitchen'],
@@ -41,7 +43,7 @@ export function createSetup({ root, api, onTv, onClose, note }) {
   }
 
   function frame(step, body) {
-    const at = DOTS.indexOf(step === 'pick' || step === 'none' || step === 'manual' ? 'search' : step === 'pairfail' ? 'pair' : step);
+    const at = DOTS.indexOf(DOT_OF[step] ?? step);
     root.innerHTML = `
       <div class="setup-top">
         <div class="setup-dots" aria-hidden="true">${DOTS.map((_, i) => `<i class="${i < at ? 'done' : i === at ? 'now' : ''}"></i>`).join('')}</div>
@@ -59,7 +61,127 @@ export function createSetup({ root, api, onTv, onClose, note }) {
     root.querySelector('.setup-body')?.focus?.();
   }
 
+  // Each brand has its own front door. LG: a number on screen (no remote) or
+  // Allow. Samsung: Allow if it asks (older ones don't). Roku/Google TV: none.
+  function startPair(extra = {}) {
+    Object.assign(state, extra);
+    const brand = state.candidate?.brand;
+    go(brand === 'lg' ? 'lgchoose' : 'pair');
+  }
+
+  async function ensureAdded() {
+    if (state.tvId) return state.tvId;
+    const added = await api('POST', '/tvs', state.candidate);
+    onTv(added);
+    state.tvId = added.id;
+    state.tv = added;
+    return added.id;
+  }
+
   const STEPS = {
+    async wake() {
+      const tv = state.candidate;
+      frame('wake', `
+        <div class="setup-art"><div class="art-tv"><div class="set"><span></span></div><div class="foot"></div></div></div>
+        <h2>Waking ${esc(tv?.name ?? 'the TV')}…</h2>
+        <p class="say-it" id="wakeSub">Sending the wake-up signal. This can take 20 seconds.</p>`);
+      const mine = run;
+      try {
+        await api('POST', `/tvs/${state.tvId}/power`, { on: true });
+      } catch {}
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        if (mine !== run) return;
+        const list = await api('GET', '/tvs').catch(() => []);
+        const now = list.find((t) => t.id === state.tvId);
+        if (now?.state?.online) {
+          feedback('success');
+          return startPair({ candidate: now });
+        }
+      }
+      if (mine !== run) return;
+      frame('wake', `
+        <h2>It didn’t wake up.</h2>
+        <ul class="checklist">
+          <li><i>🔌</i><span>Turn it on any way you can (its remote, a button on the TV, or the TV’s own app). Then tap below.</span></li>
+          <li><i>⚙️</i><span>To make waking work next time, turn on <b>Turn on via Wi-Fi</b> (LG) or <b>Power On with Mobile</b> (Samsung) in the TV’s settings.</span></li>
+        </ul>
+        <div class="setup-actions">
+          <button type="button" class="cta" data-press="up" data-setup="pair">It’s on now</button>
+          <button type="button" class="ghost" data-press="up" data-setup="wake">Try waking it again</button>
+        </div>`);
+    },
+
+    lgchoose() {
+      const tv = state.candidate;
+      frame('pair', `
+        <h2>How should we connect?</h2>
+        <p class="say-it">${esc(tv?.name ?? 'Your LG')} needs to say yes once.</p>
+        <div class="pick">
+          <button type="button" data-press="up" data-setup="pin">
+            <span class="tvdot" aria-hidden="true"></span>
+            <span><b>Show a number on the TV</b><small>No remote needed · recommended</small></span>
+          </button>
+          <button type="button" data-press="up" data-setup="allow">
+            <span class="tvdot" aria-hidden="true"></span>
+            <span><b>I’ll press Allow</b><small>With the TV’s own remote</small></span>
+          </button>
+        </div>`);
+    },
+
+    async pin() {
+      const tv = state.candidate;
+      frame('pair', `
+        <div class="setup-art"><div class="field-art"></div></div>
+        <h2 id="pinTitle">Look at the TV…</h2>
+        <p class="say-it" id="pinSub">A number is about to appear on ${esc(tv?.name ?? 'the screen')}.</p>
+        <form class="fields" id="pinForm" hidden>
+          <input class="ip-input" id="pinInput" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••••" aria-label="Number on the TV">
+          <div class="setup-actions">
+            <button type="submit" class="cta">Connect</button>
+            <button type="button" class="ghost" data-press="up" data-setup="pin">Show the number again</button>
+          </div>
+        </form>`);
+      mountField('hearth-tv');
+      const mine = run;
+      try {
+        const id = await ensureAdded();
+        const res = await api('POST', `/tvs/${id}/pair`, { mode: 'pin' });
+        if (mine !== run) return;
+        if (!res.needsPin) {
+          onTv(res);
+          feedback('success');
+          return go('name', { tv: res });
+        }
+      } catch (err) {
+        if (mine !== run) return;
+        feedback('error');
+        return go('pairfail', { error: err.message });
+      }
+      haptic('press');
+      root.querySelector('#pinTitle').textContent = 'Type the number on the TV.';
+      root.querySelector('#pinSub').textContent = 'It’s on the screen right now.';
+      const form = root.querySelector('#pinForm');
+      form.hidden = false;
+      setTimeout(() => root.querySelector('#pinInput')?.focus(), 200);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pin = root.querySelector('#pinInput').value.replace(/\D/g, '');
+        if (!pin) return;
+        try {
+          const paired = await api('POST', `/tvs/${state.tvId}/pair`, { pin });
+          onTv(paired);
+          if (mine !== run) return;
+          feedback('success');
+          go('name', { tv: paired });
+        } catch (err) {
+          feedback('error');
+          note(err.message, true);
+          root.querySelector('#pinInput').select();
+        }
+      });
+    },
+
     on() {
       frame('on', `
         <div class="setup-art"><div class="art-tv"><div class="set"><span></span></div><div class="foot"></div><span class="finger"><i></i></span></div></div>
@@ -93,7 +215,7 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         feedback('success');
         root.querySelector('#searchTitle').textContent = `Found it!`;
         root.querySelector('#searchSub').innerHTML = `<b>${esc(tv.name)}</b> · ${brandName(tv.brand)} ${esc(tv.model)}`;
-        setTimeout(() => mine === run && go('pair', { candidate: tv, tvId: null }), 1400);
+        setTimeout(() => mine === run && startPair({ candidate: tv, tvId: null }), 1400);
       } else if (fresh.length > 1) {
         field?.setShape('hearth-house', { pin: true });
         feedback('success');
@@ -117,16 +239,25 @@ export function createSetup({ root, api, onTv, onClose, note }) {
 
     async pair() {
       const tv = state.candidate;
+      const asks = tv?.brand === 'lg' || tv?.brand === 'samsung';
       frame('pair', `
+        ${asks ? '' : '<div class="setup-art"><div class="field-art"></div></div><!--'}
         <div class="setup-art">
           <div class="art-allow">
             <svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="left" id="ring" cx="50" cy="50" r="46" stroke-dasharray="289" stroke-dashoffset="0"/></svg>
             <div class="box"><small>Allow Hearth to connect?</small><div class="btns"><b>Deny</b><b class="yes">Allow</b></div></div>
             <span class="secs" id="secs">${PAIR_SECONDS}s</span>
           </div>
-        </div>
-        <h2>Grab the TV’s remote.</h2>
-        <p class="say-it">${esc(tv?.name ?? 'Your TV')} is asking a question. Point its remote at it and press <b>OK</b> on <b>Allow</b>.</p>`);
+        </div>${asks ? '' : '-->'}
+        <h2>${tv?.brand === 'lg' ? 'Grab the TV’s remote.' : 'Connecting…'}</h2>
+        <p class="say-it">${
+          tv?.brand === 'lg'
+            ? `${esc(tv?.name ?? 'Your TV')} is asking a question. Point its remote at it and press <b>OK</b> on <b>Allow</b>.`
+            : tv?.brand === 'samsung'
+              ? `Most Samsungs connect by themselves. If ${esc(tv?.name ?? 'the TV')} asks, press <b>Allow</b>.`
+              : `No buttons needed. ${esc(tv?.name ?? 'Your TV')} lets Hearth in on its own.`
+        }</p>`);
+      if (!asks) mountField('hearth-tv');
       const mine = run;
       let left = PAIR_SECONDS;
       countdown = setInterval(() => {
@@ -138,14 +269,9 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         if (left > 0 && left % 10 === 0) haptic('tick');
       }, 1000);
       try {
-        let id = state.tvId;
-        if (!id) {
-          const added = await api('POST', '/tvs', tv);
-          onTv(added);
-          id = added.id;
-          state.tvId = id;
-          if (added.paired) return mine === run && go('name', { tv: added });
-        }
+        const wasAdded = Boolean(state.tvId);
+        const id = await ensureAdded();
+        if (!wasAdded && state.tv?.paired) return mine === run && go('name', { tv: state.tv });
         const paired = await api('POST', `/tvs/${id}/pair`);
         onTv(paired);
         if (mine !== run) return;
@@ -237,7 +363,8 @@ export function createSetup({ root, api, onTv, onClose, note }) {
           const tv = await api('POST', '/tvs', { ip });
           onTv(tv);
           feedback('success');
-          go(tv.paired ? 'done' : 'pair', { candidate: tv, tvId: tv.id, tv });
+          if (tv.paired) go('done', { candidate: tv, tvId: tv.id, tv });
+          else startPair({ candidate: tv, tvId: tv.id, tv });
         } catch (err) {
           feedback('error');
           note(err.message, true);
@@ -284,7 +411,10 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       state = { candidate, tvId };
       root.hidden = false;
       document.body.style.overflow = 'hidden';
-      go(candidate || tvId ? 'pair' : 'on');
+      if (!candidate && !tvId) return go('on');
+      // An added TV that's off: wake it first (no pairing needed for that).
+      if (tvId && candidate && !candidate.state?.online && candidate.canWake) return go('wake');
+      startPair();
     },
     close,
     async handle(el) {
@@ -293,8 +423,11 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       if (action === 'search') return go('search');
       if (action === 'manual') return go('manual');
       if (action === 'again') return go('on', { candidate: null, tvId: null, tv: null });
-      if (action === 'pair') return go('pair');
-      if (action === 'choose') return go('pair', { candidate: state.found[Number(el.dataset.i)], tvId: null });
+      if (action === 'pair') return startPair();
+      if (action === 'choose') return startPair({ candidate: state.found[Number(el.dataset.i)], tvId: null });
+      if (action === 'pin') return go('pin');
+      if (action === 'allow') return go('pair');
+      if (action === 'wake') return go('wake');
       if (action === 'finish') {
         const id = state.tv?.id ?? state.tvId;
         close();

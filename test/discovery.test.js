@@ -96,3 +96,16 @@ test('Wake-on-LAN magic packet is 6×FF + 16×MAC', () => {
   assert.equal(pkt.subarray(96).toString('hex'), 'aabbcc000001');
   assert.throws(() => magicPacket('nope'));
 });
+
+test('Google TVs: the TCL is kept, Nest Hubs are not, model comes from AirPlay', async () => {
+  const { googleTvsFrom } = await import('../src/discovery.js');
+  const e = (service, name, ip, txt) => ({ service: `${service}._tcp.local`, name, ip, port: 1, txt });
+  const tvs = googleTvsFrom([
+    e('_googlecast', 'Smart-TV-1', '10.0.0.48', { fn: 'Upstairs TV', md: 'Smart TV' }),
+    e('_androidtvremote2', 'Upstairs TV', '10.0.0.48', {}),
+    e('_airplay', 'Upstairs TV', '10.0.0.48', { manufacturer: 'TCL', model: '65A300W' }),
+    e('_googlecast', 'Google-Nest-Hub-Max-1', '10.0.0.36', { fn: 'Study Cam', md: 'Google Nest Hub Max' }),
+    e('_googlecast', 'Google-Nest-Hub-2', '10.0.0.44', { fn: 'Bedroom Display', md: 'Google Nest Hub' }),
+  ]);
+  assert.deepEqual(tvs, [{ brand: 'androidtv', name: 'Upstairs TV', model: 'TCL 65A300W', ip: '10.0.0.48', macs: [] }]);
+});

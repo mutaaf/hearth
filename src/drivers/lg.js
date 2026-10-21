@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import LGTV from 'lgtv2';
+import WebSocket from 'ws';
 import { HearthError, offline, unsupported } from '../errors.js';
 import { isMac } from '../discovery.js';
 import { keyCode } from '../keys.js';
@@ -25,6 +28,12 @@ const SSAP = {
 };
 
 const PAIR_TIMEOUT = 60_000;
+const PIN_TIMEOUT = 120_000;
+
+// lgtv2's signed app manifest; PIN pairing sends the same one.
+const MANIFEST = JSON.parse(
+  readFileSync(path.join(path.dirname(fileURLToPath(import.meta.resolve('lgtv2'))), 'pairing.json'), 'utf8'),
+).manifest;
 const UNREACHABLE = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTDOWN']);
 
 export class LgDriver extends Driver {
@@ -32,6 +41,11 @@ export class LgDriver extends Driver {
   capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: true };
   #client = null;
   #pointer = null;
+
+  constructor(tv, opts = {}) {
+    super(tv, opts);
+    this.pinUrls = opts.pinUrls; // tests point PIN pairing at a fake TV
+  }
 
   start() {
     if (this.#client) return;
@@ -67,8 +81,13 @@ export class LgDriver extends Driver {
     if (client) await client.disconnect().catch(() => {});
   }
 
-  pair() {
+  // Two ways in. Default: the TV asks "Allow?" and someone presses OK on its
+  // remote. PIN mode, for TVs nobody can reach: the TV shows a number, you
+  // type it in the app (first call returns { needsPin }, second sends it).
+  pair({ mode, pin } = {}) {
     if (this.#client?.connected) return Promise.resolve();
+    if (pin) return this.#finishPin(pin);
+    if (mode === 'pin') return this.#startPin();
     this.start();
     return new Promise((resolve, reject) => {
       let prompted = false;
@@ -97,6 +116,90 @@ export class LgDriver extends Driver {
       this.on('prompt', onPrompt);
       this.on('connection-error', onError);
     });
+  }
+
+  #pin = null;
+
+  async #startPin() {
+    this.#pin?.ws.terminate();
+    const urls = this.pinUrls ?? [`wss://${this.tv.ip}:3001`, `ws://${this.tv.ip}:3000`];
+    let lastErr;
+    for (const url of urls) {
+      try {
+        const ws = await new Promise((resolve, reject) => {
+          const sock = new WebSocket(url, { rejectUnauthorized: false, handshakeTimeout: 5000 });
+          sock.once('open', () => resolve(sock));
+          sock.once('error', reject);
+        });
+        const session = { ws, waiting: new Map(), key: null };
+        ws.on('message', (raw) => {
+          let msg;
+          try {
+            msg = JSON.parse(raw.toString());
+          } catch {
+            return;
+          }
+          if (msg.type === 'registered' && msg.payload?.['client-key']) session.key = msg.payload['client-key'];
+          session.waiting.get(msg.id)?.(msg);
+        });
+        ws.on('close', () => {
+          for (const fn of session.waiting.values()) fn({ type: 'error', error: 'closed' });
+        });
+        session.timer = setTimeout(() => ws.terminate(), PIN_TIMEOUT);
+        this.#pin = session;
+        const res = await this.#pinSend('register', 'register', {
+          forcePairing: false,
+          pairingType: 'PIN',
+          manifest: MANIFEST,
+        });
+        if (res.type === 'error') throw new HearthError(502, `The TV refused PIN pairing (${res.error})`);
+        return { needsPin: true };
+      } catch (err) {
+        lastErr = err;
+        this.#pin?.ws.terminate();
+        this.#pin = null;
+        if (err instanceof HearthError) throw err;
+      }
+    }
+    throw UNREACHABLE.has(lastErr?.code) ? offline() : lastErr;
+  }
+
+  #pinSend(type, id, payload, uri) {
+    const { ws, waiting } = this.#pin;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        waiting.delete(id);
+        resolve({ type: 'error', error: 'timeout' });
+      }, 15_000);
+      waiting.set(id, (msg) => {
+        clearTimeout(timer);
+        waiting.delete(id);
+        resolve(msg);
+      });
+      ws.send(JSON.stringify({ type, id, ...(uri ? { uri } : {}), payload }));
+    });
+  }
+
+  async #finishPin(pin) {
+    const session = this.#pin;
+    if (!session || session.ws.readyState !== WebSocket.OPEN) {
+      throw new HearthError(409, 'The number timed out. Tap “Show the number again”.');
+    }
+    const registered = new Promise((resolve) => session.waiting.set('register', resolve));
+    const res = await this.#pinSend('request', 'pin', { pin: String(pin) }, 'ssap://pairing/setPin');
+    if (res.type === 'error' || res.payload?.returnValue === false) {
+      throw new HearthError(400, 'That number didn’t match. Check the TV and try again.');
+    }
+    const reg = session.key ? { payload: { 'client-key': session.key } } : await Promise.race([registered, new Promise((r) => setTimeout(() => r(null), 10_000))]);
+    const key = reg?.payload?.['client-key'];
+    clearTimeout(session.timer);
+    session.ws.close();
+    this.#pin = null;
+    if (!key) throw new HearthError(502, 'The TV accepted the number but didn’t finish pairing. Try again.');
+    this.tv.credentials = { ...this.tv.credentials, clientKey: key };
+    this.onCredentials({ clientKey: key });
+    await this.stop();
+    this.start();
   }
 
   async #onConnect() {

@@ -44,19 +44,37 @@ const PATTERNS = {
   success: [12, 70, 12, 70, 30],
   error: [40, 50, 40],
 };
-let iosSwitch;
+// Safari only plays that haptic inside a user activation, and a finger
+// *landing* (pointerdown/touchstart) isn't one — lifting it (pointerup/touchend)
+// is. So on iOS, a buzz asked for during a press is played on release.
+// (Holds can't buzz on iOS for the same reason; Android buzzes throughout.)
 function iosTick() {
-  if (!iosSwitch) {
-    const label = document.createElement('label');
-    label.setAttribute('aria-hidden', 'true');
-    label.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden';
-    label.innerHTML = '<input type="checkbox" switch tabindex="-1">';
-    document.body.append(label);
-    iosSwitch = label;
-  }
-  iosSwitch.click();
+  const label = document.createElement('label');
+  label.ariaHidden = 'true';
+  label.style.display = 'none';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.setAttribute('switch', '');
+  label.append(input);
+  document.head.append(label);
+  label.click();
+  label.remove();
 }
 const canVibrate = typeof navigator.vibrate === 'function';
+let pendingIos = 0;
+if (!canVibrate) {
+  const flush = () => {
+    if (!pendingIos) return;
+    const n = Math.min(pendingIos, 3);
+    pendingIos = 0;
+    iosTick();
+    // Extra ticks for success/error patterns; may be dropped outside the gesture.
+    for (let i = 1; i < n; i++) setTimeout(iosTick, i * 110);
+  };
+  addEventListener('pointerup', flush, true);
+  addEventListener('touchend', flush, true);
+  addEventListener('click', flush, true);
+}
 
 export function haptic(kind = 'tap') {
   if (!prefs.haptics) return;
@@ -64,9 +82,7 @@ export function haptic(kind = 'tap') {
     navigator.vibrate(PATTERNS[kind] ?? 10);
     return;
   }
-  iosTick();
-  if (kind === 'success' || kind === 'error') setTimeout(iosTick, 110);
-  if (kind === 'success') setTimeout(iosTick, 220);
+  pendingIos = Math.max(pendingIos, kind === 'success' ? 3 : kind === 'error' ? 2 : 1);
 }
 
 // ── Sound ───────────────────────────────────────────────

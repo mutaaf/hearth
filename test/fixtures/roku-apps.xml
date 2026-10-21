@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<apps>
+	<app id="12" type="appl" version="5.0.98">Netflix</app>
+	<app id="837" type="appl" version="2.21.1">YouTube</app>
+	<app id="tvinput.hdmi1" type="tvin" version="1.0.0">HDMI 1</app>
+	<app id="999" type="menu" version="1.0.0">Settings</app>
+</apps>

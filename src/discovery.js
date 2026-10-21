@@ -1,5 +1,8 @@
+import { execFile } from 'node:child_process';
 import dgram from 'node:dgram';
 import net from 'node:net';
+import { rokuFromInfo, rokuInfo } from './drivers/roku.js';
+import { browse } from './mdns.js';
 
 // Finding TVs: shout an SSDP M-SEARCH at the LAN multicast group, collect who
 // answers, then ask each candidate who it is (LG: UPnP description XML,
@@ -12,6 +15,7 @@ const SEARCH_TARGETS = [
   'urn:samsung.com:device:RemoteControlReceiver:1',
   'urn:dial-multiscreen-org:service:dial:1',
   'urn:schemas-upnp-org:device:MediaRenderer:1',
+  'roku:ecp',
 ];
 
 const MAC_RE = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i;
@@ -103,6 +107,7 @@ export async function samsungInfo(ip, timeout = 2000) {
 }
 
 async function identify(ip, answer) {
+  if (answer.roku) return rokuInfo(ip).then((info) => rokuFromInfo(ip, info)).catch(() => null);
   if (isLgAnswer(answer)) {
     const xmls = await Promise.all([...answer.locations].map((u) => getText(u).catch(() => '')));
     return lgFromDescriptions(ip, xmls.filter(Boolean).map(parseDescription));
@@ -111,6 +116,56 @@ async function identify(ip, answer) {
 }
 
 export async function discover({ timeout = 2500 } = {}) {
+  const [ssdp, cast] = await Promise.all([discoverSsdp({ timeout }), discoverGoogleTvs().catch(() => [])]);
+  // A device found both ways keeps its SSDP identity (LG/Samsung/Roku).
+  const seen = new Set(ssdp.map((t) => t.ip));
+  return [...ssdp, ...cast.filter((t) => !seen.has(t.ip))];
+}
+
+// Google TV / Android TV / Chromecast announce over mDNS. Nest Hubs and
+// speakers cast too, so keep only devices that are TVs: they also offer the
+// Android TV remote service, or call themselves a TV / Chromecast.
+const NOT_A_TV = /nest|home mini|hub|audio|speaker|group|display/i;
+export function googleTvsFrom(entries) {
+  const byIp = (service) => new Map(entries.filter((e) => e.service.startsWith(service)).map((e) => [e.ip, e]));
+  const remote = byIp('_androidtvremote2');
+  const airplay = byIp('_airplay');
+  return entries
+    .filter((e) => e.service.startsWith('_googlecast'))
+    .filter((e) => !NOT_A_TV.test(e.txt.md ?? '') && (remote.has(e.ip) || /tv|chromecast/i.test(e.txt.md ?? '')))
+    .map((e) => {
+      const ap = airplay.get(e.ip)?.txt;
+      const model = ap?.model ? `${ap.manufacturer ? `${ap.manufacturer} ` : ''}${ap.model}` : e.txt.md || 'Google TV';
+      return { brand: 'androidtv', name: e.txt.fn || remote.get(e.ip)?.name || 'Google TV', model, ip: e.ip, macs: [] };
+    });
+}
+
+async function discoverGoogleTvs() {
+  const entries = await browse(['_googlecast._tcp.local', '_androidtvremote2._tcp.local', '_airplay._tcp.local']);
+  const tvs = googleTvsFrom(entries);
+  for (const tv of tvs) {
+    await portOpen(tv.ip, 8009, 800); // say hello so the OS learns its MAC
+    const mac = await macFor(tv.ip);
+    if (mac) tv.macs = [mac];
+    tv.id = tvId('androidtv', tv.macs, tv.ip);
+  }
+  return tvs;
+}
+
+// The LAN MAC for an IP from the OS neighbour table (we just talked to it,
+// so it's there). Needed for Wake-on-LAN on devices that don't report it.
+export function macFor(ip) {
+  return new Promise((resolve) => {
+    execFile('arp', ['-n', ip], { timeout: 1500 }, (err, out) => {
+      const m = !err && String(out).match(/(([0-9a-f]{1,2}[:-]){5}[0-9a-f]{1,2})/i);
+      if (!m) return resolve(null);
+      const mac = m[1].split(/[:-]/).map((b) => b.padStart(2, '0')).join(':').toLowerCase();
+      resolve(isMac(mac) ? mac : null);
+    });
+  });
+}
+
+async function discoverSsdp({ timeout }) {
   const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   const answers = new Map();
   socket.on('message', (msg, rinfo) => {
@@ -118,6 +173,7 @@ export async function discover({ timeout = 2500 } = {}) {
     const entry = answers.get(rinfo.address) ?? { server: '', st: '', locations: new Set() };
     if (isLgAnswer(parsed)) Object.assign(entry, { server: parsed.server, st: parsed.st });
     else if (!entry.server) entry.server = parsed.server;
+    if (/roku/i.test(`${parsed.st} ${parsed.server}`)) entry.roku = true;
     if (parsed.location) entry.locations.add(parsed.location);
     answers.set(rinfo.address, entry);
   });
@@ -145,7 +201,7 @@ export async function discover({ timeout = 2500 } = {}) {
   return found.filter(Boolean);
 }
 
-function portOpen(ip, port, timeout = 1500) {
+export function portOpen(ip, port, timeout = 1500) {
   return new Promise((resolve) => {
     const sock = net.connect({ host: ip, port, timeout });
     const done = (ok) => {
@@ -158,15 +214,23 @@ function portOpen(ip, port, timeout = 1500) {
   });
 }
 
-// For "add by IP address" when SSDP is blocked (guest networks, some mesh
-// routers): ask Samsung's REST endpoint, then look for LG's control ports.
+// For "add by IP address" when discovery is blocked (guest networks, some
+// mesh routers): ask each kind of TV the question only it can answer.
 export async function probe(ip) {
   try {
     const tv = samsungFromInfo(ip, await samsungInfo(ip));
     if (tv) return tv;
   } catch {}
+  try {
+    return rokuFromInfo(ip, await rokuInfo(ip));
+  } catch {}
+  const mac = await macFor(ip);
+  const macs = mac ? [mac] : [];
   if ((await portOpen(ip, 3001)) || (await portOpen(ip, 3000))) {
-    return { id: tvId('lg', [], ip), brand: 'lg', name: 'LG TV', model: '', ip, macs: [] };
+    return { id: tvId('lg', macs, ip), brand: 'lg', name: 'LG TV', model: '', ip, macs };
+  }
+  if (await portOpen(ip, 8009)) {
+    return { id: tvId('androidtv', macs, ip), brand: 'androidtv', name: 'Google TV', model: '', ip, macs };
   }
   return null;
 }

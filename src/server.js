@@ -30,7 +30,11 @@ function routes(hub) {
     r('POST', '/tvs', (_, body) => hub.add(body)),
     r('PATCH', `/tvs/${id}`, ([tv], body) => hub.update(tv, body)),
     r('DELETE', `/tvs/${id}`, ([tv]) => hub.remove(tv)),
-    r('POST', `/tvs/${id}/pair`, ([tv]) => hub.pair(tv)),
+    r('POST', `/tvs/${id}/pair`, ([tv], body) =>
+      hub.pair(tv, {
+        ...(body.pin !== undefined ? { pin: String(body.pin).replace(/\D/g, '').slice(0, 8) } : {}),
+        ...(body.mode === 'pin' ? { mode: 'pin' } : {}),
+      })),
     r('POST', `/tvs/${id}/key`, ([tv], body) => {
       if (typeof body.key !== 'string') throw badRequest('key is required');
       const hold = Number.isFinite(body.hold) && body.hold > 0 ? body.hold : 0;

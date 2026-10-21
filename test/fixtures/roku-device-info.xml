@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<device-info>
+	<udn>00000000-0000-0000-0000-000000000000</udn>
+	<serial-number>X000000000000</serial-number>
+	<vendor-name>Roku</vendor-name>
+	<model-name>Roku Streaming Stick 4K</model-name>
+	<model-number>3820X</model-number>
+	<wifi-mac>AA:BB:CC:00:00:10</wifi-mac>
+	<is-tv>false</is-tv>
+	<is-stick>true</is-stick>
+	<user-device-name>Den Roku</user-device-name>
+	<friendly-device-name>Den Roku &amp; Co</friendly-device-name>
+	<default-device-name>Roku Streaming Stick 4K - X000000000000</default-device-name>
+	<power-mode>PowerOn</power-mode>
+</device-info>

@@ -23,8 +23,10 @@ export class SamsungDriver extends Driver {
   constructor(tv, opts = {}) {
     super(tv, opts);
     // Overridable so tests can stand up a fake TV on localhost.
-    this.port = opts.port ?? 8002;
-    this.secure = opts.secure ?? true;
+    // 2018+ sets: wss on 8002 with a token. 2016-17 (K/M series): plain ws
+    // on 8001, no token. Decided from the TV's own REST info on first use.
+    this.port = opts.port ?? null;
+    this.secure = opts.secure ?? null;
     this.fetchInfo = opts.fetchInfo ?? (() => samsungInfo(this.tv.ip, 1500));
   }
 
@@ -64,10 +66,21 @@ export class SamsungDriver extends Driver {
     this.#connecting = null;
   }
 
+  async #pickPort() {
+    if (this.port != null) return;
+    const info = await this.fetchInfo().catch(() => null);
+    // Off or unreachable: decide later, not now (a wrong guess would stick).
+    if (!info) throw offline();
+    const tokenAuth = /true/i.test(String(info.device?.TokenAuthSupport ?? ''));
+    const legacy = !tokenAuth;
+    this.port = legacy ? 8001 : 8002;
+    this.secure = !legacy;
+  }
+
   #connect(timeout = 8000) {
     if (this.#ws?.readyState === WebSocket.OPEN) return Promise.resolve(this.#ws);
     if (this.#connecting) return this.#connecting;
-    this.#connecting = new Promise((resolve, reject) => {
+    this.#connecting = this.#pickPort().then(() => new Promise((resolve, reject) => {
       const ws = new WebSocket(this.url(), { rejectUnauthorized: false, handshakeTimeout: 5000 });
       let settled = false;
       const settle = (err) => {
@@ -97,6 +110,9 @@ export class SamsungDriver extends Driver {
         if (msg.event === 'ms.channel.connect') {
           const token = msg.data?.token;
           if (token && token !== this.tv.credentials?.token) this.onCredentials({ token: String(token) });
+          // Older sets accept the connection without handing out a token;
+          // remember that they let us in.
+          else if (!token && !this.tv.credentials) this.onCredentials({ legacy: true });
           settle();
         } else if (msg.event === 'ms.channel.unauthorized') {
           settle(new HearthError(403, 'Pairing was declined on the TV'));
@@ -108,6 +124,9 @@ export class SamsungDriver extends Driver {
         if (this.#ws === ws) this.#ws = null;
         settle(offline());
       });
+    })).catch((err) => {
+      this.#connecting = null;
+      throw err;
     });
     return this.#connecting;
   }
