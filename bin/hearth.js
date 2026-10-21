@@ -28,6 +28,7 @@ async function scan() {
 
 async function serve() {
   const hub = await new Hub({ store: new Store() }).init();
+  hub.startAutoDiscovery();
   const server = createServer(hub);
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is busy. Is Hearth already running? Try: npm run down`);

@@ -127,12 +127,18 @@ export async function discover({ timeout = 2500 } = {}) {
   });
   const search = (st) =>
     Buffer.from(`M-SEARCH * HTTP/1.1\r\nHOST: ${SSDP_HOST}:${SSDP_PORT}\r\nMAN: "ssdp:discover"\r\nMX: 2\r\nST: ${st}\r\n\r\n`);
-  // UDP is lossy; ask twice.
-  for (const round of [0, 1]) {
-    for (const st of SEARCH_TARGETS) socket.send(search(st), SSDP_PORT, SSDP_HOST);
-    if (round === 0) await new Promise((r) => setTimeout(r, 400));
-  }
-  await new Promise((r) => setTimeout(r, timeout));
+  // UDP is lossy, and the first multicast from a freshly started process is
+  // often dropped (seen on macOS under launchd), so ask twice, and if nobody
+  // answered at all, ask again before giving up.
+  const ask = async () => {
+    for (const round of [0, 1]) {
+      for (const st of SEARCH_TARGETS) socket.send(search(st), SSDP_PORT, SSDP_HOST);
+      if (round === 0) await new Promise((r) => setTimeout(r, 400));
+    }
+    await new Promise((r) => setTimeout(r, timeout));
+  };
+  await ask();
+  if (!answers.size) await ask();
   socket.close();
 
   const found = await Promise.all([...answers].map(([ip, answer]) => identify(ip, answer).catch(() => null)));

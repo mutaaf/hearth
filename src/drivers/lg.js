@@ -148,6 +148,8 @@ export class LgDriver extends Driver {
     }
   }
 
+  // webOS has no press-and-hold over the network; a hold is one click (the
+  // app repeats arrows and volume itself while a finger stays down).
   async key(name) {
     const code = keyCode('lg', name);
     if (!code) throw unsupported(`The "${name}" button`);

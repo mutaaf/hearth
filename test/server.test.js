@@ -15,7 +15,7 @@ class FakeDriver extends Driver {
   capabilities = { volumeLevel: true, inputs: true, toast: true, appIcons: false };
   start() { this.setState({ online: true, power: 'on', volume: 12 }); }
   async pair() { this.onCredentials({ clientKey: 'secret-key' }); this.start(); }
-  async key(name) { sent.push(['key', name]); }
+  async key(name, opts) { sent.push(['key', name, ...(opts?.hold ? [opts.hold] : [])]); }
   async powerOff() { sent.push(['off', this.tv.id]); }
   async apps() { return [{ id: 'netflix', title: 'Netflix', icon: null }]; }
   async launch(id) { sent.push(['launch', id]); }
@@ -67,11 +67,13 @@ test('health and the app shell are served', async () => {
 test('scan → add → pair → control, and keys never leak', async () => {
   const found = (await call('POST', '/api/scan', {})).body;
   assert.equal(found[0].added, false);
+  assert.deepEqual((await call('GET', '/api/nearby')).body.map((t) => t.id), ['lg-aabbcc000001']);
 
   const added = await call('POST', '/api/tvs', found[0]);
   assert.equal(added.status, 200);
   assert.equal(added.body.id, 'lg-aabbcc000001');
   assert.equal(added.body.paired, false);
+  assert.equal((await call('GET', '/api/nearby')).body.length, 0, 'adding a TV clears it from nearby');
   assert.equal((await call('POST', '/api/scan', {})).body[0].added, true);
 
   const paired = await call('POST', '/api/tvs/lg-aabbcc000001/pair', {});
@@ -86,6 +88,8 @@ test('scan → add → pair → control, and keys never leak', async () => {
   assert.equal((await call('POST', '/api/tvs/lg-aabbcc000001/key', { key: 'volup' })).status, 200);
   assert.equal((await call('POST', '/api/tvs/lg-aabbcc000001/launch', { id: 'netflix' })).status, 200);
   assert.deepEqual(sent.slice(-2), [['key', 'volup'], ['launch', 'netflix']]);
+  await call('POST', '/api/tvs/lg-aabbcc000001/key', { key: 'ok', hold: 900 });
+  assert.deepEqual(sent.at(-1), ['key', 'ok', 900]);
   assert.equal((await call('GET', '/api/tvs/lg-aabbcc000001/apps')).body[0].title, 'Netflix');
   // Unsupported features say so instead of failing silently.
   assert.equal((await call('POST', '/api/tvs/lg-aabbcc000001/toast', { message: 'hi' })).status, 501);

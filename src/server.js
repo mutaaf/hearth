@@ -25,6 +25,7 @@ function routes(hub) {
   return [
     r('GET', '/health', () => ({ ok: true, name: 'hearth', version })),
     r('GET', '/tvs', () => hub.list()),
+    r('GET', '/nearby', () => hub.nearby),
     r('POST', '/scan', () => hub.scan()),
     r('POST', '/tvs', (_, body) => hub.add(body)),
     r('PATCH', `/tvs/${id}`, ([tv], body) => hub.update(tv, body)),
@@ -32,7 +33,8 @@ function routes(hub) {
     r('POST', `/tvs/${id}/pair`, ([tv]) => hub.pair(tv)),
     r('POST', `/tvs/${id}/key`, ([tv], body) => {
       if (typeof body.key !== 'string') throw badRequest('key is required');
-      return hub.driver(tv).key(body.key).then(() => ({ ok: true }));
+      const hold = Number.isFinite(body.hold) && body.hold > 0 ? body.hold : 0;
+      return hub.driver(tv).key(body.key, { hold }).then(() => ({ ok: true }));
     }),
     r('POST', `/tvs/${id}/power`, ([tv], body) => hub.power(tv, Boolean(body.on))),
     r('POST', `/tvs/${id}/volume`, ([tv], body) => {
@@ -135,6 +137,7 @@ export function createServer(hub) {
   };
   hub.on('change', (tv) => broadcast('tv', tv));
   hub.on('removed', (info) => broadcast('removed', info));
+  hub.on('nearby', (list) => broadcast('nearby', list));
 
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://hearth.local');
@@ -142,6 +145,7 @@ export function createServer(hub) {
       if (url.pathname === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
         res.write(`event: hello\ndata: ${JSON.stringify(hub.list())}\n\n`);
+        res.write(`event: nearby\ndata: ${JSON.stringify(hub.nearby)}\n\n`);
         listeners.add(res);
         const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
         req.on('close', () => {

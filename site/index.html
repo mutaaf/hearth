@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Hearth: one remote for every TV in the house</title>
-  <meta name="description" content="Hearth finds the LG and Samsung smart TVs on your Wi-Fi and turns every phone in the house into a fast, ad-free remote. One command to install. Nothing leaves your home.">
+  <meta name="description" content="Hearth finds the LG and Samsung smart TVs on your Wi-Fi and turns every phone in the house into a fast, ad-free remote. Three-step setup. Nothing leaves your home.">
   <meta property="og:title" content="Hearth: one remote for every TV in the house">
   <meta property="og:description" content="Finds your LG and Samsung TVs. Every phone becomes the remote. No accounts, no cloud, no ads.">
   <meta property="og:url" content="https://mutaafaziz.com/hearth/">
@@ -17,95 +17,250 @@
   <link rel="stylesheet" href="site.css">
 </head>
 <body>
-  <header class="nav">
-    <a class="wordmark" href="./"><span class="ember"></span>hearth</a>
-    <nav class="mono">
-      <a href="demo/">Demo</a>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="nav">
+    <a class="wordmark" href="./" aria-label="Hearth home"><span class="ember" aria-hidden="true"></span>hearth</a>
+    <nav aria-label="Page">
+      <a href="#try">Demo</a>
       <a href="#install">Install</a>
-      <a href="https://github.com/mutaaf/hearth">Source</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-cta" href="demo/">Try it</a>
     </nav>
   </header>
 
-  <!-- The night-time living room: aurora-field particles become the house,
-       a TV, the remote, the flame. -->
-  <section class="hero">
-    <canvas id="field" aria-hidden="true"></canvas>
-    <div class="stage" id="stage" aria-hidden="true"></div>
-    <div class="hero-copy">
-      <p class="kicker mono">For the house full of slow smart TVs</p>
-      <h1>One remote for every TV in the house.</h1>
-      <p class="lede">Hearth finds the LG and Samsung TVs on your Wi-Fi and turns every phone into a fast, ad-free remote. No accounts, no cloud. It runs at home, on your network.</p>
-      <div class="ctas">
-        <a class="cta" href="demo/">Try the demo</a>
-        <a class="ghost mono" href="#install">Install in one command ↓</a>
-      </div>
+  <!-- Night: the hero and the three-step story share one sticky sky, so the
+       aurora shape stays put while the steps scroll past it. -->
+  <div class="night">
+    <div class="sky" aria-hidden="true">
+      <canvas id="field"></canvas>
+      <div class="stage" id="stage"></div>
+      <div class="sky-fade"></div>
     </div>
-    <p class="shape-label mono" id="shapeLabel" aria-hidden="true">the house</p>
-  </section>
 
-  <main>
-    <section class="steps" aria-label="How it works">
-      <article data-shape="hearth-house">
-        <span class="n mono">01</span>
-        <h2>Find</h2>
-        <p>Hearth listens on your Wi-Fi and finds every LG webOS and Samsung Tizen TV. No model numbers, no IP addresses.</p>
-      </article>
-      <article data-shape="hearth-tv">
-        <span class="n mono">02</span>
-        <h2>Pair</h2>
-        <p>Each TV asks once: press <b>Allow</b> with its own remote. After that, every phone in the house can drive it.</p>
-      </article>
-      <article data-shape="hearth-remote">
-        <span class="n mono">03</span>
-        <h2>Control</h2>
-        <p>Swipe-pad, volume, apps, inputs, “Dinner’s ready!” on screen, and one button that turns every TV in the house off.</p>
-      </article>
+    <section class="hero" data-shape="hearth-house" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="kicker">For the house full of slow smart TVs</p>
+        <h1 id="hero-title">One remote for every&nbsp;TV in the house.</h1>
+        <p class="lede">Hearth finds the LG and Samsung TVs on your Wi-Fi and turns every phone into a fast, ad-free remote. No accounts. No cloud. It lives in your house.</p>
+        <div class="ctas">
+          <a class="cta" href="demo/">Try the live demo</a>
+          <a class="cta-ghost" href="#install">Install in one command</a>
+        </div>
+        <ul class="proof" aria-label="Highlights">
+          <li>LG webOS</li><li>Samsung Tizen</li><li>Works offline</li><li>Free · MIT</li>
+        </ul>
+      </div>
+      <p class="shape-label" id="shapeLabel" aria-hidden="true">the house</p>
+      <a class="scroll-cue" href="#setup" aria-label="Scroll to setup"><span></span></a>
     </section>
 
-    <section class="install" id="install">
-      <div>
-        <p class="kicker mono">Install</p>
-        <h2>One command on a computer that stays on.</h2>
-        <p>A Mac mini, an old laptop, a Raspberry Pi. You need <a href="https://nodejs.org">Node.js 20.19+</a>. Then:</p>
+    <section class="story" id="setup" aria-labelledby="setup-title">
+      <header class="story-head">
+        <p class="kicker">Setup</p>
+        <h2 id="setup-title">So easy a caveman could do it.</h2>
+        <p>Three steps. No app store, no account, no IP addresses.</p>
+      </header>
+
+      <ol class="steps">
+        <li class="step" data-shape="hearth-tv">
+          <span class="step-n">1</span>
+          <div>
+            <h3>Turn your TVs on.</h3>
+            <p>Really on, not standby. Make sure your phone is on the same Wi-Fi.</p>
+          </div>
+        </li>
+        <li class="step" data-shape="hearth-house">
+          <span class="step-n">2</span>
+          <div>
+            <h3>Tap <em>Find my TVs</em>.</h3>
+            <p>Hearth listens on your network and every LG and Samsung TV answers. Names, models, all of it.</p>
+          </div>
+        </li>
+        <li class="step" data-shape="hearth-remote">
+          <span class="step-n">3</span>
+          <div>
+            <h3>Press <em>Allow</em> on the TV.</h3>
+            <p>Once per TV, with its own remote. After that, every phone in the house is the remote.</p>
+          </div>
+        </li>
+        <li class="step step-done" data-shape="hearth-flame">
+          <span class="step-n">✓</span>
+          <div>
+            <h3>That’s it. Sit down.</h3>
+            <p>Swipe to move, hold to repeat, one tap to turn the whole house off at bedtime.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+  </div>
+
+  <main id="main">
+    <!-- Live demo: the real app in a phone, driving pretend TVs. -->
+    <section class="try" id="try" aria-labelledby="try-title">
+      <div class="try-copy">
+        <p class="kicker">Play with it</p>
+        <h2 id="try-title">The real app, right here.</h2>
+        <p>This is Hearth itself, driving a house of pretend TVs. Swipe the pad, hold the volume, launch an app, turn everything off.</p>
+        <div class="skins" role="group" aria-label="Remote skin">
+          <button type="button" class="skin on" data-skin="classic" aria-pressed="true">
+            <span class="sw sw-classic" aria-hidden="true"></span>Classic
+          </button>
+          <button type="button" class="skin" data-skin="8bit" aria-pressed="false">
+            <span class="sw sw-8bit" aria-hidden="true"></span>8-bit
+          </button>
+        </div>
+        <p class="hint">The 8-bit skin turns the remote into a pocket game console. Same buttons, same haptics.</p>
+      </div>
+
+      <div class="phone" id="phone">
+        <div class="phone-notch" aria-hidden="true"></div>
+        <div class="phone-screen">
+          <iframe id="demoFrame" title="Hearth demo with pretend TVs" data-src="demo/?embed=1" loading="lazy"></iframe>
+          <div class="phone-loading" aria-hidden="true"><span class="ember"></span></div>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <div class="demo-card-art" aria-hidden="true">
+          <div class="mini-pad"><i></i><i></i><i></i><i></i><b></b></div>
+        </div>
+        <a class="cta cta-wide" href="demo/">Open the demo</a>
+        <a class="cta-ghost cta-wide" href="demo/?skin=8bit">Open in 8-bit</a>
+        <p class="hint">Opens full-screen. Pretend TVs, real app.</p>
+      </div>
+    </section>
+
+    <section class="features" aria-labelledby="features-title">
+      <header class="sec-head">
+        <p class="kicker">What you get</p>
+        <h2 id="features-title">A remote that feels like a remote.</h2>
+      </header>
+      <div class="grid">
+        <article class="feat feat-big">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="19"/><circle cx="24" cy="24" r="7"/><path d="M24 9v4M24 35v4M9 24h4M35 24h4"/></svg>
+          <h3>Swipe or tap the pad</h3>
+          <p>Use it like a touchpad or press the arrows. Every press clicks back with a tiny buzz.</p>
+        </article>
+        <article class="feat">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="16" y="6" width="16" height="36" rx="8"/><path d="M24 13v8M20 17h8M20 33h8"/></svg>
+          <h3>Hold to repeat</h3>
+          <p>Hold volume or an arrow and it keeps going, faster the longer you hold.</p>
+        </article>
+        <article class="feat">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="14" height="14" rx="4"/><rect x="28" y="10" width="14" height="14" rx="4"/><rect x="6" y="28" width="14" height="14" rx="4"/><rect x="28" y="28" width="14" height="14" rx="4"/></svg>
+          <h3>Your apps, one tap</h3>
+          <p>Netflix, YouTube, whatever the TV has, on a shelf under your thumb.</p>
+        </article>
+        <article class="feat feat-accent">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 8v14M15 13a15 15 0 1 0 18 0"/></svg>
+          <h3>Everything off</h3>
+          <p>One button. Every screen in the house goes dark.</p>
+        </article>
+        <article class="feat">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 10h32v22H20l-8 7v-7H8z"/></svg>
+          <h3>Say it on screen</h3>
+          <p>“Dinner’s ready” pops up on the TV. LG only.</p>
+        </article>
+        <article class="feat">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="24" rx="3"/><path d="M18 40h12M24 34v6"/></svg>
+          <h3>See what’s on</h3>
+          <p>Every phone shows which TVs are on and what’s playing, live.</p>
+        </article>
+      </div>
+
+      <div class="compat" aria-labelledby="compat-title">
+        <h3 id="compat-title" class="compat-title">Works with</h3>
+        <div class="compat-cols">
+          <div class="compat-col">
+            <h4>LG <span>webOS · 2014+</span></h4>
+            <ul>
+              <li class="y">Finds itself on Wi-Fi</li>
+              <li class="y">Pad, back, home, media keys</li>
+              <li class="y">Volume with live level</li>
+              <li class="y">Off, and on via Wake-on-LAN</li>
+              <li class="y">App shelf with icons</li>
+              <li class="y">Named HDMI inputs</li>
+              <li class="y">Messages on screen</li>
+            </ul>
+          </div>
+          <div class="compat-col">
+            <h4>Samsung <span>Tizen · 2016+</span></h4>
+            <ul>
+              <li class="y">Finds itself on Wi-Fi</li>
+              <li class="y">Pad, back, home, media keys</li>
+              <li class="p">Volume up/down (no level)</li>
+              <li class="y">Off, and on via Wake-on-LAN</li>
+              <li class="y">App shelf</li>
+              <li class="p">Source button (no named inputs)</li>
+              <li class="n">Messages on screen</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="install-copy">
+        <p class="kicker">Install</p>
+        <h2 id="install-title">One command on a computer that stays on.</h2>
+        <p>A Mac mini, an old laptop, a Raspberry Pi. You need <a href="https://nodejs.org">Node.js 20.19+</a>. Run this, then scan the QR code it prints with your phone.</p>
       </div>
       <div class="term">
-        <div class="term-bar"><i></i><i></i><i></i><button type="button" class="copy mono" id="copy">copy</button></div>
-        <pre class="mono" id="cmd"><span class="p">$</span> git clone https://github.com/mutaaf/hearth
-<span class="p">$</span> cd hearth && npm run up</pre>
-        <p class="term-out mono">🔥 Hearth is ready · scan the QR code with your phone</p>
+        <div class="term-bar"><i></i><i></i><i></i><span>~/</span><button type="button" class="copy" id="copy">Copy</button></div>
+        <pre id="cmd"><span class="p" aria-hidden="true">$ </span>git clone https://github.com/mutaaf/hearth
+<span class="p" aria-hidden="true">$ </span>cd hearth &amp;&amp; npm run up</pre>
+        <div class="term-out">
+          <span>✓ Node 22.12</span>
+          <span>✓ Dependencies installed</span>
+          <span class="hot">🔥 Hearth is ready · scan the QR with your phone</span>
+        </div>
       </div>
     </section>
 
-    <section class="why">
-      <div class="why-card">
-        <h3>Why doesn’t it just run on this website?</h3>
-        <p>On purpose. Browsers, rightly, won’t let a website reach the devices on your home network. Hearth runs inside your house, so your TVs, pairing keys and viewing habits never leave it. The <a href="demo/">demo</a> uses pretend TVs.</p>
-      </div>
-      <div class="why-card">
-        <h3>Old TV, new life</h3>
-        <p>Four years in, smart TVs drown in ads, tracking and bloat. The <a href="https://github.com/mutaaf/hearth/blob/main/docs/TUNEUP.md">tune-up guide</a> fixes that in about 20 minutes per TV: settings, whole-house ad blocking, a factory reset done right, LG homebrew, or a cheap box that turns the TV into a plain screen.</p>
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <header class="sec-head">
+        <p class="kicker">Questions</p>
+        <h2 id="faq-title">Good questions.</h2>
+      </header>
+      <div class="faq-list">
+        <details>
+          <summary>Why doesn’t it just run on this website?</summary>
+          <p>On purpose. Browsers, rightly, won’t let a website reach the devices on your home network. Hearth runs inside your house, so your TVs, pairing keys and viewing habits never leave it. The demo on this page uses pretend TVs.</p>
+        </details>
+        <details>
+          <summary>Will it work with my TV?</summary>
+          <p>If it’s an LG smart TV from 2014 on (webOS) or a Samsung smart TV from 2016 on (Tizen), almost certainly. Roku, Android/Google TV, Vizio and Sony are on the roadmap.</p>
+        </details>
+        <details>
+          <summary>Can it break my TV?</summary>
+          <p>No. Hearth only uses the network remote control each TV already ships with, the same one the brand’s own phone app uses. It doesn’t install anything on the TV or change its software.</p>
+        </details>
+        <details>
+          <summary>Can it turn a TV on?</summary>
+          <p>Yes, with Wake-on-LAN, once you switch on “Turn on via Wi-Fi” (LG) or “Power On with Mobile” (Samsung) in the TV’s settings.</p>
+        </details>
+        <details>
+          <summary>My TVs are slow and full of ads. Can it fix that?</summary>
+          <p>Hearth makes controlling them fast. To make the TVs themselves fast, follow the <a href="https://github.com/mutaaf/hearth/blob/main/docs/TUNEUP.md">tune-up guide</a>: about 20 minutes per TV covers settings, whole-house ad blocking, a proper reset, LG homebrew, or a cheap box that turns the TV into a plain screen.</p>
+        </details>
+        <details>
+          <summary>What does it cost?</summary>
+          <p>Nothing. It’s open source under the MIT license, with no accounts, subscriptions or ads.</p>
+        </details>
       </div>
     </section>
 
-    <section class="matrix" aria-label="What works">
-      <table>
-        <thead><tr><th></th><th class="mono">LG webOS</th><th class="mono">Samsung Tizen</th></tr></thead>
-        <tbody>
-          <tr><td>Finds itself on your Wi-Fi</td><td>●</td><td>●</td></tr>
-          <tr><td>Pad, back, home, media keys</td><td>●</td><td>●</td></tr>
-          <tr><td>Volume with live level</td><td>●</td><td>○</td></tr>
-          <tr><td>Power off · wake on LAN</td><td>●</td><td>●</td></tr>
-          <tr><td>App shelf</td><td>●</td><td>●</td></tr>
-          <tr><td>Named inputs</td><td>●</td><td>○</td></tr>
-          <tr><td>Message on screen</td><td>●</td><td>—</td></tr>
-          <tr><td>Everything off</td><td>●</td><td>●</td></tr>
-        </tbody>
-      </table>
-      <p class="mono legend">● full · ○ basic · — not possible on that TV</p>
+    <section class="closer" aria-labelledby="closer-title">
+      <h2 id="closer-title">Bring the house back to one remote.</h2>
+      <div class="ctas">
+        <a class="cta" href="demo/">Try the live demo</a>
+        <a class="cta-ghost cta-ghost-dark" href="https://github.com/mutaaf/hearth">View the source</a>
+      </div>
     </section>
   </main>
 
-  <footer class="foot mono">
+  <footer class="foot">
     <a href="/">← mutaafaziz.com</a>
     <span>MIT · <a href="https://github.com/mutaaf/hearth">github.com/mutaaf/hearth</a> · particles by <a href="https://github.com/mutaaf/aurora-field">aurora-field</a></span>
   </footer>

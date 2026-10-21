@@ -32,7 +32,8 @@ export class Driver extends EventEmitter {
   async pair() { throw unsupported('Pairing'); }
 
   // Remote
-  async key(_name) { throw unsupported('That button'); }
+  // opts.hold: ms the button was held (brands without real holds treat it as a click)
+  async key(_name, _opts) { throw unsupported('That button'); }
   async powerOn() {
     if (!this.tv.macs?.length) throw unsupported('Turning on (no MAC address known yet)');
     await wake(this.tv.macs, this.tv.ip);

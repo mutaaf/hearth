@@ -140,17 +140,22 @@ export class SamsungDriver extends Driver {
     this.start();
   }
 
-  #sendKey(code) {
+  #sendKey(code, cmd = 'Click') {
     return this.#send({
       method: 'ms.remote.control',
-      params: { Cmd: 'Click', DataOfCmd: code, Option: 'false', TypeOfRemote: 'SendRemoteKey' },
+      params: { Cmd: cmd, DataOfCmd: code, Option: 'false', TypeOfRemote: 'SendRemoteKey' },
     });
   }
 
-  async key(name) {
+  // Tizen understands real press-and-hold (Press … Release), e.g. a long OK
+  // opens context menus. `hold` is how long the finger stayed down, in ms.
+  async key(name, { hold = 0 } = {}) {
     const code = keyCode('samsung', name);
     if (!code) throw unsupported(`The "${name}" button`);
-    await this.#sendKey(code);
+    if (!hold) return this.#sendKey(code);
+    await this.#sendKey(code, 'Press');
+    await new Promise((r) => setTimeout(r, Math.min(hold, 3000)));
+    await this.#sendKey(code, 'Release');
   }
 
   async powerOn() {

@@ -83,6 +83,7 @@
       var t = tv(d.id, d.brand, d.name, '', d.model, d.ip, false, {});
       tvs.push(t);
       emit('tv', t);
+      emit('nearby', discoverable);
       return t;
     }],
     ['POST', /^\/tvs\/([\w-]+)\/pair$/, function (m) {
@@ -105,6 +106,7 @@
       tvs = tvs.filter(function (x) { return x !== t; });
       discoverable.push({ id: t.id, brand: t.brand, name: t.name, model: t.model, ip: t.ip, macs: [] });
       emit('removed', { id: t.id });
+      emit('nearby', discoverable);
       return { ok: true };
     }],
     ['POST', /^\/tvs\/([\w-]+)\/key$/, function (m, body) { key(find(m[1]), body.key); return { ok: true }; }],
@@ -174,14 +176,18 @@
     },
     events: function () {
       setTimeout(function () { emit('hello', tvs); }, 0);
+      // Like the real hub, "notice" the Office TV on the network a moment later.
+      setTimeout(function () { emit('nearby', discoverable); }, 2500);
       return {
         addEventListener: function (event, fn) { (listeners[event] = listeners[event] || []).push(fn); },
       };
     },
   };
 
-  // A slim banner so nobody mistakes the demo for their own house.
+  // A slim banner so nobody mistakes the demo for their own house
+  // (hidden when the landing page embeds the demo in a phone frame).
   document.addEventListener('DOMContentLoaded', function () {
+    if (/[?&]embed=1/.test(location.search)) return;
     var bar = document.createElement('a');
     bar.className = 'demo-bar mono';
     bar.href = '../';

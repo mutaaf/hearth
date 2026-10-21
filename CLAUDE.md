@@ -33,6 +33,10 @@ src/drivers/samsung.js Tizen via samsung.remote.control websocket on wss:8002
 src/keys.js            unified key names → brand key codes
 src/wol.js             Wake-on-LAN magic packet
 web/                   vanilla JS app (index.html, style.css, app.js, shapes.js), no framework
+web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio sounds, the press engine
+                       (data-press="down|up|repeat|long|confirm"), the gesture D-pad, wake lock
+web/setup.js           the caveman setup wizard (turn on → find → Allow → room → done)
+web/skin-8bit.css      8-bit pocket-console skin (only under <html data-skin="8bit">)
 web/demo.js            pretend TVs for the public demo only
 site/                  landing page for mutaafaziz.com/hearth
 scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
@@ -46,6 +50,14 @@ scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
 4. Add a test with a fake device (see `test/samsung.test.js`).
 
 The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`); no UI change is needed for a new brand.
+
+## Touch model (keep it consistent)
+
+- Every pressable element declares `data-press`. Remote keys use `down` (fire instantly), volume/channel/seek use `repeat` (it speeds up), lists use `up` (scrolling never fires a tap), and OK/A/power/TV cards use `long`. Destructive or house-wide actions use `confirm` (hold about 0.75 s while a bar fills).
+- A long OK is sent as `{ key: 'ok', hold: ms }`. Samsung turns it into a real Press/Release; LG has no network hold, so it's a click.
+- The D-pad is a gesture surface: tap a zone, hold to repeat, or drag to step every 34 px.
+- Power: tap toggles this TV, hold turns every TV off. A long-press on a TV card opens its settings.
+- Skins are pure CSS. The 8-bit LCD text comes from `renderLcd()`. `?skin=8bit|classic` overrides the saved preference, and `?embed=1` hides the demo banner.
 
 ## Invariants
 
@@ -68,6 +80,10 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`)
 | Headless Chrome `--screenshot` hangs with `--virtual-time-budget` | The SSE stream keeps the network busy forever. Use `--timeout` and kill the process; window widths under ~500px are clamped. |
 | aurora-field sizes its canvas from the container, not the canvas's own CSS box | Position the shape with the `stage` option (an invisible box), never by moving the canvas. |
 | Headless SwiftShader screenshots catch aurora particles mid-flight (looks like stars only) | Verify the hero in real Chrome; shapes take about 2.6 s of intro before they form. |
+| The first SSDP M-SEARCH from a freshly started process (seen under launchd) often gets no answers | `discover()` re-asks once when nobody answered. The hub also re-scans every 60 s (`startAutoDiscovery`) and pushes `nearby` over SSE. |
+| A launchd plist pointing at `/opt/homebrew/Cellar/node/<ver>/bin/node` breaks on `brew upgrade` | Use `/opt/homebrew/opt/node/bin/node`. The home install (`~/hearth-home`, label `com.hearth.home`) does. |
+| iOS Safari has no Vibration API | `feel.js` toggles a hidden `<input type=checkbox switch>`, which plays the system haptic on iOS 18+. It only works inside a user gesture, so repeat ticks during a hold may stay silent. |
+| Chrome-extension `resize_window` may not shrink below the desktop layout | Verify phone layouts with DevTools-protocol screenshots (see the site agent's `shoot.cjs` approach) or on a real phone. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 

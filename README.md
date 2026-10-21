@@ -18,8 +18,7 @@ Then scan the QR code it prints with your phone. That's the whole setup.
 1. **Install Node.js** (version 20.19 or newer) from [nodejs.org](https://nodejs.org) on a computer that's usually on: a Mac mini, an old laptop, a Raspberry Pi.
 2. **Run `npm run up`** in the `hearth` folder. It installs what it needs and starts Hearth in the background. Run it again any time; it won't start a second copy.
 3. **Open the link on your phone.** Scan the QR code or type the `http://192.168…:8770` address it shows. Your phone has to be on the same Wi-Fi.
-4. **Tap "Find my TVs".** Turn the TVs on first. Hearth listens for them on the network.
-5. **Tap "Add", then press _Allow_ on the TV.** Each TV asks once, using its own remote. After that, every phone in the house can control it.
+4. **Follow the setup screens.** Turn the TV on, tap the big button, then press _Allow_ on the TV with its own remote. Pick the room. Done. After that, every phone in the house can control it, and new TVs show up as a "New TV nearby" banner.
 
 > 💡 On iPhone, tap **Share → Add to Home Screen** so Hearth opens full-screen like an app.
 
@@ -32,6 +31,16 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 | LG (2018–2024) | Settings → General → Devices → TV Management → **Turn On via Wi-Fi** (older: _Mobile TV On_) |
 | LG (2025+) | Settings → Support → IP Control Settings → **Wake On LAN** |
 | Samsung | Settings → General → Network → Expert Settings → **Power On with Mobile** |
+
+### How it feels
+
+- **Every press clicks back** with a short buzz (Android, and iPhone on iOS 18+) and an optional sound.
+- **Hold to repeat:** volume, channel and the D-pad speed up the longer you hold.
+- **Swipe the pad** like a trackpad to fly through rows of tiles.
+- **Long-press:** OK (a real press-and-hold on Samsung), a TV card for its settings, and power to turn off **every** TV.
+- **Two skins:** *Classic* (70s hi-fi) and *8-bit*, a pocket game console with a dot-matrix screen that tells you what the TV is doing. Change it under ⚙.
+- **Set up a TV in a minute:** a step-by-step wizard (turn it on, press Allow, pick the room), and Hearth notices new TVs on the network by itself.
+- **Stays awake** while the remote is open, and works sideways too.
 
 ### What works
 

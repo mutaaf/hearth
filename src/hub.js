@@ -27,6 +27,7 @@ export class Hub extends EventEmitter {
   }
 
   async close() {
+    clearInterval(this.#discoveryTimer);
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
   }
 
@@ -88,9 +89,33 @@ export class Hub extends EventEmitter {
   }
 
   async scan() {
-    const found = await this.discoverFn();
-    return found.map((tv) => ({ ...tv, added: this.tvs.some((t) => t.id === tv.id || t.ip === tv.ip) }));
+    const found = (await this.discoverFn()).map((tv) => ({
+      ...tv,
+      added: this.tvs.some((t) => t.id === tv.id || t.ip === tv.ip),
+    }));
+    this.#setNearby(found.filter((tv) => !tv.added));
+    return found;
   }
+
+  // TVs on the network that haven't been added yet. The app shows them as a
+  // "New TV nearby — add it?" banner, so nobody has to go looking.
+  nearby = [];
+
+  #setNearby(list) {
+    const key = (l) => l.map((t) => t.id).sort().join();
+    if (key(list) === key(this.nearby)) return;
+    this.nearby = list;
+    this.emit('nearby', list);
+  }
+
+  startAutoDiscovery(everyMs = 60_000) {
+    const run = () => this.scan().catch(() => {});
+    run();
+    this.#discoveryTimer = setInterval(run, everyMs);
+    this.#discoveryTimer.unref?.();
+  }
+
+  #discoveryTimer = null;
 
   async add(input = {}) {
     const ip = String(input.ip ?? '').trim();
@@ -123,6 +148,7 @@ export class Hub extends EventEmitter {
     await this.store.save(this.tvs);
     this.#attach(tv);
     this.emit('change', this.view(tv));
+    this.#setNearby(this.nearby.filter((n) => n.ip !== ip));
     return this.view(tv);
   }
 

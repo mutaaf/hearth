@@ -78,6 +78,17 @@ test('keys are sent as ms.remote.control clicks', async () => {
   await driver.stop();
 });
 
+test('a held key is sent as Press then Release', async () => {
+  mode = 'allow';
+  received.length = 0;
+  const tv = { ...makeTv(), credentials: { token: 'tok-123' } };
+  const driver = makeDriver(tv, []);
+  await driver.key('ok', { hold: 60 });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(received.map((m) => [m.params.Cmd, m.params.DataOfCmd]), [['Press', 'KEY_ENTER'], ['Release', 'KEY_ENTER']]);
+  await driver.stop();
+});
+
 test('apps are listed and launched with the right action type', async () => {
   mode = 'allow';
   received.length = 0;
