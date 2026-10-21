@@ -25,7 +25,7 @@ Then scan the QR code it prints with your phone. That's the whole setup.
 
    Pick the room. Done. Every phone in the house can now control it, and new TVs show up as a "New TV nearby" banner. A TV you already added but is off? Tap its power button: waking doesn't need it to be connected first.
 
-> 💡 On iPhone, tap **Share → Add to Home Screen** so Hearth opens full-screen like an app.
+> 💡 **Get it on every phone and iPad:** in Hearth, open ⚙ → *Get Hearth on another phone or iPad* to send the link with Messages or show a QR code. On the iPad, Hearth shows the exact taps: **Share → Add to Home Screen → Add**. It then opens full-screen with its own icon.
 
 > 🏠 **A friendlier address.** If you already run a home page on port 80 (a family portal, a dashboard), have it redirect a path like `/tv` to `http://<this-computer>:8770/`, so the whole house just remembers `http://<your-home-name>.local/tv`.
 

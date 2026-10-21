@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="58%" r="70%">
+      <stop offset="0" stop-color="#3a1608"/><stop offset=".45" stop-color="#140a08"/><stop offset="1" stop-color="#07080c"/>
+    </radialGradient>
+    <radialGradient id="cyan" cx="80%" cy="10%" r="55%"><stop offset="0" stop-color="#5ee7ff" stop-opacity=".22"/><stop offset="1" stop-color="#5ee7ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="orb" cx="44%" cy="40%" r="60%">
+      <stop offset="0" stop-color="#fff6ee"/><stop offset=".25" stop-color="#ffb18a"/><stop offset=".6" stop-color="#ff6a2b"/><stop offset="1" stop-color="#b8360b"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff6a2b" stop-opacity=".75"/><stop offset="1" stop-color="#ff6a2b" stop-opacity="0"/></radialGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#cyan)"/>
+  <g id="dots" fill="#ffb18a" opacity=".55">
+    <circle cx="180" cy="210" r="5"/><circle cx="840" cy="250" r="4"/><circle cx="250" cy="820" r="4"/><circle cx="800" cy="790" r="6"/>
+    <circle cx="140" cy="520" r="3"/><circle cx="890" cy="540" r="3"/><circle cx="520" cy="130" r="4"/><circle cx="610" cy="905" r="3"/>
+  </g>
+  <rect x="196" y="250" width="632" height="430" rx="64" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="30"/>
+  <rect x="196" y="250" width="632" height="430" rx="64" fill="none" stroke="#ff6a2b" stroke-opacity=".5" stroke-width="44" filter="url(#soft)"/>
+  <rect x="420" y="712" width="184" height="30" rx="15" fill="#fff" fill-opacity=".85"/>
+  <circle cx="512" cy="465" r="210" fill="url(#glow)"/>
+  <circle cx="512" cy="465" r="122" fill="url(#orb)"/>
+  <circle cx="474" cy="425" r="34" fill="#fff" fill-opacity=".55"/>
+</svg>

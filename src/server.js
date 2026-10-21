@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bulk } from './bulk.js';
 import { badRequest, HearthError, notFound } from './errors.js';
+import { qrSvg } from './qr.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -25,6 +26,9 @@ function routes(hub) {
   const r = (method, pattern, fn) => [method, new RegExp(`^/api${pattern}$`), fn];
   return [
     r('GET', '/health', () => ({ ok: true, name: 'hearth', version })),
+    // The address to hand family members (e.g. a home portal's /tv), for the
+    // app's "Share Hearth" and install screens.
+    r('GET', '/info', (_, __, url) => ({ name: 'hearth', version, friendlyUrl: process.env.HEARTH_FRIENDLY_URL || null })),
     r('GET', '/tvs', () => hub.list()),
     r('GET', '/nearby', () => hub.nearby),
     r('POST', '/scan', () => hub.scan()),
@@ -205,6 +209,12 @@ export function createServer(hub) {
           listeners.delete(res);
         });
         return;
+      }
+      if (url.pathname === '/api/qr.svg' && req.method === 'GET') {
+        const text = url.searchParams.get('u') ?? '';
+        if (!/^https?:\/\/[^\s]{1,200}$/.test(text)) throw badRequest('u must be an http(s) link');
+        res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'max-age=3600' });
+        return res.end(qrSvg(text));
       }
       const icon = url.pathname.match(/^\/api\/tvs\/([\w-]+)\/icon$/);
       if (icon && req.method === 'GET') return proxyIcon(hub, icon[1], url.searchParams.get('u') ?? '', res);
