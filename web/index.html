@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="skin-8bit.css">
   <link rel="stylesheet" href="skin-aurora.css">
+  <link rel="stylesheet" href="scenes.css">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -54,6 +55,7 @@
       <div class="brand"><span class="ember" aria-hidden="true"></span><h1>hearth</h1></div>
       <div class="masthead-right">
         <p class="clock mono" id="clock">—</p>
+        <button type="button" class="select-btn mono" data-press="up" data-action="select">Select</button>
         <button type="button" class="icon-btn" data-press="up" data-action="settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
       </div>
     </header>
@@ -69,6 +71,9 @@
       <span class="nearby-text"><b id="nearbyName">New TV nearby</b><small class="mono">Tap to add it</small></span>
       <span class="nearby-go mono">Add</span>
     </button>
+
+    <!-- Scenes (scenes.js) -->
+    <section class="scenes" id="scenes" aria-label="Scenes"></section>
 
     <section class="units" id="units" aria-label="Your TVs"></section>
 
@@ -89,6 +94,9 @@
       </button>
     </nav>
   </main>
+
+  <!-- Bulk select action bar (bulk.js) — replaces the dock while selecting -->
+  <nav class="bulkbar" id="bulkbar" aria-label="Act on selected TVs" hidden></nav>
 
   <!-- ─────────── The Remote ─────────── -->
   <section id="remote" class="view" hidden aria-label="Remote control">
@@ -246,7 +254,11 @@
   <!-- ─────────── Setup wizard (setup.js) ─────────── -->
   <section id="setup" class="setup" hidden aria-live="polite"></section>
 
+  <!-- Scene editor (scenes.js) -->
+  <section id="sceneEditor" class="setup scene-editor" hidden aria-label="Scene editor"></section>
+
   <!-- ─────────── Sheets ─────────── -->
+  <dialog class="sheet" id="bulkSheet"></dialog>
   <dialog class="sheet" id="editSheet">
     <div class="sheet-grip"></div>
     <h3>TV settings</h3>
