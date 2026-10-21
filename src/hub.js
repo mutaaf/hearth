@@ -5,6 +5,11 @@ import { LgDriver } from './drivers/lg.js';
 import { GoogleTvDriver } from './drivers/googletv.js';
 import { RokuDriver } from './drivers/roku.js';
 import { SamsungDriver } from './drivers/samsung.js';
+// ── health: telemetry, diagnostics, rating, AI insights ──
+import { diagnose } from './diagnostics.js';
+import { anonymise, rate } from './health.js';
+import { Insights } from './llm.js';
+import { instrument, Telemetry } from './telemetry.js';
 
 export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver, roku: RokuDriver, androidtv: GoogleTvDriver };
 
@@ -17,8 +22,12 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
-  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe } = {}) {
+  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights } = {}) {
     super();
+    // ── health ──
+    this.telemetry = telemetry ?? new Telemetry({ dir: store?.dir ?? null });
+    this.insights = insights ?? new Insights();
+    this.diag = new Map();
     this.store = store;
     this.driverClasses = drivers;
     this.discoverFn = discoverFn;
@@ -27,6 +36,7 @@ export class Hub extends EventEmitter {
   }
 
   async init() {
+    await this.telemetry.load();
     this.tvs = await this.store.load();
     for (const tv of this.tvs) this.#attach(tv);
     return this;
@@ -36,6 +46,7 @@ export class Hub extends EventEmitter {
     clearInterval(this.#discoveryTimer);
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
+    await this.telemetry.flush();
   }
 
   #attach(tv) {
@@ -53,7 +64,9 @@ export class Hub extends EventEmitter {
         this.emit('change', this.view(tv));
       },
     });
+    instrument(driver, tv.id, this.telemetry); // ── health: time every command
     driver.on('state', (state) => {
+      this.telemetry.state(tv.id, state); // ── health
       // Remember when the TV last turned on/off ("On for 1h 12m" in the app).
       const on = state.online && state.power === 'on';
       if (on !== this.#wasOn.get(tv.id)) {
@@ -137,6 +150,11 @@ export class Hub extends EventEmitter {
       added: this.tvs.some((t) => t.id === tv.id || t.ip === tv.ip),
     }));
     this.#setNearby(found.filter((tv) => !tv.added));
+    // ── health: which discovery channel saw each known TV
+    for (const f of found) {
+      const known = this.tvs.find((t) => t.id === f.id || t.ip === f.ip);
+      if (known) this.telemetry.sighting(known.id, f.brand === 'androidtv' ? 'mdns' : 'ssdp');
+    }
     return found;
   }
 
@@ -223,6 +241,9 @@ export class Hub extends EventEmitter {
     await this.#drivers.get(id)?.stop();
     this.#drivers.delete(id);
     this.#unwatch(id);
+    this.telemetry.forget(id); // ── health
+    this.insights.forget(id);
+    this.diag.delete(id);
     this.tvs = this.tvs.filter((t) => t !== tv);
     await this.store.save(this.tvs);
     this.emit('removed', { id });
@@ -244,6 +265,50 @@ export class Hub extends EventEmitter {
     const driver = this.driver(id);
     await (on ? driver.powerOn() : driver.powerOff());
     return { ok: true };
+  }
+
+  // ── health: report card, deep diagnostics, AI insights ──
+  health(id) {
+    const tv = this.get(id);
+    const view = this.view(tv);
+    const t = this.telemetry.summary(id);
+    const d = this.diag.get(id)?.data ?? null;
+    const ai = this.insights.cached(id);
+    const rating = rate(view, t, d, ai ? { aiYear: ai.insight.model_profile.year, aiAdjust: ai.insight.ai_grade_adjustment } : {});
+    return { tv: view, rating, telemetry: t, diagnostics: d, ai, aiPayload: anonymise(view, t, d, rate(view, t, d)) };
+  }
+
+  async diagnostics(id) {
+    const tv = this.get(id);
+    const data = await diagnose(tv, this.view(tv), this.#drivers.get(id));
+    this.diag.set(id, { at: Date.now(), data });
+    return this.health(id);
+  }
+
+  report() {
+    return this.tvs.map((tv) => {
+      const h = this.health(tv.id);
+      return {
+        id: tv.id,
+        name: tv.name,
+        brand: tv.brand,
+        model: tv.model ?? '',
+        score: h.rating.overall,
+        grade: h.rating.grade,
+        verdict: h.ai?.insight.verdict_for_everyone || h.rating.verdict,
+        worst: h.rating.findings.find((f) => f.severity === 'high' || f.severity === 'medium')?.title ?? null,
+        online: Boolean(h.tv.state?.online),
+        diagnosedAt: this.diag.get(tv.id)?.at ?? null,
+      };
+    });
+  }
+
+  async aiInsights(id, { provider, model, key, refresh } = {}) {
+    // Fresh diagnostics make a better report; reuse them if under 10 minutes old.
+    if (!this.diag.get(id) || Date.now() - this.diag.get(id).at > 600_000) await this.diagnostics(id).catch(() => {});
+    const { aiPayload } = this.health(id);
+    await this.insights.run(id, aiPayload, { provider, model, key, refresh });
+    return this.health(id);
   }
 
   async powerAll(on) {

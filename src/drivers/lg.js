@@ -296,4 +296,32 @@ export class LgDriver extends Driver {
   async toast(message) {
     await this.#request(SSAP.toast, { message: String(message).slice(0, 120) });
   }
+
+  // ── Health & diagnostics (read-only SSAP queries) ──
+  async diagnostics() {
+    if (!this.#client?.connected) return { connected: false };
+    const ask = (uri) => this.#client.request(uri).catch((err) => ({ error: err.message }));
+    const [system, software, network, volume, power, launchPoints, inputs, foreground] = await Promise.all([
+      ask(SSAP.systemInfo),
+      ask('ssap://com.webos.service.update/getCurrentSWInformation'),
+      ask(SSAP.network),
+      ask(SSAP.volume),
+      ask('ssap://com.webos.service.tvpower/power/getPowerState'),
+      ask(SSAP.launchPoints),
+      ask(SSAP.inputs),
+      ask(SSAP.foreground),
+    ]);
+    return {
+      connected: true,
+      url: this.#client.urls?.[0] ?? null,
+      system,
+      software,
+      network,
+      volume,
+      power,
+      launchPointCount: launchPoints?.launchPoints?.length ?? null,
+      inputs: inputs?.devices?.map((d) => ({ id: d.id, label: d.label, connected: d.connected })) ?? inputs,
+      foreground,
+    };
+  }
 }

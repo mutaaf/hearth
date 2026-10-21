@@ -68,6 +68,18 @@ function routes(hub) {
       scenesOf(hub).run(sc).catch((err) => console.error('[hearth] scene failed:', err.message));
       return { ok: true, started: true };
     }),
+    // ── health: report card, diagnostics, AI insights (keys pass through, never stored) ──
+    r('GET', '/report', () => hub.report()),
+    r('GET', `/tvs/${id}/health`, ([tv]) => hub.health(tv)),
+    r('GET', `/tvs/${id}/diagnostics`, ([tv]) => hub.diagnostics(tv)),
+    r('POST', `/tvs/${id}/insights`, ([tv], body, _url, req) =>
+      hub.aiInsights(tv, {
+        provider: String(body.provider ?? 'edge'),
+        model: body.model ? String(body.model).slice(0, 120) : null,
+        key: req.headers['x-hearth-key'] ?? '',
+        refresh: Boolean(body.refresh),
+      })),
+    r('POST', '/ai/models', (_, body, _url, req) => hub.insights.models(String(body.provider ?? 'auto'), req.headers['x-hearth-key'] ?? '')),
   ];
 }
 
@@ -106,6 +118,7 @@ function sendJson(res, status, data) {
 // Third-party browser files served straight from node_modules.
 const VENDOR = {
   'vendor/aurora-field.min.js': path.join(ROOT, 'node_modules', 'aurora-field', 'dist', 'aurora-field.min.js'),
+  'vendor/insight-schema.js': path.join(ROOT, 'src', 'insight-schema.js'),
 };
 
 async function serveStatic(res, pathname) {
@@ -186,7 +199,7 @@ export function createServer(hub) {
           const m = url.pathname.match(pattern);
           if (!m || method !== req.method) continue;
           const body = method === 'GET' || method === 'DELETE' ? {} : await readJson(req);
-          return sendJson(res, 200, await handler(m.slice(1), body, url));
+          return sendJson(res, 200, await handler(m.slice(1), body, url, req));
         }
         throw notFound('API route');
       }

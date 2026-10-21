@@ -19,6 +19,7 @@ cpSync(
   path.join(ROOT, 'node_modules', 'aurora-field', 'dist', 'aurora-field.min.js'),
   path.join(DEMO, 'vendor', 'aurora-field.min.js'),
 );
+cpSync(path.join(ROOT, 'src', 'insight-schema.js'), path.join(DEMO, 'vendor', 'insight-schema.js'));
 
 // demo.js must run before app.js reads window.HearthDemo.
 const demoHtml = path.join(DEMO, 'index.html');

@@ -1,6 +1,6 @@
 {
   "name": "hearth",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "One remote for every TV in the house. Finds your LG, Samsung, Roku and Google TV devices on the Wi-Fi and gives every phone a fast, ad-free remote.",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,12 @@
     "deploy:site": "node scripts/build-site.mjs && npx --yes wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "aurora-field": "^3.3.0",
     "lgtv2": "^2.1.0",
     "multicast-dns": "^7.2.5",
     "node-forge": "^1.4.0",
+    "openai": "^7.41.0",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.18.0"
   },

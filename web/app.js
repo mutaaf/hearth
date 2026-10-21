@@ -5,6 +5,7 @@ import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, s
 import { createSetup } from './setup.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
+import { createHealth } from './health.js'; // health
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const tvs = new Map();
@@ -610,8 +611,12 @@ function openSettings() {
   for (const card of document.querySelectorAll('[data-skin-pick]')) card.classList.toggle('active', card.dataset.skinPick === prefs.skin);
   $('#prefHaptics').checked = prefs.haptics;
   $('#prefSound').checked = soundOn();
+  health.renderAiSettings($('#aiSettings')); // health
   openSheet('#settingsSheet');
 }
+
+// ── health: report cards + diagnostics + AI notes ─────────
+const health = createHealth({ root: $('#health'), note, haptic, feedback, demo });
 
 // ── Setup wizard ─────────────────────────────────────────
 const setup = createSetup({
@@ -792,6 +797,13 @@ function onPress(el, info) {
       return openSettings();
     case 'select':
       return bulk.selecting ? bulk.exit() : bulk.enter();
+    // ── health
+    case 'health':
+      haptic('tap');
+      return health.openHouse();
+    case 'tv-health':
+      $('#editSheet').close();
+      return health.openTv(editing);
     case 'edit':
       haptic('tap');
       return openEdit();
@@ -858,7 +870,7 @@ function wire() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && bulk.selecting) return bulk.exit();
-    if (e.target.closest('input, dialog, #setup, #sceneEditor')) return;
+    if (e.target.closest('input, dialog, #setup, #sceneEditor, #health')) return;
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('button, [role="button"]')) {
       if (e.target.matches('.unit')) e.target.click();
       return;
