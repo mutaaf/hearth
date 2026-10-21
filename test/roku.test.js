@@ -114,15 +114,26 @@ test('an unreachable Roku is offline (503)', async () => {
   await assert.rejects(driver.pair(), (err) => err.status === 503);
 });
 
-test('polling reports standby and the app on screen', async () => {
+test('polling reports the app on screen; standby and the home screen show nothing playing', async () => {
   reset();
-  fake.power = 'DisplayOff';
   fake.active = '<active-app><app id="12" type="appl" version="5.0.98">Netflix</app></active-app>';
   const driver = new RokuDriver(makeTv(), { base });
-  const state = new Promise((resolve) => driver.on('state', (s) => s.online && resolve(s)));
-  driver.start();
-  assert.deepEqual(await state, { online: true, power: 'standby', volume: null, muted: null, app: '12', appTitle: 'Netflix' });
-  await driver.stop();
+  try {
+    const state = new Promise((resolve) => driver.on('state', (s) => s.online && resolve(s)));
+    driver.start();
+    assert.deepEqual(await state, { online: true, power: 'on', volume: null, muted: null, app: '12', appTitle: 'Netflix' });
+    // Asleep: the Roku still names the last app, but nothing is playing.
+    fake.power = 'DisplayOff';
+    await driver.refresh();
+    assert.deepEqual([driver.state.power, driver.state.app], ['standby', null]);
+    // Newer Roku OS calls its home screen "Roku Dynamic Menu".
+    fake.power = 'PowerOn';
+    fake.active = '<active-app><app id="562859" type="appl">Roku Dynamic Menu</app></active-app>';
+    await driver.refresh();
+    assert.deepEqual([driver.state.power, driver.state.app, driver.state.appTitle], ['on', null, null]);
+  } finally {
+    await driver.stop();
+  }
 });
 
 test('inputs: Roku TVs list HDMI, sticks say not supported', async () => {

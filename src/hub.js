@@ -34,6 +34,7 @@ export class Hub extends EventEmitter {
 
   async close() {
     clearInterval(this.#discoveryTimer);
+    for (const timers of this.#settleTimers.values()) timers.forEach(clearTimeout);
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
   }
@@ -64,6 +65,7 @@ export class Hub extends EventEmitter {
     });
     driver.on('connection-error', () => {});
     this.#drivers.set(tv.id, driver);
+    driver.setActive?.(this.viewers > 0);
     if (tv.credentials) driver.start();
     else this.#watch(tv, driver);
   }
@@ -243,7 +245,57 @@ export class Hub extends EventEmitter {
   async power(id, on) {
     const driver = this.driver(id);
     await (on ? driver.powerOn() : driver.powerOff());
+    this.settle(id);
     return { ok: true };
+  }
+
+  // ── Live state that matches the TV ──
+  // After any command, re-read the TV shortly afterwards (and once more a
+  // bit later, for slow app launches and power transitions), so the app shows
+  // what the TV is really doing rather than what we hoped it would do.
+  #settleTimers = new Map();
+  settle(id, delays = this.settleDelays ?? [700, 2500]) {
+    const driver = this.#drivers.get(id);
+    if (!driver?.refresh) return;
+    for (const t of this.#settleTimers.get(id) ?? []) clearTimeout(t);
+    const timers = delays.map((ms) => {
+      const t = setTimeout(() => Promise.resolve(driver.refresh()).catch(() => {}), ms);
+      t.unref?.();
+      return t;
+    });
+    this.#settleTimers.set(id, timers);
+  }
+
+  // How many app screens are open (SSE clients). Drivers that poll go faster
+  // while someone's looking and slow down when nobody is.
+  viewers = 0;
+  setViewers(n) {
+    const was = this.viewers > 0;
+    this.viewers = Math.max(0, n);
+    const now = this.viewers > 0;
+    if (was === now) return;
+    for (const d of this.#drivers.values()) d.setActive?.(now);
+  }
+
+  // Installed apps per TV, cached: the launcher resolves "YouTube TV" → this
+  // TV's own id from here without asking every TV every time.
+  #apps = new Map();
+  async apps(id, { fresh = false, maxAge = 10 * 60_000 } = {}) {
+    const driver = this.driver(id);
+    const hit = this.#apps.get(id);
+    if (!fresh && hit && Date.now() - hit.at < maxAge) return hit.list;
+    try {
+      const list = await driver.apps();
+      this.#apps.set(id, { at: Date.now(), list });
+      return list;
+    } catch (err) {
+      if (hit) return hit.list; // stale beats nothing (the TV may be asleep)
+      throw err;
+    }
+  }
+
+  cachedApps(id) {
+    return this.#apps.get(id)?.list ?? null;
   }
 
   async powerAll(on) {

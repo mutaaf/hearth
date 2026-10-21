@@ -27,6 +27,8 @@ function tag(xml, name) {
   return m ? decode(m[1].trim()) : '';
 }
 
+const HOME_APPS = new Set(['562859']); // "Roku Dynamic Menu": the home screen on newer Roku OS
+
 const POWER = { PowerOn: 'on', DisplayOff: 'standby', Ready: 'standby', Headless: 'standby' };
 
 export function parseRokuDeviceInfo(xml) {
@@ -97,22 +99,30 @@ export class RokuDriver extends Driver {
 
   start() {
     if (this.#poll) return;
-    const tick = async () => {
-      try {
-        const info = await this.#info();
-        const active = await this.#ecp('GET', '/query/active-app').catch(() => '');
-        // The home screen is <app>Roku</app> with no id.
-        const m = active.match(/<app\b[^>]*\bid="([^"]+)"[^>]*>([^<]*)</);
-        const app = m?.[1] ?? null;
-        const appTitle = m ? m[2].replace(/&amp;/g, '&').replace(/&apos;|&#39;/g, "'").trim() || null : null;
-        this.setState({ online: true, power: info.power, app, appTitle });
-      } catch {
-        this.setState({ online: false, power: 'off', app: null, appTitle: null });
-      }
-    };
-    tick();
-    this.#poll = setInterval(tick, POLL_MS);
+    this.#tick();
+    this.#poll = setInterval(() => this.#tick(), POLL_MS);
     this.#poll.unref?.();
+  }
+
+  // Re-read power and what's on screen (polls, and after every command).
+  refresh() {
+    return this.#tick();
+  }
+
+  async #tick() {
+    try {
+      const info = await this.#info();
+      const active = info.power === 'on' ? await this.#ecp('GET', '/query/active-app').catch(() => '') : '';
+      // The home screen is <app>Roku</app> with no id; newer Roku OS reports
+      // the home screen / screensaver as "Roku Dynamic Menu" (id 562859).
+      const m = active.match(/<app\b[^>]*\bid="([^"]+)"[^>]*>([^<]*)</);
+      const home = !m || HOME_APPS.has(m[1]);
+      const app = home ? null : m[1];
+      const appTitle = home ? null : decode(m[2]).trim() || null;
+      this.setState({ online: true, power: info.power, app, appTitle });
+    } catch {
+      this.setState({ online: false, power: 'off', app: null, appTitle: null });
+    }
   }
 
   async stop() {

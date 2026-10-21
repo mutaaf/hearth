@@ -4,6 +4,8 @@ import https from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bulk } from './bulk.js';
+import { catalogView } from './catalog.js';
+import { catalogStatus, launchOn } from './launch.js';
 import { badRequest, HearthError, notFound } from './errors.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,6 +24,11 @@ const TYPES = {
 // [method, path pattern, handler(params, body, url)] — handlers return JSON.
 function routes(hub) {
   const id = '([\\w-]+)';
+  // After a command, re-read the TV so live state reflects what happened.
+  const settled = (tv) => {
+    hub.settle(tv);
+    return { ok: true };
+  };
   const r = (method, pattern, fn) => [method, new RegExp(`^/api${pattern}$`), fn];
   return [
     r('GET', '/health', () => ({ ok: true, name: 'hearth', version })),
@@ -39,23 +46,27 @@ function routes(hub) {
     r('POST', `/tvs/${id}/key`, ([tv], body) => {
       if (typeof body.key !== 'string') throw badRequest('key is required');
       const hold = Number.isFinite(body.hold) && body.hold > 0 ? body.hold : 0;
-      return hub.driver(tv).key(body.key, { hold }).then(() => ({ ok: true }));
+      return hub.driver(tv).key(body.key, { hold }).then(() => settled(tv));
     }),
     r('POST', `/tvs/${id}/power`, ([tv], body) => hub.power(tv, Boolean(body.on))),
     r('POST', `/tvs/${id}/volume`, ([tv], body) => {
       if (!Number.isFinite(body.level)) throw badRequest('level must be a number 0–100');
-      return hub.driver(tv).setVolume(body.level).then(() => ({ ok: true }));
+      return hub.driver(tv).setVolume(body.level).then(() => settled(tv));
     }),
-    r('GET', `/tvs/${id}/apps`, ([tv]) => hub.driver(tv).apps()),
-    r('POST', `/tvs/${id}/launch`, ([tv], body) => hub.driver(tv).launch(String(body.id ?? '')).then(() => ({ ok: true }))),
+    r('GET', `/tvs/${id}/apps`, ([tv], _, url) => hub.apps(tv, { fresh: url.searchParams.has('fresh') })),
+    r('POST', `/tvs/${id}/launch`, ([tv], body) => hub.driver(tv).launch(String(body.id ?? '')).then(() => settled(tv))),
     r('GET', `/tvs/${id}/inputs`, ([tv]) => hub.driver(tv).inputs()),
-    r('POST', `/tvs/${id}/input`, ([tv], body) => hub.driver(tv).setInput(String(body.id ?? '')).then(() => ({ ok: true }))),
+    r('POST', `/tvs/${id}/input`, ([tv], body) => hub.driver(tv).setInput(String(body.id ?? '')).then(() => settled(tv))),
     r('POST', `/tvs/${id}/toast`, ([tv], body) => {
       const message = String(body.message ?? '').trim();
       if (!message) throw badRequest('message is required');
       return hub.driver(tv).toast(message).then(() => ({ ok: true }));
     }),
     r('POST', '/all/power', (_, body) => hub.powerAll(Boolean(body.on))),
+    // ── the cross-brand app launcher ──
+    r('GET', '/catalog', () => catalogView()),
+    r('GET', '/catalog/status', (_, __, url) => catalogStatus(hub, { fresh: url.searchParams.has('fresh') })),
+    r('POST', '/launch', (_, body) => launchOn(hub, body)),
     // ── bulk select + scenes ──
     r('POST', '/bulk', (_, body) => bulk(hub, body.ids, String(body.action ?? ''), body.args ?? {}).then((results) => ({ results }))),
     r('GET', '/scenes', () => scenesOf(hub).list()),
@@ -171,10 +182,12 @@ export function createServer(hub) {
         res.write(`event: hello\ndata: ${JSON.stringify(hub.list())}\n\n`);
         res.write(`event: nearby\ndata: ${JSON.stringify(hub.nearby)}\n\n`);
         listeners.add(res);
+        hub.setViewers?.(listeners.size);
         const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
         req.on('close', () => {
           clearInterval(ping);
           listeners.delete(res);
+          hub.setViewers?.(listeners.size);
         });
         return;
       }

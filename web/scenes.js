@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const EMOJI = ['🌙', '🍿', '📚', '☀️', '🎮', '🏈', '🧸', '🎉', '🛋️', '🍽️', '🎬', '✨'];
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const APP_SUGGESTIONS = ['Netflix', 'YouTube', 'Disney+', 'Prime Video', 'Hulu', 'Max', 'Spotify', 'Plex'];
+const APP_SUGGESTIONS = ['Netflix', 'YouTube', 'YouTube TV', 'Disney+', 'Prime Video', 'Hulu', 'Max', 'Peacock', 'Paramount+', 'ESPN', 'Apple TV', 'Spotify', 'Plex', 'YouTube Kids'];
 // The step builder's "What?" buttons → stored step.
 const WHAT = {
   on: { label: 'Turn on', icon: '⏻', action: 'power', args: { on: true } },

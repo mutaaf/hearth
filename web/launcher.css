@@ -1,0 +1,96 @@
+/* The app launcher (launcher.js): the "Watch" strip on the house view and the
+   "Streaming" grid on a TV's Apps panel. Tiles reuse .app / .app-icon, so each
+   skin's app styling applies; the blocks at the bottom tune the rest per skin. */
+
+/* ── Tiles ─────────────────────────────── */
+.app.cat { position: relative; border-radius: 22px; padding: 6px 2px 4px; }
+.cat-icon b { font-style: normal; color: var(--fg, #fff); font-weight: 800; letter-spacing: -.05em; line-height: 1; font-size: 30px; }
+.cat-icon b[data-len="2"] { font-size: 24px; }
+.cat-icon b[data-len="3"] { font-size: 19px; }
+.cat-icon b[data-len="4"], .cat-icon b[data-len="5"] { font-size: 15px; letter-spacing: -.03em; }
+.cat-badge {
+  font-size: 9px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint);
+  margin-top: -4px; white-space: nowrap;
+}
+.app.cat.current .cat-badge { color: var(--signal); }
+.app.cat.missing .app-icon { filter: grayscale(1); opacity: .35; }
+.app.cat.missing > span:not(.app-icon) { opacity: .55; }
+.app.cat.busy .app-icon { animation: cat-busy .9s ease-in-out infinite; }
+@keyframes cat-busy { 50% { transform: scale(.88); opacity: .7; } }
+/* Hold-to-open: the whole tile charges like "Hold: all off". */
+.app.cat.hold { overflow: hidden; }
+.app.cat.hold .charge { background: var(--signal-soft); border-radius: inherit; }
+.app.cat.hold.charging .app-icon { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--signal); }
+.app.cat.hold.charged .app-icon { transform: scale(.92); }
+
+/* ── House: the Watch strip ────────────── */
+.watch { margin: 0 0 20px; }
+.watch-head { gap: 10px; align-items: center; }
+.wake-toggle {
+  min-height: 32px; padding: 0 12px; border-radius: 999px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
+  background: var(--body); border: 1px solid var(--body-edge); color: var(--ink-soft); transition: transform .1s, background .15s;
+}
+.wake-toggle.on { color: var(--ink); border-color: var(--signal); }
+.wake-toggle.pressed { transform: scale(.95); }
+.watch-row {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 84px; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity;
+  scrollbar-width: none; margin: 0 -16px; padding: 4px 16px 6px; overscroll-behavior-x: contain;
+}
+.watch-row::-webkit-scrollbar { display: none; }
+.watch-row .app { scroll-snap-align: start; }
+.watch-row .app-icon { width: 64px; height: 64px; border-radius: 18px; }
+.watch-hint { margin: 4px 2px 0; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
+.launch-results { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; grid-column: 1 / -1; }
+/* .ok is also the D-pad's OK button class (absolute, round, glassy): keep
+   result chips (here and in the bulk bar) from inheriting it. */
+:is(.launch-results, .bulk-results) .chip-result.ok {
+  position: static; inset: auto; display: inline-block; place-items: normal; pointer-events: auto;
+  border: 0; border-radius: 999px; box-shadow: none; width: auto; height: auto; font-size: 12px; transform: none;
+}
+/* Results sit on the page here (not the dark bulk bar): readable in light skins too. */
+.launch-results .chip-result.ok { background: #1f9d4c1f; color: #157a3a; }
+.launch-results .chip-result.bad { background: #d6402f1c; color: #b3321f; }
+
+/* ── Remote: the Streaming grid ────────── */
+.cat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.cat-head .panel-title { margin-bottom: 8px; }
+.cat-grid { margin-bottom: 26px; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--body); border: 1px solid var(--body-edge); }
+.seg button { min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.seg button.active { background: var(--key); color: var(--key-ink); }
+.seg button.pressed { transform: scale(.95); }
+
+/* ── Classic dark ──────────────────────── */
+@media (prefers-color-scheme: dark) {
+  [data-skin="classic"] .launch-results .chip-result.ok { background: #3fd36f26; color: #8ff0b0; }
+  [data-skin="classic"] .launch-results .chip-result.bad { background: #ff5a4a26; color: #ffb0a6; }
+}
+
+/* ── Aurora ────────────────────────────── */
+[data-skin="aurora"] .wake-toggle, [data-skin="aurora"] .seg { background: var(--glass-1); border-color: var(--hair); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+[data-skin="aurora"] .wake-toggle.on { border-color: var(--signal); box-shadow: 0 0 18px -6px var(--signal); }
+[data-skin="aurora"] .seg button.active { background: var(--signal); color: #fff; box-shadow: 0 0 18px -6px var(--signal); }
+[data-skin="aurora"] .app.cat .cat-icon { box-shadow: 0 0 0 1px #ffffff1a, 0 14px 30px -14px var(--tint); }
+[data-skin="aurora"] .app.cat.current .app-icon { box-shadow: 0 0 0 2px var(--signal), 0 0 30px -6px var(--signal); }
+[data-skin="aurora"] .app.cat.hold .charge { background: linear-gradient(90deg, #ff6a2b33, #5ee7ff22); }
+[data-skin="aurora"] .launch-results .chip-result.ok { background: #3fd36f26; color: #8ff0b0; }
+[data-skin="aurora"] .launch-results .chip-result.bad { background: #ff5a4a26; color: #ffb0a6; }
+/* The Apps sheet slides over the orb; keep its titles (aurora hides panel titles). */
+[data-skin="aurora"] .cat-head { justify-content: flex-end; }
+
+/* ── 8-bit ─────────────────────────────── */
+[data-skin="8bit"] .cat-icon b { font-family: 'Press Start 2P', monospace; color: var(--lcd-0); letter-spacing: 0; font-size: 16px; }
+[data-skin="8bit"] .cat-icon b[data-len="3"], [data-skin="8bit"] .cat-icon b[data-len="4"], [data-skin="8bit"] .cat-icon b[data-len="5"] { font-size: 10px; }
+[data-skin="8bit"] .watch-row .app-icon { width: 56px; height: 56px; }
+[data-skin="8bit"] .watch-head h3 { line-height: 1.7; }
+[data-skin="8bit"] .cat-badge, [data-skin="8bit"] .watch-hint, [data-skin="8bit"] .wake-toggle { font-size: 7px; }
+[data-skin="8bit"] .wake-toggle, [data-skin="8bit"] .seg, [data-skin="8bit"] .seg button { border-radius: 0; }
+[data-skin="8bit"] .wake-toggle.on { background: var(--lcd-3); color: var(--lcd-0); border-color: #0c0b10; }
+[data-skin="8bit"] .seg { background: var(--key); border-color: #0c0b10; }
+[data-skin="8bit"] .seg button { font-size: 8px; font-family: 'Press Start 2P', monospace; color: var(--key-ink); }
+[data-skin="8bit"] .seg button.active { background: var(--lcd-3); color: var(--lcd-0); }
+[data-skin="8bit"] .app.cat.missing .app-icon { opacity: .3; }
+[data-skin="8bit"] .app.cat.hold .charge { background: repeating-linear-gradient(90deg, var(--lcd-2) 0 6px, var(--lcd-1) 6px 9px); border-radius: 0; transition-timing-function: steps(10, end); }
+[data-skin="8bit"] .launch-results .chip-result { border-radius: 0; font-size: 8px; font-family: 'Press Start 2P', monospace; line-height: 1.6; }
+[data-skin="8bit"] .launch-results .chip-result.ok { background: var(--lcd-3); color: var(--lcd-0); }
+[data-skin="8bit"] .launch-results .chip-result.bad { background: #a3245b; color: #fff; }

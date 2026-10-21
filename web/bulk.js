@@ -113,23 +113,26 @@ export function createBulk({ api, getTvs, render, note, openEdit, saveAsScene })
     );
   }
 
+  // The cross-brand catalog: each TV opens its own id for the app (the server
+  // resolves it), so "YouTube TV" works on a Samsung, an LG and a Roku at once.
   async function appPicker() {
     const list = chosen();
-    openSheet('<h3>Open an app</h3><p class="sub">Finding apps every selected TV has…</p>');
-    const perTv = await Promise.all(list.map((t) => api('GET', `/tvs/${t.id}/apps`).catch(() => [])));
-    // Apps in common, matched by name (each TV launches its own id).
-    const names = perTv.map((apps) => new Map(apps.map((a) => [a.title.toLowerCase(), a.title])));
-    const common = [...(names[0]?.values() ?? [])].filter((title) => names.every((m) => m.has(title.toLowerCase())));
+    openSheet('<h3>Open an app</h3><p class="sub">Checking which TVs have what…</p>');
+    const [catalog, status] = await Promise.all([api('GET', '/catalog').catch(() => []), api('GET', '/catalog/status').catch(() => ({}))]);
+    const have = (key) => list.filter((t) => status[t.id]?.[key]?.installed === true).length;
+    const ranked = [...catalog].sort((a, b) => have(b.key) - have(a.key));
     openSheet(
       `<h3>Open an app</h3>
-       <p class="sub">${common.length ? `On all ${list.length} TV${list.length > 1 ? 's' : ''}:` : 'No app is on every selected TV (or they’re off). Type one:'}</p>
+       <p class="sub">On the ${list.length} selected TV${list.length > 1 ? 's' : ''}. The number is how many have it.</p>
        <form class="fields">
-         <div class="chips big">${common.map((t) => `<button type="submit" class="chip" name="title" value="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-         ${common.length ? '' : '<input name="typed" placeholder="Netflix" autocomplete="off"><button type="submit" class="cta small">Open</button>'}
+         <div class="chips">${ranked.map((a) => `<button type="submit" class="chip" name="app" value="${esc(a.key)}">${esc(a.title)} <small class="mono">${have(a.key)}/${list.length}</small></button>`).join('')}</div>
+         <input name="typed" placeholder="Or type one: Pandora" autocomplete="off"><button type="submit" class="cta small">Open</button>
        </form>`,
       (data, submitter) => {
-        const title = submitter?.value || data.get('typed');
-        if (title) run('launch', { title }, `Open ${title}`);
+        const key = submitter?.name === 'app' ? submitter.value : '';
+        const title = key ? catalog.find((a) => a.key === key)?.title : String(data.get('typed') ?? '').trim();
+        if (key) run('launch', { app: key, wake: true }, `Open ${title}`);
+        else if (title) run('launch', { title, wake: true }, `Open ${title}`);
       },
     );
   }
@@ -169,6 +172,7 @@ export function createBulk({ api, getTvs, render, note, openEdit, saveAsScene })
       return selecting;
     },
     isSelected: (id) => selected.has(id),
+    selectedIds: () => [...selected],
     enter(id) {
       selecting = true;
       if (id) selected.add(id);

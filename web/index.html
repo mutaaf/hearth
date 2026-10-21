@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="skin-8bit.css">
   <link rel="stylesheet" href="skin-aurora.css">
   <link rel="stylesheet" href="scenes.css">
+  <link rel="stylesheet" href="launcher.css">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -74,6 +75,9 @@
 
     <!-- Scenes (scenes.js) -->
     <section class="scenes" id="scenes" aria-label="Scenes"></section>
+
+    <!-- Watch: one tap-and-hold opens an app on every TV (launcher.js) -->
+    <section class="watch" id="watch" aria-label="Open an app on every TV" hidden></section>
 
     <section class="units" id="units" aria-label="Your TVs"></section>
 
@@ -217,7 +221,9 @@
       </section>
 
       <section class="panel" id="p-apps" data-panel="apps" hidden>
-        <h3 class="panel-title mono">Apps</h3>
+        <div class="cat-head"><h3 class="panel-title mono">Streaming</h3><div class="seg" id="launchMode" role="group" aria-label="Open on" hidden></div></div>
+        <div class="apps-grid cat-grid" id="catalogApps"></div>
+        <h3 class="panel-title mono">Everything on this TV</h3>
         <div class="apps-grid" id="apps"><p class="hint mono">Turn the TV on to see its apps.</p></div>
       </section>
 

@@ -1,4 +1,5 @@
-import { badRequest, unsupported } from './errors.js';
+import { badRequest, HearthError, unsupported } from './errors.js';
+import { launchOne } from './launch.js';
 
 // One action on one TV, in the same vocabulary for bulk select and scenes.
 // Returns nothing on success; throws (with a friendly message) on failure.
@@ -35,15 +36,14 @@ export async function runAction(hub, id, action, args = {}) {
       return driver.key('mute');
     }
     case 'launch': {
-      let appId = args.id;
-      if (!appId && args.title) {
-        const apps = await driver.apps();
-        const title = String(args.title).toLowerCase();
-        appId = apps.find((a) => a.title.toLowerCase() === title)?.id ?? apps.find((a) => a.title.toLowerCase().includes(title))?.id;
-        if (!appId) throw badRequest(`${args.title} isn’t installed on this TV`);
-      }
-      if (!appId) throw badRequest('Which app?');
-      return driver.launch(String(appId));
+      // { app: 'youtubetv' } (catalog key or name), { title } or { id }. The
+      // catalog resolves each TV's own id; titles never confuse YouTube with
+      // YouTube TV (see catalog.js).
+      const ref = args.id ? { id: String(args.id) } : { app: args.app ?? args.title };
+      if (!ref.id && !ref.app) throw badRequest('Which app?');
+      const r = await launchOne(hub, id, ref, { wake: Boolean(args.wake) });
+      if (!r.ok) throw new HearthError(r.reason === 'not-installed' ? 400 : 409, r.error);
+      return;
     }
     case 'input':
       return driver.setInput(String(args.id ?? ''));
@@ -69,6 +69,8 @@ export async function bulk(hub, ids, action, args = {}) {
   const known = ids.filter((id) => hub.tvs.some((t) => t.id === id));
   const names = new Map(known.map((id) => [id, hub.tvs.find((t) => t.id === id).name])); // before a forget removes them
   const results = await Promise.allSettled(known.map((id) => runAction(hub, id, action, args)));
+  // Re-read the TVs shortly after, so the app shows what really happened.
+  if (action !== 'forget' && action !== 'room') for (const id of known) hub.settle?.(id);
   return known.map((id, i) => ({
     id,
     name: names.get(id),

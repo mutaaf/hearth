@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import LGTV from 'lgtv2';
+import LGTV, { POWER_STATES } from 'lgtv2';
 import WebSocket from 'ws';
 import { HearthError, offline, unsupported } from '../errors.js';
 import { isMac } from '../discovery.js';
@@ -25,6 +25,7 @@ const SSAP = {
   systemInfo: 'ssap://system/getSystemInfo',
   network: 'ssap://com.webos.service.connectionmanager/getinfo',
   pointer: 'ssap://com.webos.service.networkinput/getPointerInputSocket',
+  power: 'ssap://com.webos.service.tvpower/power/getPowerState',
 };
 
 const PAIR_TIMEOUT = 60_000;
@@ -212,10 +213,15 @@ export class LgDriver extends Driver {
       this.setState({ volume: v.volume ?? null, muted: v.muteStatus ?? v.muted ?? null });
     });
     client.subscribe(SSAP.foreground, (err, res) => {
-      if (!err && res) this.setState({ app: res.appId || null });
+      if (!err && res) this.setState({ app: this.state.power === 'on' ? res.appId || null : null });
     });
     client.subscribePowerState((err, res) => {
-      if (!err && res) this.setState({ power: res.state === 'unknown' ? 'on' : res.state });
+      if (err || !res) return;
+      const power = res.state === 'unknown' ? 'on' : res.state;
+      const was = this.state.power;
+      // Asleep (Active Standby / Screen Off): nothing is "playing" any more.
+      this.setState(power === 'on' ? { power } : { power, app: null });
+      if (power === 'on' && was !== 'on') this.refresh();
     });
 
     const info = {};
@@ -229,6 +235,29 @@ export class LgDriver extends Driver {
       if (macs.length) info.macs = macs;
     }
     if (Object.keys(info).length) this.onInfo(info);
+  }
+
+  // Re-read power, foreground app and volume. Subscriptions normally push
+  // these, but a command or a power transition is worth double-checking.
+  async refresh() {
+    const client = this.#client;
+    if (!client?.connected) return;
+    const [fg, vol, pw] = await Promise.all([
+      client.request(SSAP.foreground).catch(() => null),
+      client.request(SSAP.volume).catch(() => null),
+      client.request(SSAP.power).catch(() => null),
+    ]);
+    const patch = {};
+    const power = pw?.state ? (POWER_STATES[pw.state] ?? 'on') : this.state.power;
+    if (pw?.state) patch.power = power;
+    if (fg && power === 'on') patch.app = fg.appId || null;
+    if (power !== 'on') patch.app = null;
+    const v = vol?.volumeStatus ?? vol;
+    if (v && (v.volume != null || v.muteStatus != null || v.muted != null)) {
+      patch.volume = v.volume ?? this.state.volume;
+      patch.muted = v.muteStatus ?? v.muted ?? this.state.muted;
+    }
+    this.setState(patch);
   }
 
   async #request(uri, payload) {

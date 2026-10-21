@@ -3,20 +3,73 @@
 // to this instead of the Hearth server. Never loaded by the home server.
 (function () {
   var LG_APPS = [
-    ['netflix', 'Netflix'], ['youtube.leanback.v4', 'YouTube'], ['amazon', 'Prime Video'],
+    ['netflix', 'Netflix'], ['youtube.leanback.v4', 'YouTube'], ['youtube.leanback.ytv.v1', 'YouTube TV'], ['amazon', 'Prime Video'],
     ['com.disney.disneyplus-prod', 'Disney+'], ['hulu', 'Hulu'], ['spotify-beehive', 'Spotify'],
     ['com.webos.app.livetv', 'Live TV'], ['com.webos.app.browser', 'Web Browser'],
   ];
   var SAMSUNG_APPS = [
-    ['3201907018807', 'Netflix'], ['111299001912', 'YouTube'], ['3201910019365', 'Prime Video'],
+    ['3201907018807', 'Netflix'], ['111299001912', 'YouTube'], ['3201707014489', 'YouTube TV'], ['3201910019365', 'Prime Video'],
     ['3201901017640', 'Disney+'], ['3201601007625', 'Hulu'], ['3201606009684', 'Spotify'],
   ];
   var LG_CAPS = { volumeLevel: true, inputs: true, toast: true, appIcons: false };
   var SAMSUNG_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
   var ROKU_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
   var GTV_CAPS = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false };
-  var ROKU_APPS = [['12', 'Netflix'], ['837', 'YouTube'], ['291097', 'Disney+'], ['2285', 'Hulu'], ['13', 'Prime Video'], ['22297', 'Spotify']];
-  var GTV_APPS = [['233637DE', 'YouTube'], ['CA5E8412', 'Netflix'], ['CC32E753', 'Spotify'], ['9AC194DC', 'Plex']];
+  var ROKU_APPS = [['12', 'Netflix'], ['837', 'YouTube'], ['195316', 'YouTube TV'], ['291097', 'Disney+'], ['2285', 'Hulu'], ['13', 'Prime Video'], ['22297', 'Spotify']];
+  var GTV_APPS = [['233637DE', 'YouTube'], ['32EAB1DF', 'YouTube TV'], ['17608BC8', 'Prime Video'], ['C3DE6BC2', 'Disney+'], ['CC32E753', 'Spotify'], ['9AC194DC', 'Plex']];
+  // A slice of src/catalog.js for the launcher (key, title, mark, colour, and
+  // which pretend id it is on each brand). No-Cast apps have no androidtv id.
+  var CATALOG = [
+    ['youtube', 'YouTube', '▶', '#e62117', { lg: 'youtube.leanback.v4', samsung: '111299001912', roku: '837', androidtv: '233637DE' }],
+    ['youtubetv', 'YouTube TV', 'TV', '#cc0000', { lg: 'youtube.leanback.ytv.v1', samsung: '3201707014489', roku: '195316', androidtv: '32EAB1DF' }],
+    ['netflix', 'Netflix', 'N', '#e50914', { lg: 'netflix', samsung: '3201907018807', roku: '12', androidtv: 'CA5E8412' }],
+    ['primevideo', 'Prime Video', 'prime', '#00a8e1', { lg: 'amazon', samsung: '3201910019365', roku: '13', androidtv: '17608BC8' }],
+    ['disneyplus', 'Disney+', 'D+', '#113ccf', { lg: 'com.disney.disneyplus-prod', samsung: '3201901017640', roku: '291097', androidtv: 'C3DE6BC2' }],
+    ['max', 'Max', 'max', '#002be7', { lg: 'com.wbd.stream', samsung: '3202301029760', roku: '61322' }],
+    ['hulu', 'Hulu', 'hulu', '#1ce783', { lg: 'hulu', samsung: '3201601007625', roku: '2285' }],
+    ['appletv', 'Apple TV', 'tv', '#1d1d1f', { lg: 'com.apple.appletv', samsung: '3201807016597', roku: '551012' }],
+    ['peacock', 'Peacock', 'P', '#000000', { lg: 'com.peacock.tv', samsung: '3202006020991', roku: '593099' }],
+    ['paramountplus', 'Paramount+', 'P+', '#0064ff', { lg: 'com.cbs-all-access.webapp.prod', samsung: '3201710014981', roku: '31440', androidtv: '0BBDC217' }],
+    ['espn', 'ESPN', 'E', '#dd0000', { lg: 'com.espn.espnplus-prod', samsung: '3201708014618', roku: '34376' }],
+    ['spotify', 'Spotify', 'S', '#1db954', { lg: 'spotify-beehive', samsung: '3201606009684', roku: '22297', androidtv: 'CC32E753' }],
+    ['plex', 'Plex', 'plex', '#e5a00d', { lg: 'cdp-30', samsung: '3201512006963', roku: '13535', androidtv: '9AC194DC' }],
+    ['tubi', 'Tubi', 'T', '#7408ff', { lg: 'com.tubitv.ott.tubi', samsung: '3201504001965', roku: '41468' }],
+    ['plutotv', 'Pluto TV', 'P', '#fff200', { lg: 'com.plutotv.app', samsung: '3201808016802', roku: '74519' }],
+    ['sling', 'Sling TV', 'S', '#2c8fff', { lg: 'com.movenetworks.app.sling-tv-sling-production', samsung: '3201707014448', roku: '46041' }],
+    ['fubo', 'Fubo', 'f', '#fa4616', { lg: 'com.fubotv.app', samsung: '3201903017953', roku: '43465' }],
+    ['twitch', 'Twitch', 'tw', '#9146ff', { lg: 'tv.twitch.tv.starshot.lg', samsung: '3202203026841', androidtv: 'B3DCF968' }],
+    ['crunchyroll', 'Crunchyroll', 'cr', '#f47521', { lg: 'com.crunchyroll.webapp', samsung: '3202302030097', roku: '2595' }],
+    ['youtubekids', 'YouTube Kids', 'K', '#ff4e45', { lg: 'youtube.leanback.kids.v4', samsung: '3201611010983', androidtv: '0354A290' }],
+  ];
+  function catalogEntry(ref) {
+    var r = String(ref || '').toLowerCase();
+    return CATALOG.filter(function (c) { return c[0] === r || c[1].toLowerCase() === r; })[0];
+  }
+  // What a TV would answer for one catalog app: { installed, appId, reason }.
+  function catalogOn(t, c) {
+    var id = c[4][t.brand];
+    if (!id) return t.brand === 'androidtv' ? { installed: false, reason: 'unsupported' } : { installed: false, reason: 'not-installed' };
+    var hit = appsOf(t).filter(function (a) { return a[0] === id; })[0];
+    return hit ? { installed: true, appId: id } : { installed: false, reason: 'not-installed' };
+  }
+  function launchOn(t, ref, wake) {
+    var out = { id: t.id, name: t.name };
+    if (!t.paired) return Object.assign(out, { ok: false, reason: 'unpaired', error: 'Not connected yet' });
+    var woke = false;
+    if (!t.state.online || t.state.power !== 'on') {
+      if (!wake) return Object.assign(out, { ok: false, reason: 'off', error: 'It’s off' });
+      change(t, { online: true, power: 'on', volume: t.brand === 'lg' ? 15 : t.state.volume, muted: t.brand === 'lg' ? false : t.state.muted });
+      woke = true;
+    }
+    var c = catalogEntry(ref);
+    var title = c ? c[1] : ref;
+    var s = c ? catalogOn(t, c) : { installed: false, reason: 'not-installed' };
+    if (!s.installed) {
+      return Object.assign(out, { ok: false, reason: s.reason, error: s.reason === 'unsupported' ? title + ' can’t be opened on a Google TV without its own remote (no Cast app)' : title + ' isn’t installed on this TV' });
+    }
+    change(t, { app: s.appId, appTitle: title });
+    return Object.assign(out, { ok: true, appId: s.appId, title: title }, woke ? { woke: true } : {});
+  }
   var CAPS = { lg: null, samsung: null, roku: null, androidtv: null };
 
   function tv(id, brand, name, room, model, ip, paired, state) {
@@ -103,13 +156,18 @@
       emit('removed', { id: t.id });
       return;
     }
-    needsOn(t);
+    if (!(action === 'launch' && args.wake)) needsOn(t);
     if (action === 'volume') {
       var level = args.level != null ? args.level : (t.state.volume || 15) + (args.delta || 0);
       change(t, { volume: Math.max(0, Math.min(100, level)), muted: false });
     } else if (action === 'mute') {
       change(t, { muted: args.on !== false });
     } else if (action === 'launch') {
+      if (args.app || catalogEntry(args.title)) {
+        var r = launchOn(t, args.app || args.title, args.wake);
+        if (!r.ok) throw new Error(r.error);
+        return;
+      }
       var hit = appsOf(t).filter(function (a) { return a[1].toLowerCase() === String(args.title || '').toLowerCase() || a[0] === args.id; })[0];
       if (!hit) throw new Error((args.title || 'That app') + ' isn’t installed on this TV');
       change(t, { app: hit[0], appTitle: hit[1] });
@@ -168,6 +226,32 @@
   }
 
   var routes = [
+    ['GET', /^\/catalog$/, function () {
+      return CATALOG.map(function (c) {
+        return { key: c[0], title: c[1], mark: c[2], color: c[3], brands: Object.keys(c[4]) };
+      });
+    }],
+    ['GET', /^\/catalog\/status/, function () {
+      var out = {};
+      tvs.filter(function (t) { return t.paired; }).forEach(function (t) {
+        var row = {};
+        CATALOG.forEach(function (c) { row[c[0]] = catalogOn(t, c); });
+        out[t.id] = row;
+      });
+      return out;
+    }],
+    ['POST', /^\/launch$/, function (_, body) {
+      if (!body.app) throw new Error('Which app? e.g. { "app": "youtubetv" }');
+      var targets = body.tvs === 'all' || body.tvs == null
+        ? tvs.filter(function (t) { return t.paired; })
+        : tvs.filter(function (t) { return (body.tvs || []).indexOf(t.id) >= 0; });
+      if (!targets.length) throw new Error('Pick at least one TV');
+      return wait(body.wake ? 900 : 350).then(function () {
+        var results = targets.map(function (t) { return launchOn(t, body.app, body.wake); });
+        var c = catalogEntry(body.app);
+        return { app: c ? c[0] : null, title: c ? c[1] : body.app, ok: results.every(function (r) { return r.ok; }), results: results };
+      });
+    }],
     ['POST', /^\/bulk$/, function (_, body) {
       return {
         results: (body.ids || []).map(function (id) {

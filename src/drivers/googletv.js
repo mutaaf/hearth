@@ -1,4 +1,5 @@
 import tls from 'node:tls';
+import { CATALOG } from '../catalog.js';
 import { HearthError, offline, unsupported } from '../errors.js';
 import { decode, encode, str } from '../proto.js';
 import { Driver } from './base.js';
@@ -14,13 +15,11 @@ const NS = {
   receiver: 'urn:x-cast:com.google.cast.receiver',
 };
 
-// Cast app ids (stable, public). Launching one opens that app on the TV.
-export const CAST_APPS = [
-  { id: '233637DE', title: 'YouTube' },
-  { id: 'CA5E8412', title: 'Netflix' },
-  { id: 'CC32E753', title: 'Spotify' },
-  { id: '9AC194DC', title: 'Plex' },
-];
+// Cast app ids (stable, public) from the catalog. Launching one opens that
+// app on the TV. Cast can't list installed apps; GET_APP_AVAILABILITY says
+// which of these the TV can open.
+export const CAST_APPS = CATALOG.flatMap((e) => (e.ids.androidtv ?? []).map((id) => ({ id, title: e.title })));
+const STALE_MS = 20_000; // heartbeats every 5 s; this long without a word = gone
 
 const VOLUME_STEP = 0.02;
 
@@ -35,10 +34,13 @@ export class GoogleTvDriver extends Driver {
   #retry = null;
   #stopped = true;
   #level = null;
+  #heardAt = 0;
+  #available = null;
 
   constructor(tv, opts = {}) {
     super(tv, opts);
     this.port = opts.port ?? 8009;
+    this.staleMs = opts.staleMs ?? STALE_MS;
   }
 
   start() {
@@ -76,7 +78,13 @@ export class GoogleTvDriver extends Driver {
         this.#sock = sock;
         this.#buf = Buffer.alloc(0);
         this.#send(NS.connection, { type: 'CONNECT' });
-        this.#heartbeat = setInterval(() => this.#send(NS.heartbeat, { type: 'PING' }), 5000);
+        this.#heardAt = Date.now();
+        // PING every 5 s; a socket that went quiet (TV unplugged, Wi-Fi gone)
+        // never sends a FIN, so drop it ourselves instead of showing stale state.
+        this.#heartbeat = setInterval(() => {
+          if (Date.now() - this.#heardAt > this.staleMs) return sock.destroy(new Error('stale'));
+          this.#send(NS.heartbeat, { type: 'PING' });
+        }, Math.min(5000, this.staleMs / 2));
         this.#heartbeat.unref?.();
         const status = await this.#ask({ type: 'GET_STATUS' });
         if (status) resolve();
@@ -122,6 +130,7 @@ export class GoogleTvDriver extends Driver {
   }
 
   #onData(chunk) {
+    this.#heardAt = Date.now();
     this.#buf = Buffer.concat([this.#buf, chunk]);
     while (this.#buf.length >= 4) {
       const n = this.#buf.readUInt32BE(0);
@@ -149,13 +158,15 @@ export class GoogleTvDriver extends Driver {
     const v = status.volume ?? {};
     if (typeof v.level === 'number') this.#level = v.level;
     this.#session = app?.sessionId ?? null;
+    // Google TVs keep Cast alive in standby and say so: isStandBy.
+    const standby = status.isStandBy === true;
     this.setState({
       online: true,
-      power: 'on',
+      power: standby ? 'standby' : 'on',
       volume: typeof v.level === 'number' ? Math.round(v.level * 100) : this.state.volume,
       muted: typeof v.muted === 'boolean' ? v.muted : this.state.muted,
-      app: app?.appId ?? null,
-      appTitle: app?.displayName ?? null,
+      app: standby ? null : (app?.appId ?? null),
+      appTitle: standby ? null : (app?.displayName ?? null),
     });
   }
 
@@ -202,14 +213,30 @@ export class GoogleTvDriver extends Driver {
     this.#send(NS.receiver, { type: 'SET_VOLUME', volume: { level: this.#level }, requestId: this.#requestId++ });
   }
 
+  // Re-read the receiver status (after a command, or to double-check).
+  async refresh() {
+    if (!this.#sock) return;
+    const status = await this.#ask({ type: 'GET_STATUS' }, 3000);
+    if (!status) this.#sock?.destroy(new Error('no answer'));
+  }
+
+  // The Cast apps this TV says it can open (cached; it doesn't change often).
   async apps() {
-    return CAST_APPS.map((a) => ({ ...a, icon: null }));
+    await this.#ready();
+    if (!this.#available) {
+      const res = await this.#ask({ type: 'GET_APP_AVAILABILITY', appId: CAST_APPS.map((a) => a.id) }, 5000);
+      const avail = res?.availability;
+      if (avail) this.#available = new Set(Object.keys(avail).filter((id) => avail[id] === 'APP_AVAILABLE'));
+    }
+    const ok = (a) => !this.#available || this.#available.has(a.id);
+    return CAST_APPS.filter(ok).map((a) => ({ ...a, icon: null }));
   }
 
   async launch(appId) {
     await this.#ready();
     const res = await this.#ask({ type: 'LAUNCH', appId }, 10_000);
     if (res?.type === 'LAUNCH_ERROR') throw new HearthError(502, `The TV couldn’t open that app (${res.reason ?? 'error'})`);
+    if (!res) throw new HearthError(504, 'The TV didn’t answer the launch');
   }
 
   async powerOff() {

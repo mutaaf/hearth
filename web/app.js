@@ -5,6 +5,7 @@ import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, s
 import { createSetup } from './setup.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
+import { createLauncher } from './launcher.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const tvs = new Map();
@@ -138,6 +139,7 @@ function renderHouse() {
       </article>`)
     .join('');
   if (list.length) firstPaint = false;
+  launcher.renderHouse();
   houseField?.setShape(on ? 'hearth-house' : 'hearth-flame', { pin: true });
 }
 
@@ -180,6 +182,7 @@ function renderRemote() {
   if (tab === 'say' && !caps.toast) setTab('remote');
   $('#sourceKey').hidden = t.brand !== 'samsung';
   for (const el of document.querySelectorAll('#apps .app')) el.classList.toggle('current', el.dataset.app === t.state?.app);
+  launcher.renderPanel(t);
   renderLcd(t);
   renderAurora(t);
 }
@@ -373,7 +376,8 @@ function renderDock(t) {
   const caps = t.capabilities ?? {};
   const html = [
     `<button type="button" class="dock-item ${t.state?.muted ? 'on' : ''}" data-press="down" data-key="mute" aria-label="Mute"><svg><use href="#i-mute"/></svg><small>${t.state?.muted ? 'Unmute' : 'Mute'}</small></button>`,
-    caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-${playing.get(t.id) === false ? 'play' : 'pause'}"/></svg><small>${playing.get(t.id) === false ? 'Play' : 'Pause'}</small></button>`,
+    // Neutral: nothing reports play/pause state, so don't pretend to know it.
+    caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-play"/></svg><small>Play/Pause</small></button>`,
     ...top.map((a) => `<button type="button" class="dock-item app ${a.id === t.state?.app ? 'current' : ''}" data-press="up" data-app="${esc(a.id)}"><i style="--tint:${tint(a.title)}">${
       t.capabilities?.appIcons && a.icon ? `<img alt="" src="api/tvs/${encodeURIComponent(t.id)}/icon?u=${encodeURIComponent(a.icon)}">` : esc((a.title.match(/[A-Za-z0-9+]/) ?? ['•'])[0].toUpperCase())
     }</i><small>${esc(a.title)}</small></button>`),
@@ -627,6 +631,14 @@ const setup = createSetup({
 
 // ── Bulk select + scenes ─────────────────────────────────
 const scenes = createScenes({ api, note, getTvs: () => [...tvs.values()] });
+const launcher = createLauncher({
+  api,
+  note,
+  getTvs: () => [...tvs.values()],
+  getCurrent: () => (current ? tvs.get(current) : null),
+  getSelected: () => bulk.selectedIds(),
+  isSelecting: () => bulk.selecting,
+});
 const bulk = createBulk({
   api,
   note,
@@ -693,6 +705,7 @@ function connectEvents() {
     // First visit with no TVs: go straight into setup.
     if (!greeted && !tvs.size && !setup.isOpen) setup.open();
     if (!greeted) scenes.load();
+    launcher.load();
     greeted = true;
     bulk.prune();
   });
@@ -701,6 +714,7 @@ function connectEvents() {
     const wasOnline = tvs.get(t.id)?.state?.online;
     tvs.set(t.id, t);
     if (t.id === current && t.state?.online && !wasOnline) loadExtras(t);
+    if (t.state?.online && !wasOnline) launcher.statusSoon();
     if (location.hash.includes(t.id) && !current) route();
     else render();
   });
@@ -732,6 +746,7 @@ function onPress(el, info) {
   // ── bulk select + scenes ──
   if (d.bulk) return bulk.handle(el, info);
   if (d.ed !== undefined || d.scene || d.sceneNew) return scenes.handle(el, info);
+  if (d.launch || d.launchAll || d.launchMode || d.wakeToggle !== undefined) return launcher.handle(el, info);
   if (d.key) return sendKey(d.key, { ...(info.long ? { hold: info.held } : {}), repeat: info.repeat });
   if (d.quick) {
     const t = tvs.get(d.quick);
@@ -852,6 +867,7 @@ function wire() {
       e.target.closest('[data-bulk="forget"]') ? 'Keep holding to forget the selected TVs'
       : e.target.closest('[data-ed="delete"]') ? 'Keep holding to delete this scene'
       : forgetting ? 'Keep holding to forget this TV'
+      : e.target.closest('[data-launch-all]') ? launcher.shortHoldHint(e.target)
       : 'Keep holding to turn every TV off',
     );
   });
