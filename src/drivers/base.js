@@ -30,6 +30,11 @@ export class Driver extends EventEmitter {
   start() {}
   async stop() {}
   async pair() { throw unsupported('Pairing'); }
+  // Connection doctor: a harmless check that the TV answers and still trusts
+  // us. → { ok, auth: 'ok'|'missing'|'rejected'|'prompt', how?, detail }
+  async verify() {
+    return { ok: Boolean(this.state.online), auth: this.tv.credentials ? 'ok' : 'missing', detail: this.state.online ? 'Answering' : 'Not answering' };
+  }
 
   // Remote
   // opts.hold: ms the button was held (brands without real holds treat it as a click)

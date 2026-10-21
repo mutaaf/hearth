@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { bulk } from './bulk.js';
 import { badRequest, HearthError, notFound } from './errors.js';
 import { qrSvg } from './qr.js';
+import { runDoctor, runDoctorAll } from './doctor.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -39,7 +40,14 @@ function routes(hub) {
       hub.pair(tv, {
         ...(body.pin !== undefined ? { pin: String(body.pin).replace(/\D/g, '').slice(0, 8) } : {}),
         ...(body.mode === 'pin' ? { mode: 'pin' } : {}),
+        // Google TV full remote: { mode: 'code' } shows the code, { code } finishes.
+        ...(body.mode === 'code' ? { mode: 'code' } : {}),
+        ...(body.code !== undefined ? { code: String(body.code).replace(/[^0-9a-f]/gi, '').slice(0, 6) } : {}),
       })),
+    // ── doctor: fix connections, pair again ──
+    r('POST', `/tvs/${id}/doctor`, ([tv]) => runDoctor(hub, tv)),
+    r('POST', '/doctor', () => runDoctorAll(hub).then((reports) => ({ reports }))),
+    r('POST', `/tvs/${id}/unpair`, ([tv]) => hub.unpair(tv)),
     r('POST', `/tvs/${id}/key`, ([tv], body) => {
       if (typeof body.key !== 'string') throw badRequest('key is required');
       const hold = Number.isFinite(body.hold) && body.hold > 0 ? body.hold : 0;
@@ -192,6 +200,8 @@ export function createServer(hub) {
   hub.on('change', (tv) => broadcast('tv', tv));
   hub.on('removed', (info) => broadcast('removed', info));
   hub.on('nearby', (list) => broadcast('nearby', list));
+  hub.on('healed', (info) => broadcast('healed', info)); // ── doctor
+  hub.on('doctor', (step) => broadcast('doctor', step));
   hub.scenes?.on('progress', (p) => broadcast('scene', p));
   hub.scenes?.on('changed', (list) => broadcast('scenes', list));
 
