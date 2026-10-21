@@ -88,6 +88,9 @@ function timeline(points, since) {
 
 const table = (rows) => `<table class="h-table kv">${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td class="mono">${esc(v ?? '–')}</td></tr>`).join('')}</table>`;
 
+// Findings the connection doctor can do something about.
+const FIXABLE = /connect|respond|reach|patchy|wake|unreachable|pair|trust|google.s code|arrow/i;
+
 export function createHealth({ root, note, haptic, feedback, demo }) {
   let view = 'house';
   let tvId = null;
@@ -150,6 +153,7 @@ export function createHealth({ root, note, haptic, feedback, demo }) {
         </button>`)
         .join('')}</div>
       <button type="button" class="cta h-wide" data-press="up" data-h="diagnose-all">Run diagnostics on every TV</button>
+      <button type="button" class="ghost h-wide" data-press="up" data-doctor="all">Fix every connection</button>
       <p class="h-foot mono">Scores come from what Hearth measures: speed, reliability, connection, software, wake-ups and control. ${loadAi().on ? 'AI notes are written by ' + (loadAi().mode === 'byok' ? 'your own AI key' : 'Gemma 4 on Hearth Cloud') + ' from an anonymised report.' : 'AI notes are off.'}</p>`);
   }
 
@@ -295,11 +299,11 @@ export function createHealth({ root, note, haptic, feedback, demo }) {
         <h3>${esc(h.tv.name)}</h3><p class="h-sub">${esc(h.ai?.insight.verdict_for_everyone || r.verdict)}</p>
         ${r.aiAdjustment ? `<p class="h-chip mono">AI ${r.aiAdjustment.points > 0 ? '+' : ''}${r.aiAdjustment.points}: ${esc(r.aiAdjustment.reason)}</p>` : ''}</div>
       </section>
-      <div class="h-row"><button type="button" class="ghost" data-press="up" data-h="diagnose">${busy.diag ? 'Diagnosing…' : 'Run diagnostics'}</button></div>
+      <div class="h-row"><button type="button" class="ghost" data-press="up" data-h="diagnose">${busy.diag ? 'Diagnosing…' : 'Run diagnostics'}</button><button type="button" class="ghost" data-press="up" data-doctor="fix" data-tv="${esc(h.tv.id)}">Fix connection</button></div>
       ${aiCard(h)}
       <section class="h-need">
         <h4 class="mono">What you need to know</h4>
-        ${needs.length ? needs.map((f) => `<article class="h-find ${f.severity}"><span class="h-sev mono">${SEV[f.severity]}</span><b>${esc(f.title)}</b><p>${esc(f.detail)}</p>${f.fix ? `<p class="h-fix">${esc(f.fix)}</p>` : ''}</article>`).join('') : '<article class="h-find good"><b>Nothing to fix.</b></article>'}
+        ${needs.length ? needs.map((f) => `<article class="h-find ${f.severity}"><span class="h-sev mono">${SEV[f.severity]}</span><b>${esc(f.title)}</b><p>${esc(f.detail)}</p>${f.fix ? `<p class="h-fix">${esc(f.fix)}</p>` : ''}${FIXABLE.test(f.title) ? `<button type="button" class="chip" data-press="up" data-doctor="${/google.s code|arrow/i.test(f.title) ? 'gtv-unlock' : 'fix'}" data-tv="${esc(h.tv.id)}">Fix it</button>` : ''}</article>`).join('') : '<article class="h-find good"><b>Nothing to fix.</b></article>'}
         ${tips.map((f) => `<details class="h-tip"><summary><span class="h-sev mono">${SEV[f.severity]}</span> ${esc(f.title)}</summary><p>${esc(f.detail)}</p>${f.fix ? `<p class="h-fix">${esc(f.fix)}</p>` : ''}</details>`).join('')}
       </section>
       <section class="h-subs">
