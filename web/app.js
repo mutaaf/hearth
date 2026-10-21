@@ -78,8 +78,8 @@ const isUnknown = (t) => t.state?.online && t.state.power === 'unknown';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
 const statusWord = (t) =>
-  !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
-const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV' };
+  t.state?.unavailable ? 'Needs setup' : !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
+const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' };
 const brandName = (b) => BRANDS[b] ?? 'TV';
 
 function appName(t) {
@@ -125,7 +125,7 @@ function renderHouse() {
   units.classList.toggle('settled', !firstPaint);
   units.innerHTML = list
     .map((t, i) => `
-      <article class="unit ${ledClass(t)} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
+      <article data-brand="${esc(t.brand)}" class="unit ${ledClass(t)} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
         <span class="sel-check" aria-hidden="true"></span>
         <div class="screen"><div class="scan"></div><span class="now">${esc(appName(t))}</span></div>
         ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
@@ -161,6 +161,8 @@ function renderRemote() {
   renderSwitcher();
   const bits = [statusWord(t)];
   if (isOn(t) && t.state.app) bits.push(appName(t));
+  if (isOn(t) && t.state.nowPlaying) bits.push(t.state.nowPlaying);
+  if (t.state?.unavailable) bits.push(t.state.unavailable);
   if (t.state?.volume != null) bits.push(`vol ${t.state.volume}${t.state.muted ? ' (muted)' : ''}`);
   $('#rStatus').textContent = bits.join(' · ');
   $('#rLed').className = `led ${ledClass(t)}`;
@@ -294,7 +296,9 @@ function insights(t) {
   const out = [];
   const others = [...tvs.values()].filter((o) => o.id !== t.id && isOn(o));
   const hour = new Date().getHours();
+  if (t.state?.unavailable) out.push(t.state.unavailable);
   if (!t.paired) out.push('Not connected yet — tap Connect above');
+  if (isOn(t) && t.state.nowPlaying) out.push(`Now playing: ${t.state.nowPlaying}`);
   else if (!t.state?.online) out.push(t.canWake ? 'Off · tap ⏻ to wake it' : 'Off · turn it on with its own remote once');
   if (t.state?.muted) out.push('Muted · tap the ring to unmute');
   if ((t.state?.volume ?? 0) >= 60) out.push(`Loud · volume ${t.state.volume}`);

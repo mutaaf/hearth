@@ -17,12 +17,18 @@
   var GTV_CAPS = { volumeLevel: true, inputs: false, toast: false, appIcons: false, remote: false };
   var ROKU_APPS = [['12', 'Netflix'], ['837', 'YouTube'], ['291097', 'Disney+'], ['2285', 'Hulu'], ['13', 'Prime Video'], ['22297', 'Spotify']];
   var GTV_APPS = [['233637DE', 'YouTube'], ['CA5E8412', 'Netflix'], ['CC32E753', 'Spotify'], ['9AC194DC', 'Plex']];
-  var CAPS = { lg: null, samsung: null, roku: null, androidtv: null };
+  // Apple TV: bundle ids, as the Companion app list reports them.
+  var ATV_CAPS = { volumeLevel: false, inputs: false, toast: false, appIcons: false };
+  var ATV_APPS = [
+    ['com.netflix.Netflix', 'Netflix'], ['com.google.ios.youtube', 'YouTube'], ['com.google.ios.youtubeunplugged', 'YouTube TV'],
+    ['com.apple.TVWatchList', 'TV'], ['com.disney.disneyplus', 'Disney+'], ['com.apple.TVMusic', 'Music'], ['com.apple.Arcade', 'Arcade'],
+  ];
+  var CAPS = { lg: null, samsung: null, roku: null, androidtv: null, appletv: null };
 
   function tv(id, brand, name, room, model, ip, paired, state) {
     return {
       id: id, brand: brand, name: name, room: room, model: model, ip: ip, paired: paired, canWake: true,
-      capabilities: { lg: LG_CAPS, samsung: SAMSUNG_CAPS, roku: ROKU_CAPS, androidtv: GTV_CAPS }[brand],
+      capabilities: { lg: LG_CAPS, samsung: SAMSUNG_CAPS, roku: ROKU_CAPS, androidtv: GTV_CAPS, appletv: ATV_CAPS }[brand],
       since: Date.now() - Math.round(Math.random() * 3 * 3600e3),
       state: Object.assign({ online: false, power: 'off', volume: null, muted: null, app: null }, state),
     };
@@ -35,6 +41,8 @@
       { online: true, power: 'on', volume: 53, muted: false, app: null }),
     tv('demo-kids', 'samsung', 'Kids’ Room', 'Upstairs', 'UN43TU7000', '192.168.1.41', true,
       { online: true, power: 'on', app: null }),
+    tv('demo-media', 'appletv', 'Media Room', 'Downstairs', '4K (2nd gen)', '192.168.1.71', true,
+      { online: true, power: 'on', app: 'com.netflix.Netflix', appTitle: 'Netflix', nowPlaying: 'Stranger Things: Chapter One', playing: 'playing' }),
     tv('demo-basement', 'roku', 'Basement', 'Downstairs', 'Streaming Stick 3840R', '192.168.1.53', true,
       { online: true, power: 'standby', app: null }),
     tv('demo-bedroom', 'lg', 'Bedroom', 'Upstairs', '55UP7000PUA', '192.168.1.42', true,
@@ -42,6 +50,7 @@
   ];
   var discoverable = [
     { id: 'demo-office', brand: 'samsung', name: 'Office TV', model: 'QN50Q60A', ip: '192.168.1.43', macs: [] },
+    { id: 'demo-game', brand: 'appletv', name: 'Game Room', model: '4K', ip: '192.168.1.63', macs: [] },
   ];
 
   var listeners = {};
@@ -72,8 +81,14 @@
     if (name === 'volup' || name === 'voldown') {
       if (s.volume == null) return;
       change(t, { volume: Math.max(0, Math.min(100, s.volume + (name === 'volup' ? 1 : -1))), muted: false });
+    } else if (name === 'mute' && t.brand === 'appletv') {
+      throw new Error('Muting (the Apple TV passes volume to the TV, and has no network mute) isn’t supported on this TV');
     } else if (name === 'mute') {
       if (s.muted != null) change(t, { muted: !s.muted });
+    } else if (t.brand === 'appletv' && (name === 'play' || name === 'pause') && s.nowPlaying) {
+      change(t, { playing: name === 'play' ? 'playing' : 'paused' });
+    } else if (name === 'home' && t.brand === 'appletv') {
+      change(t, { app: null, appTitle: null, nowPlaying: null, playing: null });
     } else if (name === 'home' && t.brand === 'lg') {
       change(t, { app: 'com.webos.app.home' });
     } else if (name === 'source' && t.brand !== 'samsung') {
@@ -83,7 +98,7 @@
 
   // ── Bulk select + scenes, in memory ──
   function appsOf(t) {
-    return { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand];
+    return { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS, appletv: ATV_APPS }[t.brand];
   }
   function act(t, action, args) {
     args = args || {};
@@ -216,8 +231,20 @@
       emit('nearby', discoverable);
       return t;
     }],
-    ['POST', /^\/tvs\/([\w-]+)\/pair$/, function (m) {
+    ['POST', /^\/tvs\/([\w-]+)\/pair$/, function (m, body) {
       var t = find(m[1]);
+      // Apple TV: a code for the remote, then one for "what's playing".
+      // Any 4 digits will do in the demo.
+      if (t.brand === 'appletv' && !(body && body.pin)) {
+        t.pinStep = 1;
+        return wait(1200).then(function () { return Object.assign(copy(t), { needsPin: true, step: 1, steps: 2 }); });
+      }
+      if (t.brand === 'appletv' && t.pinStep === 1) {
+        t.pinStep = 2;
+        t.paired = true;
+        change(t, { online: true, power: 'on' });
+        return wait(900).then(function () { return Object.assign(copy(t), { needsPin: true, step: 2, steps: 2 }); });
+      }
       return wait(2600).then(function () {
         t.paired = true;
         change(t, { online: true, power: 'on' });
@@ -254,12 +281,12 @@
     ['GET', /^\/tvs\/([\w-]+)\/apps$/, function (m) {
       var t = find(m[1]);
       needsOn(t);
-      return ({ lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand]).map(function (a) { return { id: a[0], title: a[1], icon: null }; });
+      return ({ lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS, appletv: ATV_APPS }[t.brand]).map(function (a) { return { id: a[0], title: a[1], icon: null }; });
     }],
     ['POST', /^\/tvs\/([\w-]+)\/launch$/, function (m, body) {
       var t = find(m[1]);
       needsOn(t);
-      var list = { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS }[t.brand];
+      var list = { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS, appletv: ATV_APPS }[t.brand];
       var hit = list.filter(function (a) { return a[0] === body.id; })[0];
       if (t.brand !== 'samsung') change(t, { app: body.id, appTitle: hit ? hit[1] : null });
       return { ok: true };

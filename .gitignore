@@ -5,3 +5,5 @@ node_modules/
 dist/
 .wrangler/
 .claude/
+__pycache__/
+.venv/

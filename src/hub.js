@@ -1,16 +1,19 @@
 import { EventEmitter } from 'node:events';
 import { badRequest, HearthError, notFound } from './errors.js';
 import { discover, isIPv4, isMac, macFor, portOpen, probe, tvId } from './discovery.js';
+import { closeBridge } from './atv-bridge.js';
+import { AppleTvDriver } from './drivers/appletv.js';
 import { LgDriver } from './drivers/lg.js';
 import { GoogleTvDriver } from './drivers/googletv.js';
 import { RokuDriver } from './drivers/roku.js';
 import { SamsungDriver } from './drivers/samsung.js';
 
-export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver, roku: RokuDriver, androidtv: GoogleTvDriver };
+export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver, roku: RokuDriver, androidtv: GoogleTvDriver, appletv: AppleTvDriver };
 
 // Ports a TV listens on even before it's paired: enough to tell "on" from
 // "off" so the app can offer to wake it.
-const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv: [8009] };
+// Apple TV: AirPlay's fixed :7000 (Companion's port moves around).
+const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv: [8009], appletv: [7000] };
 
 // The hub owns the list of TVs and one live driver per TV. The HTTP server is
 // a thin layer over it; tests drive it directly with fake drivers.
@@ -36,6 +39,7 @@ export class Hub extends EventEmitter {
     clearInterval(this.#discoveryTimer);
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
+    await closeBridge();
   }
 
   #attach(tv) {
@@ -170,10 +174,10 @@ export class Hub extends EventEmitter {
     if (input.brand) {
       if (!this.driverClasses[input.brand]) throw badRequest(`Unsupported brand: ${input.brand}`);
       const macs = (Array.isArray(input.macs) ? input.macs : []).filter(isMac).map((m) => m.toLowerCase());
-      found = { brand: input.brand, name: input.name, model: input.model, ip, macs };
+      found = { brand: input.brand, name: input.name, model: input.model, ip, macs, atvId: input.atvId };
     } else {
       found = await this.probeFn(ip);
-      if (!found) throw new HearthError(404, 'No LG or Samsung TV answered at that address. Is it switched on?');
+      if (!found) throw new HearthError(404, 'No TV answered at that address. Is it switched on?');
     }
 
     // No MAC from discovery (Google TVs)? Ask the OS; it's needed to wake it.
@@ -189,6 +193,9 @@ export class Hub extends EventEmitter {
       room: clean(input.room),
       ip,
       macs: found.macs ?? [],
+      // Apple TV: pyatv's device identifier (AirPlay deviceid), to find it
+      // again if its IP changes.
+      ...(typeof found.atvId === 'string' && /^[0-9A-F:-]{6,64}$/i.test(found.atvId) ? { atvId: found.atvId } : {}),
       addedAt: new Date().toISOString(),
     };
     if (this.tvs.some((t) => t.id === tv.id)) tv.id += `-${Date.now().toString(36)}`;
@@ -232,8 +239,12 @@ export class Hub extends EventEmitter {
   async pair(id, opts = {}) {
     const tv = this.get(id);
     const result = await this.driver(id).pair(opts);
-    // Some TVs (LG in PIN mode) show a number first and finish on a 2nd call.
-    if (result?.needsPin) return { ...this.view(tv), needsPin: true };
+    // Some TVs (LG in PIN mode, Apple TV) show a number first and finish on a
+    // 2nd call. Apple TV asks twice (remote, then what's playing): step/steps.
+    if (result?.needsPin) {
+      const { step, steps, label } = result;
+      return { ...this.view(tv), needsPin: true, ...(steps ? { step, steps, label } : {}) };
+    }
     this.#unwatch(id);
     // Make sure the new pairing key is on disk before we report success.
     await this.store.save(this.tvs);
@@ -261,5 +272,5 @@ export class Hub extends EventEmitter {
   }
 }
 
-const BRAND_NAMES = { lg: 'LG TV', samsung: 'Samsung TV', roku: 'Roku', androidtv: 'Google TV' };
+const BRAND_NAMES = { lg: 'LG TV', samsung: 'Samsung TV', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' };
 const clean = (s) => String(s ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60);

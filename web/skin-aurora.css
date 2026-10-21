@@ -78,6 +78,9 @@
 [data-skin="aurora"] .unit.on { border-color: #ff6a2b44; box-shadow: 0 0 50px -24px var(--signal); }
 [data-skin="aurora"] .unit .quick { background: var(--glass-2); border-color: var(--hair); }
 [data-skin="aurora"] .unit.on .quick { background: var(--signal); box-shadow: 0 0 24px -4px var(--signal); }
+[data-skin="aurora"] .unit.on[data-brand="appletv"] .screen {
+  background: radial-gradient(80% 120% at 30% 110%, #8fc4ff55, transparent 60%), radial-gradient(70% 90% at 85% -10%, #f2f2ff33, transparent 70%), #07080c;
+}
 [data-skin="aurora"] .dock, [data-skin="aurora"] .tabs {
   background: #0d0f17cc; border: 1px solid var(--hair); box-shadow: 0 20px 60px -10px #000;
   backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
