@@ -7,3 +7,22 @@
 .away-overlay iframe { width: 100%; height: 100%; border: 0; display: block; }
 html.is-racing body { overflow: hidden; }
 @keyframes away-in { from { opacity: 0; } }
+
+/* The live stream dropped: say so (app.js sets html.stale) instead of
+   passing old TV state off as live. Pure CSS, so it needs no markup. */
+html.stale::after {
+  content: 'Reconnecting…';
+  position: fixed; z-index: 999; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px);
+  transform: translateX(-50%);
+  padding: 7px 14px 7px 30px; border-radius: 999px;
+  font: 600 12px/1.2 var(--mono, ui-monospace, monospace); letter-spacing: 0.04em;
+  color: #fff; background: rgba(20, 20, 28, 0.86);
+  background-image: radial-gradient(circle at 15px 50%, #f5a524 0 4px, transparent 5px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 8px 30px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: stale-in 0.3s ease both 1.2s; /* a blip under a second stays invisible */
+}
+html.stale.is-racing::after { display: none; }
+/* opacity, not filter: a filter would re-anchor fixed children inside. */
+html.stale #remote, html.stale #house { opacity: 0.72; transition: opacity 0.4s; }
+@keyframes stale-in { from { opacity: 0; transform: translate(-50%, -8px); } }

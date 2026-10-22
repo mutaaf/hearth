@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import LGTV, { POWER_STATES } from 'lgtv2';
 import WebSocket from 'ws';
-import { HearthError, offline, unsupported } from '../errors.js';
+import { Backoff } from '../backoff.js';
+import { HearthError, isUnreachable, offline, unsupported } from '../errors.js';
 import { isMac } from '../discovery.js';
 import { keyCode } from '../keys.js';
 import { hearthHome } from '../store.js';
@@ -40,7 +41,8 @@ const PIN_TIMEOUT = 120_000;
 const MANIFEST = JSON.parse(
   readFileSync(path.join(path.dirname(fileURLToPath(import.meta.resolve('lgtv2'))), 'pairing.json'), 'utf8'),
 ).manifest;
-const UNREACHABLE = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTDOWN']);
+// lgtv2 reports "tried every port" as ECONNFAILED; that's "not there" too.
+const gone = (err) => isUnreachable(err) || err?.code === 'ECONNFAILED';
 
 export class LgDriver extends Driver {
   static brand = 'lg';
@@ -68,30 +70,52 @@ export class LgDriver extends Driver {
         cb();
       },
       learnMac: false,
-      reconnect: 5000,
+      // lgtv2's own loop retries every N ms forever (two ports each time);
+      // we pace it ourselves with jittered backoff (2 s → 60 s).
+      reconnect: 0,
       timeout: 8000,
     });
-    client.on('connect', () => this.#onConnect());
+    client.on('connect', () => {
+      this.#backoff.up();
+      this.#onConnect();
+    });
     client.on('prompt', () => this.emit('prompt'));
     client.on('close', () => {
       this.#pointer = null;
       this.setState({ online: false, power: 'off', app: null });
+      this.#reconnectSoon(client);
     });
     // Connection errors are expected whenever the TV is off; the reconnect
     // loop retries and 'close' already marks the TV offline.
     // A TV that was already off when Hearth started never connects, so 'close' never fires: say so
     // instead of leaving the first-boot 'unknown' up (webOS drops Wi-Fi when fully off).
     client.on('error', (err) => {
-      if (!client.connected) this.setState({ online: false, power: 'off', app: null, inputLabel: null });
+      if (!client.connected) {
+        this.setState({ online: false, power: 'off', app: null, inputLabel: null });
+        this.#reconnectSoon(client);
+      }
       this.emit('connection-error', err);
     });
     this.#client = client;
+  }
+
+  #backoff = new Backoff();
+  #reconnectTimer = null;
+  #reconnectSoon(client) {
+    if (this.#client !== client || this.#reconnectTimer) return;
+    this.#reconnectTimer = setTimeout(() => {
+      this.#reconnectTimer = null;
+      if (this.#client === client && !client.connected) client.connect();
+    }, this.#backoff.next());
+    this.#reconnectTimer.unref?.();
   }
 
   async stop() {
     const client = this.#client;
     this.#client = null;
     this.#pointer = null;
+    clearTimeout(this.#reconnectTimer);
+    this.#reconnectTimer = null;
     if (client) await client.disconnect().catch(() => {});
   }
 
@@ -120,7 +144,7 @@ export class LgDriver extends Driver {
       const onPrompt = () => (prompted = true);
       const onError = (err) => {
         if (/reject|denied|cancel/i.test(err.message)) finish(new HearthError(403, 'Pairing was declined on the TV'));
-        else if (!prompted && UNREACHABLE.has(err.code)) finish(offline());
+        else if (!prompted && gone(err)) finish(offline());
       };
       const timer = setTimeout(
         () => finish(new HearthError(408, prompted ? 'Nobody pressed Allow on the TV in time' : 'The TV never answered')),
@@ -175,7 +199,7 @@ export class LgDriver extends Driver {
         if (err instanceof HearthError) throw err;
       }
     }
-    throw UNREACHABLE.has(lastErr?.code) ? offline() : lastErr;
+    throw gone(lastErr) ? offline() : lastErr;
   }
 
   #pinSend(type, id, payload, uri) {

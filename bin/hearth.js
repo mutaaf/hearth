@@ -5,7 +5,10 @@ import { discover } from '../src/discovery.js';
 import { Hub } from '../src/hub.js';
 import { Scenes } from '../src/scenes.js';
 import { createServer } from '../src/server.js';
-import { Store } from '../src/store.js';
+import { chmod, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { log, startLogRotation } from '../src/log.js';
+import { hearthHome, Store } from '../src/store.js';
 
 const PORT = Number(process.env.HEARTH_PORT) || 8770;
 const HOST = process.env.HEARTH_HOST || '0.0.0.0';
@@ -27,7 +30,19 @@ async function scan() {
   console.table(tvs.map(({ brand, name, model, ip }) => ({ brand, name, model, ip })));
 }
 
+// One bad TV, socket or frame must never take every TV down: log it and
+// carry on. Only the HTTP server failing for good exits (launchd restarts it).
+function safetyNet() {
+  process.on('uncaughtException', (err) => log.error('[hearth] uncaught:', err?.stack ?? err));
+  process.on('unhandledRejection', (err) => log.error('[hearth] unhandled rejection:', err?.stack ?? err));
+}
+
 async function serve() {
+  safetyNet();
+  const home = hearthHome();
+  await mkdir(home, { recursive: true, mode: 0o700 });
+  await chmod(home, 0o700).catch(() => {}); // pairing keys live here
+  startLogRotation(path.join(home, 'hearth.log'));
   const hub = await new Hub({ store: new Store() }).init();
   hub.startAutoDiscovery();
   hub.scenes = await new Scenes({ hub }).init();
@@ -35,7 +50,7 @@ async function serve() {
   const server = createServer(hub);
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is busy. Is Hearth already running? Try: npm run down`);
-    else console.error(err);
+    else log.error('[hearth] server failed:', err?.stack ?? err);
     process.exit(1);
   });
   server.listen(PORT, HOST, () => {
@@ -48,10 +63,16 @@ async function serve() {
     if (ip) qrcode.generate(url, { small: true }, (qr) => console.log(qr.replace(/^/gm, '  ')));
     console.log(`  ${hub.tvs.length} TV${hub.tvs.length === 1 ? '' : 's'} remembered. Ctrl+C to stop.\n`);
   });
+  // A hung driver stop() can't block exit: 5 s, then out anyway.
+  let stopping = false;
   const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    setTimeout(() => process.exit(0), 5000).unref();
     hub.scenes?.stop();
     server.close();
-    await hub.close();
+    server.closeAllConnections?.();
+    await hub.close().catch((err) => log.error('[hearth] shutdown:', err?.message ?? err));
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

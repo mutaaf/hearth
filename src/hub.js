@@ -3,6 +3,8 @@ import { badRequest, HearthError, notFound } from './errors.js';
 import { classify } from './activity.js';
 import { discover, isIPv4, isMac, macFor, portOpen, probe, tvId } from './discovery.js';
 import { closeBridge } from './atv-bridge.js';
+import { isForbiddenTarget } from './guard.js';
+import { log } from './log.js';
 import { AppleTvDriver } from './drivers/appletv.js';
 import { LgDriver } from './drivers/lg.js';
 import { GoogleTvDriver } from './drivers/googletv.js';
@@ -26,8 +28,12 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
-  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights, macForFn = macFor } = {}) {
+  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights, macForFn = macFor, forbiddenIp = isForbiddenTarget } = {}) {
     super();
+    // Loopback, link-local, multicast…: never a TV, and never somewhere the
+    // icon proxy or a driver should be pointed (tests with fake TVs on
+    // 127.0.0.1 pass () => false).
+    this.forbiddenIp = forbiddenIp;
     this.macForFn = macForFn; // ── doctor: self-healing addresses
     // ── health ──
     this.telemetry = telemetry ?? new Telemetry({ dir: store?.dir ?? null });
@@ -115,7 +121,7 @@ export class Hub extends EventEmitter {
   }
 
   #persist() {
-    this.store.save(this.tvs).catch((err) => console.error('[hearth] could not save TVs:', err.message));
+    this.store.save(this.tvs).catch((err) => log.error('[hearth] could not save TVs:', err.message));
   }
 
   // What the outside world sees. Never includes pairing keys.
@@ -164,7 +170,32 @@ export class Hub extends EventEmitter {
     return this.#drivers.get(id);
   }
 
-  async scan() {
+  // One scan at a time: the 60 s timer, "Scan" in the app and the doctor all
+  // ask; overlapping scans used to heal the same moved TV twice and leave two
+  // live drivers for it.
+  #scanning = null;
+  scan() {
+    this.#scanning ??= this.#scan().finally(() => {
+      this.#scanning = null;
+    });
+    return this.#scanning;
+  }
+
+  // Changes to one TV (move, edit, pair again, add at an address) run one at
+  // a time per key, so two of them can't both stop + reattach a driver.
+  #locks = new Map();
+  #withLock(key, fn) {
+    const prev = this.#locks.get(key) ?? Promise.resolve();
+    const run = prev.catch(() => {}).then(fn);
+    const tail = run.catch(() => {});
+    this.#locks.set(key, tail);
+    tail.then(() => {
+      if (this.#locks.get(key) === tail) this.#locks.delete(key);
+    });
+    return run;
+  }
+
+  async #scan() {
     const raw = await this.discoverFn();
     for (const f of raw) await this.#heal(f).catch(() => null); // ── doctor
     const found = raw.map((tv) => ({
@@ -198,30 +229,44 @@ export class Hub extends EventEmitter {
   }
 
   async relocate(id, ip) {
-    const tv = this.get(id);
-    if (!isIPv4(ip) || tv.ip === ip) return null;
-    const from = tv.ip;
-    await this.#drivers.get(id)?.stop();
-    this.#unwatch(id);
-    tv.ip = ip;
+    return this.#withLock(`tv:${id}`, async () => {
+      const tv = this.get(id);
+      // Re-checked under the lock: a parallel heal may have moved it already.
+      if (!isIPv4(ip) || this.forbiddenIp(ip) || tv.ip === ip) return null;
+      if (this.tvs.some((t) => t !== tv && t.ip === ip)) return null;
+      const from = tv.ip;
+      await this.#reattach(tv, () => {
+        tv.ip = ip;
+      });
+      await this.store.save(this.tvs);
+      const healed = { id, name: tv.name, from, to: ip, message: `${tv.name} moved to ${ip} — reconnected` };
+      this.emit('change', this.view(tv));
+      this.emit('healed', healed);
+      return healed;
+    });
+  }
+
+  // Stop the TV's driver (and any watcher), apply a change, start a fresh one.
+  async #reattach(tv, change) {
+    const old = this.#drivers.get(tv.id);
+    this.#drivers.delete(tv.id);
+    this.#unwatch(tv.id);
+    await old?.stop();
+    change();
     this.#attach(tv);
-    await this.store.save(this.tvs);
-    const healed = { id, name: tv.name, from, to: ip, message: `${tv.name} moved to ${ip} — reconnected` };
-    this.emit('change', this.view(tv));
-    this.emit('healed', healed);
-    return healed;
   }
 
   // Forget the pairing (not the TV) so it can be paired again.
   async unpair(id) {
-    const tv = this.get(id);
-    await this.#drivers.get(id)?.stop();
-    this.#drivers.delete(id);
-    delete tv.credentials;
-    this.#attach(tv);
-    await this.store.save(this.tvs);
-    this.emit('change', this.view(tv));
-    return this.view(tv);
+    return this.#withLock(`tv:${id}`, async () => {
+      const tv = this.get(id);
+      await this.#reattach(tv, () => {
+        delete tv.credentials;
+      });
+      await this.store.save(this.tvs);
+      this.emit('change', this.view(tv));
+      return this.view(tv);
+    });
   }
   // ── end doctor ──
 
@@ -248,6 +293,12 @@ export class Hub extends EventEmitter {
   async add(input = {}) {
     const ip = String(input.ip ?? '').trim();
     if (!isIPv4(ip)) throw badRequest('That doesn’t look like an IP address (e.g. 192.168.1.40)');
+    if (this.forbiddenIp(ip)) throw badRequest('That address can’t be a TV (it’s this computer or a special address)');
+    // Two taps on "Add" for the same address: the second waits and gets the first's TV.
+    return this.#withLock(`ip:${ip}`, () => this.#add(ip, input));
+  }
+
+  async #add(ip, input) {
     const existing = this.tvs.find((t) => t.ip === ip);
     if (existing) return this.view(existing);
 
@@ -290,34 +341,49 @@ export class Hub extends EventEmitter {
 
   async update(id, patch = {}) {
     const tv = this.get(id);
-    if (patch.name !== undefined) tv.name = clean(patch.name) || tv.name;
-    if (patch.room !== undefined) tv.room = clean(patch.room);
     if (patch.ip !== undefined) {
       if (!isIPv4(patch.ip)) throw badRequest('That doesn’t look like an IP address');
-      if (patch.ip !== tv.ip) {
-        // Drivers bake the address into their connection; rebuild it.
-        await this.#drivers.get(id)?.stop();
-        tv.ip = patch.ip;
-        this.#attach(tv);
-      }
+      if (this.forbiddenIp(patch.ip)) throw badRequest('That address can’t be a TV (it’s this computer or a special address)');
     }
-    await this.store.save(this.tvs);
-    this.emit('change', this.view(tv));
-    return this.view(tv);
+    return this.#withLock(`tv:${id}`, async () => {
+      if (patch.name !== undefined) tv.name = clean(patch.name) || tv.name;
+      if (patch.room !== undefined) tv.room = clean(patch.room);
+      if (patch.ip !== undefined && patch.ip !== tv.ip) {
+        // Drivers bake the address into their connection (and unpaired TVs
+        // have a reachability watcher on it); rebuild both.
+        await this.#reattach(tv, () => {
+          tv.ip = patch.ip;
+        });
+        this.#apps.delete(id);
+      }
+      await this.store.save(this.tvs);
+      this.emit('change', this.view(tv));
+      return this.view(tv);
+    });
   }
 
   async remove(id) {
     const tv = this.get(id);
-    await this.#drivers.get(id)?.stop();
-    this.#drivers.delete(id);
-    this.#unwatch(id);
-    this.telemetry.forget(id); // ── health
-    this.insights.forget(id);
-    this.diag.delete(id);
-    this.tvs = this.tvs.filter((t) => t !== tv);
-    await this.store.save(this.tvs);
-    this.emit('removed', { id });
-    return { ok: true };
+    return this.#withLock(`tv:${id}`, async () => {
+      const driver = this.#drivers.get(id);
+      this.#drivers.delete(id);
+      this.#unwatch(id);
+      // Everything kept per TV goes with it (pending settle re-reads too).
+      for (const t of this.#settleTimers.get(id) ?? []) clearTimeout(t);
+      this.#settleTimers.delete(id);
+      this.#apps.delete(id);
+      this.#since.delete(id);
+      this.#wasOn.delete(id);
+      this.#activitySince.delete(id);
+      await driver?.stop();
+      this.telemetry.forget(id); // ── health
+      this.insights.forget(id);
+      this.diag.delete(id);
+      this.tvs = this.tvs.filter((t) => t !== tv);
+      await this.store.save(this.tvs);
+      this.emit('removed', { id });
+      return { ok: true };
+    });
   }
 
   async pair(id, opts = {}) {

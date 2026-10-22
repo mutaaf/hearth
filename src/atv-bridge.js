@@ -4,7 +4,9 @@ import { EventEmitter } from 'node:events';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Backoff } from './backoff.js';
 import { HearthError } from './errors.js';
+import { log } from './log.js';
 
 // Apple TVs speak Companion/AirPlay with HAP pairing; pyatv (Python) is the
 // mature implementation. One long-lived Python process serves every Apple TV
@@ -22,7 +24,6 @@ export const NOT_INSTALLED =
   'Apple TV support needs Python 3 and pyatv. Run `npm run up` on the Hearth computer (it installs them), then try again.';
 
 const CODES = { offline: 503, unsupported: 501, auth: 401, expired: 410, error: 502 };
-const MAX_BACKOFF = 30_000;
 
 export class AtvBridge extends EventEmitter {
   #child = null;
@@ -30,7 +31,7 @@ export class AtvBridge extends EventEmitter {
   #buf = '';
   #seq = 1;
   #waiting = new Map();
-  #backoff = 1000;
+  #backoff = new Backoff({ min: 1000, max: 30_000 });
   #restartTimer = null;
   #closed = false;
   available = null; // null = not tried yet, true/false after the first start
@@ -68,17 +69,21 @@ export class AtvBridge extends EventEmitter {
         started = true;
         this.available = true;
         this.reason = '';
-        this.#backoff = 1000;
+        this.#backoff.up(); // only resets once it has stayed up a while
         this.version = msg.pyatv;
         resolve();
       };
       this.once('_ready', onReady);
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', (chunk) => this.#onData(chunk));
+      // Python dying mid-write raises EPIPE on stdin: a lost request, not a crash.
+      child.stdin.on('error', (err) => log.warn('[appletv-bridge] stdin:', err.message));
+      child.stdout.on('error', () => {});
+      child.stderr.on('error', () => {});
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', (d) => {
         const text = String(d).trim();
-        if (text) console.error(text.startsWith('[appletv-bridge]') ? text : `[appletv-bridge] ${text}`);
+        if (text) log.warn(text.startsWith('[appletv-bridge]') ? text : `[appletv-bridge] ${text}`);
       });
       child.once('error', (err) => {
         this.off('_ready', onReady);
@@ -122,8 +127,7 @@ export class AtvBridge extends EventEmitter {
   // Exponential backoff; on success every driver hears 'restart' and reconnects.
   #scheduleRestart() {
     clearTimeout(this.#restartTimer);
-    const wait = this.#backoff;
-    this.#backoff = Math.min(MAX_BACKOFF, this.#backoff * 2);
+    const wait = this.#backoff.next();
     this.#restartTimer = setTimeout(() => {
       if (this.#closed) return;
       this.start().then(() => this.emit('restart'), () => this.#scheduleRestart());
@@ -176,8 +180,18 @@ export class AtvBridge extends EventEmitter {
         reject(new HearthError(504, 'The Apple TV took too long to answer'));
       }, timeout + 2000);
       timer.unref?.();
+      const child = this.#child;
+      if (!child?.stdin?.writable) {
+        clearTimeout(timer);
+        return reject(new HearthError(503, 'The Apple TV helper restarted; try again'));
+      }
       this.#waiting.set(id, { resolve, reject, timer });
-      this.#child.stdin.write(`${JSON.stringify({ id, op, timeout: timeout / 1000, ...args })}\n`);
+      child.stdin.write(`${JSON.stringify({ id, op, timeout: timeout / 1000, ...args })}\n`, (err) => {
+        if (!err || !this.#waiting.has(id)) return;
+        this.#waiting.delete(id);
+        clearTimeout(timer);
+        reject(new HearthError(503, 'The Apple TV helper restarted; try again'));
+      });
     });
   }
 

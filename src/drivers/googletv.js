@@ -1,6 +1,7 @@
 import tls from 'node:tls';
 import { CATALOG } from '../catalog.js';
-import { HearthError, offline, unsupported } from '../errors.js';
+import { Backoff } from '../backoff.js';
+import { asOffline, HearthError, offline, unsupported } from '../errors.js';
 import { decode, encode, str } from '../proto.js';
 import { Driver } from './base.js';
 import { ANDROID_KEYS, AtvPairing, AtvRemote, DIRECTION, makeIdentity } from './googletv-remote.js';
@@ -23,6 +24,7 @@ export const CAST_APPS = CATALOG.flatMap((e) => (e.ids.androidtv ?? []).map((id)
 const STALE_MS = 20_000; // heartbeats every 5 s; this long without a word = gone
 
 const VOLUME_STEP = 0.02;
+const MAX_FRAME = 64 * 1024; // real Cast messages are a few KB
 
 export class GoogleTvDriver extends Driver {
   static brand = 'androidtv';
@@ -37,6 +39,8 @@ export class GoogleTvDriver extends Driver {
   #level = null;
   #heardAt = 0;
   #available = null;
+  #opening = null; // the in-flight connect: every caller shares it
+  #backoff = new Backoff();
 
   constructor(tv, opts = {}) {
     super(tv, opts);
@@ -50,6 +54,7 @@ export class GoogleTvDriver extends Driver {
 
   #remote = null;
   #remoteRetry = null;
+  #remoteBackoff = new Backoff({ min: 5000 });
   #pairing = null;
   #pendingId = null;
 
@@ -73,15 +78,20 @@ export class GoogleTvDriver extends Driver {
       this.#remoteRetry.unref?.();
     };
     r.on('close', () => {
-      if (this.#remote === r) this.#remote = null;
-      retry(5000);
+      if (this.#remote !== r) return; // a failed connect: the catch below schedules it
+      this.#remote = null;
+      retry(this.#remoteBackoff.next());
     });
     r.connect()
-      .then(() => (this.remoteAuth = 'ok'))
+      .then(() => {
+        this.remoteAuth = 'ok';
+        this.#remoteBackoff.up();
+      })
       .catch((err) => {
         if (this.#remote === r) this.#remote = null;
+        r.close();
         this.remoteAuth = err.status === 401 ? 'rejected' : 'unreachable';
-        retry(err.status === 401 ? 60_000 : 10_000);
+        retry(err.status === 401 ? 60_000 : this.#remoteBackoff.next());
       });
   }
 
@@ -148,12 +158,13 @@ export class GoogleTvDriver extends Driver {
   #scheduleRetry() {
     if (this.#stopped) return;
     clearTimeout(this.#retry);
-    this.#retry = setTimeout(() => this.#open().catch(() => this.#scheduleRetry()), 5000);
+    this.#retry = setTimeout(() => this.#open().catch(() => this.#scheduleRetry()), this.#backoff.next());
     this.#retry.unref?.();
   }
 
   #close() {
     clearInterval(this.#heartbeat);
+    this.#heartbeat = null;
     this.#sock?.destroy();
     this.#sock = null;
     for (const fn of this.#waiting.values()) fn(null);
@@ -162,7 +173,10 @@ export class GoogleTvDriver extends Driver {
 
   #open() {
     if (this.#sock) return Promise.resolve();
-    return new Promise((resolve, reject) => {
+    // A retry, a key press and a launch-with-wake can all ask at once: they
+    // share one connect instead of each opening a socket (and a heartbeat).
+    if (this.#opening) return this.#opening;
+    const opening = new Promise((resolve, reject) => {
       const sock = tls.connect({ host: this.tv.ip, port: this.port, rejectUnauthorized: false, timeout: 5000 });
       sock.once('secureConnect', async () => {
         this.#sock = sock;
@@ -171,27 +185,46 @@ export class GoogleTvDriver extends Driver {
         this.#heardAt = Date.now();
         // PING every 5 s; a socket that went quiet (TV unplugged, Wi-Fi gone)
         // never sends a FIN, so drop it ourselves instead of showing stale state.
+        clearInterval(this.#heartbeat);
         this.#heartbeat = setInterval(() => {
           if (Date.now() - this.#heardAt > this.staleMs) return sock.destroy(new Error('stale'));
           this.#send(NS.heartbeat, { type: 'PING' });
         }, Math.min(5000, this.staleMs / 2));
         this.#heartbeat.unref?.();
         const status = await this.#ask({ type: 'GET_STATUS' });
-        if (status) resolve();
-        else reject(offline());
+        if (status) {
+          this.#backoff.up();
+          resolve();
+        } else {
+          reject(offline());
+          sock.destroy();
+        }
       });
-      sock.on('data', (d) => this.#onData(d));
+      sock.on('data', (d) => {
+        // A malformed frame drops this socket (it reconnects), never the process.
+        try {
+          this.#onData(d);
+        } catch (err) {
+          sock.destroy(err);
+        }
+      });
       sock.once('timeout', () => sock.destroy(new Error('timeout')));
-      sock.once('error', (err) => {
-        if (!this.#sock) reject(['ECONNREFUSED', 'EHOSTUNREACH', 'EHOSTDOWN', 'ETIMEDOUT'].includes(err.code) || err.message === 'timeout' ? offline() : err);
-      });
+      // Persistent: a socket can emit 'error' more than once.
+      sock.on('error', (err) => reject(asOffline(err)));
       sock.once('close', () => {
         const wasOpen = this.#sock === sock;
         if (wasOpen) this.#close();
+        reject(offline());
         this.setState({ online: false, power: 'off', app: null });
         if (wasOpen) this.#scheduleRetry();
       });
     });
+    this.#opening = opening;
+    const done = () => {
+      if (this.#opening === opening) this.#opening = null;
+    };
+    opening.then(done, done);
+    return opening;
   }
 
   // Cast frames: 4-byte big-endian length, then a protobuf CastMessage
@@ -220,19 +253,23 @@ export class GoogleTvDriver extends Driver {
   }
 
   #onData(chunk) {
-    this.#heardAt = Date.now();
     this.#buf = Buffer.concat([this.#buf, chunk]);
     while (this.#buf.length >= 4) {
       const n = this.#buf.readUInt32BE(0);
+      // A garbage length would grow the buffer forever while looking alive.
+      if (n > MAX_FRAME) throw new Error(`Cast frame too large (${n} bytes)`);
       if (this.#buf.length < 4 + n) break;
       const msg = decode(this.#buf.subarray(4, 4 + n));
       this.#buf = this.#buf.subarray(4 + n);
+      // Only whole frames count as hearing from the TV.
+      this.#heardAt = Date.now();
       let payload;
       try {
         payload = JSON.parse(str(msg, 6) ?? '{}');
       } catch {
         continue;
       }
+      if (!payload || typeof payload !== 'object') continue;
       if (payload.type === 'PING') this.#send(NS.heartbeat, { type: 'PONG' });
       if (payload.type === 'RECEIVER_STATUS') this.#onStatus(payload.status ?? {});
       if (payload.requestId && this.#waiting.has(payload.requestId)) {

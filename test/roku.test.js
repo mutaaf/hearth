@@ -22,10 +22,14 @@ before(async () => {
       return res.end();
     }
     if (req.url === '/query/device-info') {
-      res.writeHead(200, { 'content-type': 'text/xml' });
-      return res.end(
-        DEVICE_INFO.replace('PowerOn', fake.power).replace('<is-tv>false', `<is-tv>${fake.isTv}`),
-      );
+      // Snapshot now, answer later: a slow Roku answering an old question.
+      const body = DEVICE_INFO.replace('PowerOn', fake.power).replace('<is-tv>false', `<is-tv>${fake.isTv}`);
+      const delay = fake.slowNext;
+      fake.slowNext = 0;
+      return setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/xml' });
+        res.end(body);
+      }, delay ?? 0);
     }
     if (req.url === '/query/apps') return res.end(APPS);
     if (req.url === '/query/active-app') return res.end(fake.active);
@@ -168,4 +172,20 @@ test('inside an app, the media player says playing or paused, with position', as
   await driver.refresh();
   assert.equal(driver.state.media, null);
   assert.ok(!received.some((r) => r.url === '/query/media-player'));
+});
+
+test('a slow, older poll that answers late never overwrites a newer read', async () => {
+  reset();
+  const driver = new RokuDriver(makeTv(), { base });
+  // Poll 1 asks while the Roku is asleep but answers slowly…
+  fake.power = 'DisplayOff';
+  fake.slowNext = 150;
+  const slow = driver.refresh();
+  // …poll 2 (after someone pressed power) sees it on and answers first.
+  await new Promise((r) => setTimeout(r, 20));
+  fake.power = 'PowerOn';
+  await driver.refresh();
+  assert.equal(driver.state.power, 'on');
+  await slow;
+  assert.equal(driver.state.power, 'on', 'the late answer is dropped');
 });

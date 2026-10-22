@@ -278,7 +278,8 @@ test('hub: add → two-step pair → keys stored server-side only', async () => 
   const dir = mkdtempSync(path.join(os.tmpdir(), 'hearth-atv-'));
   const bridge = new FakeBridge();
   setBridge(bridge);
-  const hub = await new Hub({ store: new Store(dir) }).init();
+  // The fake Apple TV lives on 127.0.0.1, which real TVs never do.
+  const hub = await new Hub({ store: new Store(dir), forbiddenIp: () => false }).init();
   hub.watchMs = 3_600_000;
   try {
     const added = await hub.add({ brand: 'appletv', name: 'Media Room', model: '4K (2nd gen)', ip: '127.0.0.1', atvId: 'E2:AC:BD:99:96:BD' });

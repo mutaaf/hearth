@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { queue, readJson, writeJson } from './jsonfile.js';
 
 // Everything Hearth remembers (TVs, pairing keys) lives in one JSON file in
 // ~/.hearth, outside the repo, so a git pull never touches your setup.
@@ -14,30 +14,19 @@ export class Store {
     this.file = path.join(dir, 'tvs.json');
   }
 
-  async load() {
-    try {
-      const data = JSON.parse(await readFile(this.file, 'utf8'));
-      return Array.isArray(data.tvs) ? data.tvs : [];
-    } catch (err) {
-      if (err.code === 'ENOENT') return [];
-      throw err;
-    }
+  // A corrupt or half-written file falls back to tvs.json.bak (the previous
+  // good copy), else starts empty with the bad file kept aside. Never throws.
+  load() {
+    return readJson(this.file, (d) => (Array.isArray(d?.tvs) ? d.tvs : undefined), []);
   }
 
   // Saves are queued: a pairing key and a rename can land in the same tick,
   // and overlapping temp-file renames would lose one of them.
-  #queue = Promise.resolve();
+  #enqueue = queue();
 
   save(tvs) {
-    const snapshot = JSON.stringify({ version: 1, tvs }, null, 2) + '\n';
-    const run = this.#queue.then(async () => {
-      await mkdir(this.dir, { recursive: true });
-      const tmp = `${this.file}.${process.pid}.tmp`;
-      // Pairing keys are in here; keep the file readable by this user only.
-      await writeFile(tmp, snapshot, { mode: 0o600 });
-      await rename(tmp, this.file);
-    });
-    this.#queue = run.catch(() => {});
-    return run;
+    // Pairing keys are in here; writeJson keeps the file readable by this user only.
+    const snapshot = { version: 1, tvs: JSON.parse(JSON.stringify(tvs)) };
+    return this.#enqueue(() => writeJson(this.file, snapshot));
   }
 }

@@ -214,6 +214,12 @@ async function discoverSsdp({ timeout }) {
     if (parsed.location) entry.locations.add(parsed.location);
     answers.set(rinfo.address, entry);
   });
+  // Persistent: a send can fail (Wi-Fi or Ethernet dropping during the 60 s
+  // auto-scan) long after bind; an 'error' with no listener would crash Hearth.
+  let failed = null;
+  socket.on('error', (err) => {
+    failed = err;
+  });
   await new Promise((resolve, reject) => {
     socket.once('error', reject);
     socket.bind(resolve);
@@ -225,14 +231,19 @@ async function discoverSsdp({ timeout }) {
   // answered at all, ask again before giving up.
   const ask = async () => {
     for (const round of [0, 1]) {
-      for (const st of SEARCH_TARGETS) socket.send(search(st), SSDP_PORT, SSDP_HOST);
+      for (const st of SEARCH_TARGETS) socket.send(search(st), SSDP_PORT, SSDP_HOST, () => {});
       if (round === 0) await new Promise((r) => setTimeout(r, 400));
     }
     await new Promise((r) => setTimeout(r, timeout));
   };
-  await ask();
-  if (!answers.size) await ask();
-  socket.close();
+  try {
+    await ask();
+    if (!answers.size && !failed) await ask();
+  } finally {
+    try {
+      socket.close();
+    } catch {}
+  }
 
   const found = await Promise.all([...answers].map(([ip, answer]) => identify(ip, answer).catch(() => null)));
   return found.filter(Boolean);
