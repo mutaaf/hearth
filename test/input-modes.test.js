@@ -17,7 +17,7 @@ import { Store } from '../src/store.js';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── A pretend webOS TV: registers, hands out a pointer socket, takes IME text.
-const lg = { requests: [], pointer: [] };
+const lg = { requests: [], pointer: [], wol: 'false', sets: [] };
 let lgServer;
 let lgUrl;
 before(async () => {
@@ -40,6 +40,14 @@ before(async () => {
       }
       if (msg.uri.endsWith('getExternalInputList')) {
         return ws.send(JSON.stringify({ type: 'response', id: msg.id, payload: { returnValue: true, devices: [{ id: 'HDMI_2', appId: 'com.webos.app.hdmi2', label: 'PlayStation 5' }] } }));
+      }
+      if (msg.uri.endsWith('settings/getSystemSettings')) {
+        return ws.send(JSON.stringify({ type: 'response', id: msg.id, payload: { returnValue: true, category: 'network', settings: { wolwowlOnOff: lg.wol } } }));
+      }
+      if (msg.uri.endsWith('settings/setSystemSettings')) {
+        lg.sets.push(msg.payload);
+        lg.wol = msg.payload?.settings?.wolwowlOnOff ?? lg.wol;
+        return ws.send(JSON.stringify({ type: 'response', id: msg.id, payload: { returnValue: true } }));
       }
       if (msg.uri.endsWith('getForegroundAppInfo')) {
         return ws.send(JSON.stringify({ type: 'response', id: msg.id, payload: { returnValue: true, appId: 'com.webos.app.hdmi2' } }));
@@ -184,4 +192,23 @@ test('API: /pointer and /text validate, and views carry activity', async () => {
     await hub.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('LG: "Turn on via Wi-Fi" is switched on by itself when it is off, and left alone when on', async () => {
+  lg.wol = 'false';
+  lg.sets.length = 0;
+  const tv = { id: 'lg-w', brand: 'lg', name: 'Den', ip: '127.0.0.1', macs: ['aa:bb:cc:00:00:02'], credentials: { clientKey: 'k1' } };
+  const driver = new LgDriver(tv, { url: lgUrl });
+  driver.start();
+  for (let i = 0; i < 100 && driver.state.wakeOnLan !== true; i++) await wait(20);
+  assert.equal(driver.state.wakeOnLan, true);
+  assert.deepEqual(lg.sets, [{ category: 'network', settings: { wolwowlOnOff: 'true' } }]);
+  await driver.stop();
+  // Already on: read only, never written.
+  const again = new LgDriver({ ...tv, id: 'lg-w2' }, { url: lgUrl });
+  again.start();
+  for (let i = 0; i < 100 && again.state.wakeOnLan !== true; i++) await wait(20);
+  assert.equal(again.state.wakeOnLan, true);
+  assert.equal(lg.sets.length, 1);
+  await again.stop();
 });

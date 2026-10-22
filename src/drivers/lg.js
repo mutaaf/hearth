@@ -17,6 +17,8 @@ const SSAP = {
   setVolume: 'ssap://audio/setVolume',
   foreground: 'ssap://com.webos.applicationManager/getForegroundAppInfo',
   media: 'ssap://com.webos.media/getForegroundAppInfo',
+  getSettings: 'ssap://settings/getSystemSettings', // category + keys (one unknown key fails the whole read)
+  setSettings: 'ssap://settings/setSystemSettings',
   launchPoints: 'ssap://com.webos.applicationManager/listLaunchPoints',
   launch: 'ssap://system.launcher/launch',
   inputs: 'ssap://tv/getExternalInputList',
@@ -216,10 +218,26 @@ export class LgDriver extends Driver {
     this.start();
   }
 
+  // "Turn on via Wi-Fi/LAN" is what lets Wake-on-LAN reach a sleeping LG.
+  // Read it on every connect and switch it on if someone turned it off.
+  async #ensureWakeOnLan(client) {
+    const ask = (uri, payload) => new Promise((resolve) => client.request(uri, payload, (err, res) => resolve(err ? null : res)));
+    const read = await ask(SSAP.getSettings, { category: 'network', keys: ['wolwowlOnOff'] });
+    const value = read?.settings?.wolwowlOnOff;
+    if (value == null) return; // firmware without the setting
+    let on = value === 'true' || value === true;
+    if (!on) {
+      const set = await ask(SSAP.setSettings, { category: 'network', settings: { wolwowlOnOff: 'true' } });
+      on = Boolean(set?.returnValue);
+    }
+    this.setState({ wakeOnLan: on });
+  }
+
   async #onConnect() {
     this.setState({ online: true, power: 'on' });
     this.emit('connect');
     const client = this.#client;
+    this.#ensureWakeOnLan(client);
     client.subscribe(SSAP.volume, (err, res) => {
       if (err || !res) return;
       const v = res.volumeStatus ?? res;
