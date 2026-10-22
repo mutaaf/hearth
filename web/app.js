@@ -56,8 +56,10 @@ const KEY_LABEL = {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 // The demo on mutaafaziz.com/hearth/demo swaps the server for simulated TVs
-// (web/demo.js); everything else in the app is identical.
-const demo = window.HearthDemo;
+// (web/demo.js), and the phone app (hearth-app) for the hub running on the
+// phone itself (window.HearthHost, same { api, events } shape); everything
+// else in the app is identical.
+const demo = window.HearthDemo ?? window.HearthHost;
 
 async function api(method, path, body) {
   if (demo) return demo.api(method, path, body);

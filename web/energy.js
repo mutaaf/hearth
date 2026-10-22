@@ -353,9 +353,8 @@ export function createEnergy({ root, api, note, haptic, feedback, demo, getTvs }
     const ai = loadAi();
     const byok = ai.mode === 'byok' && ai.key;
     try {
-      const res = demo
-        ? await demo.api('POST', '/energy/bill', body)
-        : await fetchBill({ ...body, provider: byok ? ai.provider : 'edge', ...(byok && ai.model ? { model: ai.model } : {}) }, byok ? ai.key : '');
+      const full = { ...body, provider: byok ? ai.provider : 'edge', ...(byok && ai.model ? { model: ai.model } : {}) };
+      const res = demo ? await demo.api('POST', '/energy/bill', full, byok ? { 'x-hearth-key': ai.key } : {}) : await fetchBill(full, byok ? ai.key : '');
       report = res;
       pending = null;
       step = 'report';

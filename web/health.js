@@ -99,7 +99,7 @@ export function createHealth({ root, note, haptic, feedback, demo }) {
   let aiError = '';
 
   async function call(method, path, body, headers = {}) {
-    if (demo) return demo.api(method, path, body);
+    if (demo) return demo.api(method, path, body, headers);
     const init = { method, headers: { ...headers } };
     if (method !== 'GET') {
       init.headers['content-type'] = 'application/json';

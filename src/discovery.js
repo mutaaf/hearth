@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import dgram from 'node:dgram';
 import net from 'node:net';
-import { appleTvModel } from './drivers/appletv.js';
+import { appleTvModel } from './drivers/appletv-models.js';
 import { rokuFromInfo, rokuInfo } from './drivers/roku.js';
 import { browse } from './mdns.js';
 
