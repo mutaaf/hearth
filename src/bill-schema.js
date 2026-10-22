@@ -27,7 +27,7 @@ export function chargeLines(text) {
     line = line
       .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '')
       .replace(/\(?\b\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, '#')
-      .replace(/\d[\d -]{6,}\d/g, (m) => (/^\d{1,3}(,\d{3})+$/.test(m) ? m : '#')) // account/meter numbers, not 1,234
+      .replace(/\d[\d -]{5,}\d/g, (m) => (m.replace(/\D/g, '').length >= 7 ? '#' : m)) // account/meter numbers, not dates or 1,234
       .slice(0, 160)
       .trim();
     if (!line || out.at(-1) === line) continue;

@@ -33,7 +33,7 @@ test('only charge lines leave the house: no name, address, account, meter, phone
   for (const secret of ['JANE', 'Jane', 'Maple', '62704', '4401', '2233 9087', '88123456', '555-0143', 'help@', 'www.', 'PO Box', 'Springfield']) {
     assert.ok(!sent.includes(secret), `${secret} must not be sent:\n${sent}`);
   }
-  for (const keep of ['918 kWh', '$0.0921', '$9.50', '$142.37', 'Billing Period']) assert.ok(sent.includes(keep), `${keep} is needed`);
+  for (const keep of ['918 kWh', '$0.0921', '$9.50', '$142.37', 'Billing Period: 09/01/2026 - 09/30/2026']) assert.ok(sent.includes(keep), `${keep} is needed`);
   assert.ok(lines.length >= 7 && lines.length <= 12);
 });
 

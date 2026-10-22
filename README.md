@@ -91,6 +91,15 @@ From a script on the computer running Hearth (it's always in the house): `curl -
 
 Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support), `HEARTH_OPEN=1` (no house code: anyone on the Wi-Fi can use it).
 
+## What your TVs cost
+
+⚙ → **What your TVs cost** (or Health → ⚡). Add your last power bill and Hearth works out your real price per kWh, then what every TV costs a day, a month and a year. Hours come from what the TVs actually did; watts are estimated from each model's screen size and year (type your own off the sticker for exact numbers).
+
+- **The PDF from your electric company:** read on your phone. Only the lines with prices and kWh are sent, and you see them first. Names, addresses, account and meter numbers stay on the phone.
+- **A photo of a paper bill:** drag a box around just the charges; only that part is sent.
+- Read by Hearth Cloud (free, Gemma on Cloudflare) or your own AI key. Hearth keeps the price per kWh and the bill's totals (`~/.hearth/energy.json`), never the bill. No AI? Tap *Type it*.
+- The meter's disc spins as fast as the TVs that are on right now draw power.
+
 ## Feels like a real app
 
 - **Pull to refresh** from the top of the house list or a remote: every TV re-reads what it's doing. Coming back to the app after half a minute does the same by itself.
