@@ -2,7 +2,7 @@
 // background if it isn't already running, prints the phone URL + QR code.
 // Safe to run any number of times; on a warm machine it just confirms health.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, openSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,8 +84,11 @@ const health = () =>
 if (await health()) {
   step(`Already running on port ${PORT}`);
 } else {
-  mkdirSync(HOME, { recursive: true });
-  const out = openSync(LOG, 'a');
+  // Same file and mode as the launchd service: append-only (so in-process
+  // rotation can copy + truncate it), private to this user like the keys.
+  mkdirSync(HOME, { recursive: true, mode: 0o700 });
+  chmodSync(HOME, 0o700);
+  const out = openSync(LOG, 'a', 0o600);
   const child = spawn(process.execPath, [path.join(ROOT, 'bin', 'hearth.js')], {
     cwd: ROOT,
     detached: true,

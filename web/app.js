@@ -62,7 +62,17 @@ async function api(method, path, body) {
     init.headers = { 'content-type': 'application/json' };
     init.body = JSON.stringify(body ?? {});
   }
-  const res = await fetch(`/api${path}`, init);
+  // Never hang: pairing, launches that wake TVs, the doctor and AI notes can
+  // legitimately take a while; everything else answers in seconds.
+  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power)$|^\/ai\/|^\/tvs$|\/run$/.test(path);
+  init.signal = AbortSignal.timeout?.(slow ? 90_000 : 15_000);
+  let res;
+  try {
+    res = await fetch(`/api${path}`, init);
+  } catch (err) {
+    if (err?.name === 'TimeoutError') throw new Error('Hearth took too long to answer. Try again.');
+    throw new Error('Can’t reach Hearth right now');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Something went wrong (${res.status})`);
   return data;
@@ -748,9 +758,41 @@ function render() {
 }
 
 // ── Live updates ─────────────────────────────────────────
+// The live stream heals itself: a stream the browser gave up on (CLOSED, e.g.
+// a proxy answered non-200) is reopened with backoff, and coming back to the
+// app reopens it at once. While it's down the app says "Reconnecting…"
+// (html.stale) instead of showing old state as if it were live.
+let liveEs = null;
+let esRetry = null;
+let esDelay = 2000;
+function reconnectEvents() {
+  clearTimeout(esRetry);
+  esRetry = null;
+  liveEs?.close();
+  connectEvents();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!demo && document.visibilityState === 'visible' && liveEs && liveEs.readyState !== 1) reconnectEvents();
+});
 function connectEvents() {
   const es = demo ? demo.events() : new EventSource('/api/events');
   away.watch(demo ? null : es);
+  if (!demo) {
+    liveEs = es;
+    es.addEventListener('open', () => document.documentElement.classList.remove('stale'));
+    es.addEventListener('hello', () => {
+      document.documentElement.classList.remove('stale');
+      esDelay = 2000;
+    });
+    es.addEventListener('error', () => {
+      if (liveEs !== es) return;
+      document.documentElement.classList.add('stale');
+      if (es.readyState === 2 && !esRetry) {
+        esRetry = setTimeout(reconnectEvents, esDelay);
+        esDelay = Math.min(30_000, esDelay * 2);
+      }
+    });
+  }
   es.addEventListener('hello', (e) => {
     tvs.clear();
     for (const t of JSON.parse(e.data)) tvs.set(t.id, t);

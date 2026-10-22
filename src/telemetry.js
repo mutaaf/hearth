@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { queue, readJson, writeJson } from './jsonfile.js';
 
 // Every signal Hearth sees, per TV: each command and how long it took,
 // connections coming and going, power and online history, wake attempts,
@@ -67,10 +67,11 @@ export class Telemetry {
 
   async load() {
     if (!this.file) return this;
-    try {
-      const data = JSON.parse(await readFile(this.file, 'utf8'));
-      for (const [id, rec] of Object.entries(data.tvs ?? {})) this.tvs.set(id, { ...blank(this.now()), ...rec, cur: null });
-    } catch {}
+    // A corrupt file is kept aside (telemetry.json.corrupt-<time>), not overwritten blind.
+    const tvs = await readJson(this.file, (d) => (d?.tvs && typeof d.tvs === 'object' ? d.tvs : undefined), {});
+    for (const [id, rec] of Object.entries(tvs)) {
+      if (rec && typeof rec === 'object') this.tvs.set(id, { ...blank(this.now()), ...rec, cur: null });
+    }
     return this;
   }
 
@@ -268,17 +269,18 @@ export class Telemetry {
     this.timer.unref?.();
   }
 
-  async save() {
-    if (!this.file) return;
+  // Queued, each with its own temp file: the timer's save and flush() on
+  // shutdown can no longer race on one temp name.
+  #enqueue = queue();
+  save() {
+    if (!this.file) return Promise.resolve();
     const tvs = {};
     for (const [id, r] of this.tvs) {
       // Close the running app's time into the totals for the snapshot only.
       tvs[id] = { ...r, cur: null, cmds: r.cmds.slice(-200) };
     }
-    await mkdir(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify({ version: 1, tvs }), { mode: 0o600 });
-    await rename(tmp, this.file);
+    const snapshot = JSON.parse(JSON.stringify({ version: 1, tvs }));
+    return this.#enqueue(() => writeJson(this.file, snapshot, { pretty: false, backup: false }));
   }
 
   async flush() {

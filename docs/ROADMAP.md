@@ -42,8 +42,8 @@ Make Hearth robust enough to charge for, then ship it native.
    - Crash-safe restarts.
    - A support bundle a user can send.
 4. **Security on the LAN:**
-   - Only this household's phones can control or forget TVs.
-   - DNS-rebinding and cross-site protection.
+   - Only this household's phones can control or forget TVs. **Not done yet:** this needs a per-household token. A phone would join by scanning a QR code from a phone that's already trusted. Today anyone on the Wi-Fi can use the remote.
+   - DNS-rebinding and cross-site protection. **Done in v0.12:** Host allowlist, Origin check, icon proxy limited to the TV's own icons, rate limits.
 5. **Chaos tests:** fake TVs that drop mid-command, answer garbage, go slow, or change IP.
 6. **Native app:** backlogged in [backlog/native-app.md](backlog/native-app.md). Works on any network, no home server needed.
 

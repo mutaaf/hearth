@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { bulk } from './bulk.js';
 import { catalogView } from './catalog.js';
 import { catalogStatus, launchOn } from './launch.js';
-import { badRequest, HearthError, notFound } from './errors.js';
+import { badRequest, HearthError, isUnreachable, notFound } from './errors.js';
+import { createHostCheck, createLimiter } from './guard.js';
+import { log } from './log.js';
 import { qrSvg } from './qr.js';
 import { runDoctor, runDoctorAll } from './doctor.js';
 
@@ -88,7 +90,7 @@ function routes(hub) {
     r('POST', `/scenes/${id}/run`, ([sc]) => {
       // Reply at once; progress streams over SSE ('scene' events).
       scenesOf(hub).get(sc);
-      scenesOf(hub).run(sc).catch((err) => console.error('[hearth] scene failed:', err.message));
+      scenesOf(hub).run(sc).catch((err) => log.warn('[hearth] scene failed:', err.message));
       return { ok: true, started: true };
     }),
     // ── health: report card, diagnostics, AI insights (keys pass through, never stored) ──
@@ -180,7 +182,9 @@ async function serveStatic(res, pathname) {
 
 // App icons live on the TV, sometimes behind its self-signed HTTPS cert, which
 // phones refuse to load. Proxy them — but only from that TV's own address.
-function proxyIcon(hub, tvIdParam, url, res) {
+// And only URLs that TV itself listed for its apps: never "any path on any
+// port of that address", which would let a page read other services there.
+async function proxyIcon(hub, tvIdParam, url, res) {
   const tv = hub.get(tvIdParam);
   let target;
   try {
@@ -188,7 +192,11 @@ function proxyIcon(hub, tvIdParam, url, res) {
   } catch {
     throw badRequest('Bad icon URL');
   }
-  if (target.hostname !== tv.ip || !/^https?:$/.test(target.protocol)) throw badRequest('Icon must come from the TV');
+  if (target.hostname !== tv.ip || !/^https?:$/.test(target.protocol) || hub.forbiddenIp(tv.ip)) throw badRequest('Icon must come from the TV');
+  const listed = (list) => Array.isArray(list) && list.some((a) => a?.icon === url);
+  if (!listed(hub.cachedApps(tv.id)) && !listed(await hub.apps(tv.id).catch(() => null))) {
+    throw new HearthError(403, 'That icon isn’t one this TV listed');
+  }
   const client = target.protocol === 'https:' ? https : http;
   const upstream = client.get(target, { rejectUnauthorized: false, timeout: 4000 }, (up) => {
     if (up.statusCode !== 200) {
@@ -202,12 +210,33 @@ function proxyIcon(hub, tvIdParam, url, res) {
   upstream.on('error', () => res.headersSent || sendJson(res, 502, { error: 'Icon unavailable' }));
 }
 
-export function createServer(hub) {
+// Calls that are slow or costly (they wake TVs, wait 25 s, or reach the
+// cloud) are rate limited per client: [method, path pattern, bucket].
+const LIMITED = [
+  ['POST', /^\/api\/scan$/, 'scan'],
+  ['POST', /^\/api\/tvs$/, 'add'],
+  ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
+  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models)$/, 'ai'],
+];
+const SSE_MAX_BUFFER = 512 * 1024; // a phone this far behind is gone; drop it
+
+export function createServer(hub, { hostCheck = createHostCheck(), limiter = createLimiter() } = {}) {
   const table = routes(hub);
   const listeners = new Set();
+  const viewersChanged = () => hub.setViewers?.(listeners.size);
+  const drop = (res) => {
+    if (!listeners.delete(res)) return;
+    viewersChanged();
+    res.destroy();
+  };
   const broadcast = (event, data) => {
     const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of listeners) res.write(frame);
+    for (const res of listeners) {
+      // A phone that stopped reading (asleep, walked out of Wi-Fi without
+      // closing) would buffer forever and keep "someone's watching" on.
+      if (res.destroyed || res.writableLength > SSE_MAX_BUFFER) drop(res);
+      else res.write(frame);
+    }
   };
   hub.on('change', (tv) => broadcast('tv', tv));
   hub.on('removed', (info) => broadcast('removed', info));
@@ -220,18 +249,36 @@ export function createServer(hub) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://hearth.local');
     try {
+      // DNS rebinding / cross-site: only local names, and for anything that
+      // changes something, only pages served from one.
+      const refused = hostCheck.check(req, { mutating: req.method !== 'GET' && req.method !== 'HEAD' });
+      if (refused) throw new HearthError(req.headers.host && !hostCheck.allowed(req.headers.host) ? 421 : 403, refused);
+      const limited = LIMITED.find(([m, re]) => m === req.method && re.test(url.pathname));
+      if (limited) {
+        const wait = limiter.take(`${req.socket.remoteAddress}|${limited[2]}`);
+        if (wait) {
+          res.setHeader('retry-after', String(Math.ceil(wait / 1000)));
+          throw new HearthError(429, `That's a lot of requests. Try again in ${Math.ceil(wait / 1000)} s.`);
+        }
+      }
       if (url.pathname === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
         res.write(`event: hello\ndata: ${JSON.stringify(hub.list())}\n\n`);
         res.write(`event: nearby\ndata: ${JSON.stringify(hub.nearby)}\n\n`);
         listeners.add(res);
-        hub.setViewers?.(listeners.size);
-        const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-        req.on('close', () => {
+        viewersChanged();
+        const ping = setInterval(() => {
+          if (res.destroyed || res.writableLength > SSE_MAX_BUFFER) return drop(res);
+          res.write(': ping\n\n');
+        }, 25_000);
+        ping.unref?.();
+        const gone = () => {
           clearInterval(ping);
-          listeners.delete(res);
-          hub.setViewers?.(listeners.size);
-        });
+          if (listeners.delete(res)) viewersChanged();
+        };
+        req.on('close', gone);
+        res.on('close', gone);
+        res.on('error', gone);
         return;
       }
       if (url.pathname === '/api/qr.svg' && req.method === 'GET') {
@@ -241,7 +288,7 @@ export function createServer(hub) {
         return res.end(qrSvg(text));
       }
       const icon = url.pathname.match(/^\/api\/tvs\/([\w-]+)\/icon$/);
-      if (icon && req.method === 'GET') return proxyIcon(hub, icon[1], url.searchParams.get('u') ?? '', res);
+      if (icon && req.method === 'GET') return await proxyIcon(hub, icon[1], url.searchParams.get('u') ?? '', res);
 
       if (url.pathname.startsWith('/api/')) {
         for (const [method, pattern, handler] of table) {
@@ -256,9 +303,12 @@ export function createServer(hub) {
       await serveStatic(res, url.pathname);
     } catch (err) {
       // ESSAP = the LG TV itself refused the request; pass its reason through.
-      const status = err instanceof HearthError ? err.status : err.code === 'ESSAP' ? 502 : 500;
-      if (status === 500) console.error('[hearth]', req.method, url.pathname, err);
-      if (!res.headersSent) sendJson(res, status, { error: status === 500 ? 'Something went wrong talking to the TV' : err.message });
+      // Off/asleep/unreachable TVs are a 503 with plain words, never a 500.
+      const status = err instanceof HearthError ? err.status : err.code === 'ESSAP' ? 502 : isUnreachable(err) ? 503 : 500;
+      if (status === 500) log.error('[hearth]', req.method, url.pathname, err?.stack ?? err);
+      const message = status === 500 ? 'Something went wrong talking to the TV' : status === 503 && !(err instanceof HearthError) ? 'TV is off or not reachable' : err.message;
+      if (!res.headersSent) sendJson(res, status, { error: message });
+      else res.destroy();
     }
   });
 }

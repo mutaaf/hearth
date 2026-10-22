@@ -1,9 +1,10 @@
 import { EventEmitter } from 'node:events';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { queue, readJson, writeJson } from './jsonfile.js';
 import path from 'node:path';
 import { runAction } from './bulk.js';
 import { badRequest, notFound } from './errors.js';
 import { hearthHome } from './store.js';
+import { log } from './log.js';
 
 // Scenes: a named list of steps across TVs ("Movie night": living room on,
 // volume 20, open Netflix), runnable with one tap or on a weekly schedule.
@@ -17,27 +18,16 @@ export class SceneStore {
     this.file = path.join(dir, 'scenes.json');
   }
 
-  async load() {
-    try {
-      const data = JSON.parse(await readFile(this.file, 'utf8'));
-      return Array.isArray(data.scenes) ? data.scenes : [];
-    } catch (err) {
-      if (err.code === 'ENOENT') return null; // first run: seed templates
-      throw err;
-    }
+  // null on first run (seed templates). A corrupt file falls back to the
+  // backup, else to null (re-seeded), with the bad copy kept aside.
+  load() {
+    return readJson(this.file, (d) => (Array.isArray(d?.scenes) ? d.scenes : undefined), null);
   }
 
-  #queue = Promise.resolve();
+  #enqueue = queue();
   save(scenes) {
-    const snapshot = JSON.stringify({ version: 1, scenes }, null, 2) + '\n';
-    const run = this.#queue.then(async () => {
-      await mkdir(this.dir, { recursive: true });
-      const tmp = `${this.file}.${process.pid}.tmp`;
-      await writeFile(tmp, snapshot, { mode: 0o600 });
-      await rename(tmp, this.file);
-    });
-    this.#queue = run.catch(() => {});
-    return run;
+    const snapshot = { version: 1, scenes: JSON.parse(JSON.stringify(scenes)) };
+    return this.#enqueue(() => writeJson(this.file, snapshot));
   }
 }
 
@@ -249,7 +239,7 @@ export class Scenes extends EventEmitter {
       if (this.#fired.get(scene.id) === key) continue;
       this.#fired.set(scene.id, key);
       fired.push(scene.id);
-      this.run(scene.id, { trigger: 'schedule' }).catch((err) => console.error('[hearth] scene failed:', err.message));
+      this.run(scene.id, { trigger: 'schedule' }).catch((err) => log.warn('[hearth] scene failed:', err.message));
     }
     return fired;
   }

@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import { CATALOG } from '../catalog.js';
 import { portOpen } from '../discovery.js';
-import { HearthError, offline, unsupported } from '../errors.js';
+import { asOffline, HearthError, offline, unsupported } from '../errors.js';
 import { keyCode } from '../keys.js';
 import { soap } from '../upnp.js';
 import { Driver } from './base.js';
@@ -309,7 +309,8 @@ export class SamsungDriver extends Driver {
         }
         this.emit('message', msg);
       });
-      ws.on('error', (err) => settle(err.code === 'ECONNREFUSED' || err.code === 'EHOSTUNREACH' ? offline() : err));
+      // EHOSTDOWN, ETIMEDOUT, a handshake timeout…: the TV isn't there (503), not a 500.
+      ws.on('error', (err) => settle(asOffline(err)));
       ws.on('close', () => {
         if (this.#ws === ws) this.#ws = null;
         settle(offline());

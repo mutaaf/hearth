@@ -51,6 +51,10 @@ src/launch.js          POST /api/launch: wake → resolve per TV → launch in p
 src/upnp.js            just-enough UPnP SOAP (Samsung RenderingControl)
 src/keys.js            unified key names → brand key codes
 src/wol.js             Wake-on-LAN magic packet
+src/jsonfile.js        crash-safe JSON files (fsync, .bak, corrupt → aside) + a save queue
+src/backoff.js         shared reconnect pacing (exponential, jitter, healthy-reset)
+src/guard.js           Host/Origin allowlist (DNS rebinding), forbidden TV addresses, rate limiter
+src/log.js             timestamped log lines + copy-truncate rotation of ~/.hearth/hearth.log
 web/                   vanilla JS app (index.html, style.css, app.js, shapes.js), no framework
 web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio sounds, the press engine
                        (data-press="down|up|repeat|long|confirm"), the gesture D-pad, wake lock
@@ -145,9 +149,16 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 
 - Pairing keys never leave the server: `Hub.view()` is the only shape sent to clients. A test enforces this.
 - Mutating API calls must be `application/json` (blocks cross-site form POSTs). Keep it that way.
-- The icon proxy only fetches from the TV's own IP.
-- Drivers throw `HearthError` with a status (`unsupported()` → 501, `offline()` → 503), never HTTP-aware code.
+- The icon proxy only fetches from the TV's own IP, and only icon URLs that TV listed in `apps()`.
+- Drivers throw `HearthError` with a status (`unsupported()` → 501, `offline()` → 503), never HTTP-aware code. Network errors go through `asOffline()`/`isUnreachable()` in errors.js (one shared errno set); the server also maps any stray unreachable error to 503.
 - Unpaired TVs are never connected to automatically, because connecting pops a prompt on the TV.
+- **Nothing a TV does can crash Hearth.** Every socket, dgram and child stdin has a persistent `'error'` listener; socket `'data'` handlers are wrapped so a bad frame destroys that socket only; frames are size-capped (Cast/remote 64 KB). `bin/hearth.js` logs `uncaughtException`/`unhandledRejection` and keeps running; only the HTTP server failing exits (launchd restarts it). Shutdown has a 5 s deadline.
+- **Every network call has a timeout; every reconnect uses `src/backoff.js`** (2 s → 60 s, ±20% jitter, reset only after 60 s up). LG runs lgtv2 with `reconnect: 0` and reconnects itself; Cast, the Google remote and the Apple TV helper use the same helper.
+- **Persistence never throws:** `src/jsonfile.js` writes temp (unique name) → fsync → previous copy to `.bak` → rename, and reads fall back to `.bak`, else move the bad file to `<name>.corrupt-<ts>` and start empty. Store, scenes and telemetry all use it, each through a save queue.
+- **One change per TV at a time:** `Hub` serialises relocate/update/unpair/remove per TV and add per IP (`#withLock`), and there is one scan in flight (`scan()` is shared). `#reattach()` is the only way to swap a driver (it stops the old one and any watcher first). `remove()` clears every per-TV map and timer.
+- **Who may call the API (src/guard.js):** the Host must be a local name (private IP literal, localhost, single-label, `.local`/`.lan`/`.home.arpa`…, the friendly URL's host, `HEARTH_ALLOWED_HOSTS`) or it's 421, which stops DNS rebinding. A mutating request with an `Origin` must come from such a host (403). TV addresses can't be loopback/link-local/multicast (`Hub({ forbiddenIp })`; tests on 127.0.0.1 pass `() => false`). Scan, add, doctor and AI calls are token-bucket rate limited per client (429 + Retry-After). There is no per-household login yet (roadmap).
+- **SSE:** a client whose buffer passes 512 KB, or whose socket closed or errored, is dropped and stops counting as a viewer. The web app reopens a CLOSED EventSource with backoff (and at once when the page becomes visible) and shows "Reconnecting…" (`html.stale`) meanwhile. `api()` times out (15 s; 90 s for pair/launch/doctor/AI/scan/bulk/power/add).
+- **Logs:** one format, `<ISO time> LEVEL [hearth] message` (src/log.js; quiet under `node --test`). `~/.hearth` is 0700, and `hearth.log` is 0600 and rotated in-process at 5 MB (keep 3) by copy-then-truncate, because launchd and `npm run up` hold it open in append mode. Never log credentials.
 
 ## Apple TV state (pushed, never polled)
 
@@ -202,6 +213,11 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | CSS `display` on a class beats the `hidden` attribute | racer.css sets `[hidden] { display: none !important }`; `.ghost`/`.go` are `display:block`. |
 | Not every TV can say "playing" | Roku `/query/media-player` (state, position, duration, is_live), LG `ssap://com.webos.media/getForegroundAppInfo` (playState only, webOS 4+; apps that skip the webOS media pipeline say nothing), Apple TV via pyatv (state + position). Samsung and Google TV over Cast give nothing, so `phaseOf()` falls back to this phone's last keys (play/skip → watching, arrows in the last 30 s → browsing) and 90 s settled in a streaming app. |
 | LG "Turn on via Wi-Fi" is `ssap://settings/getSystemSettings` `{category:'network', keys:['wolwowlOnOff']}` | Readable and writable with lgtv2's normal permissions (verified 2026-10-21 on the 55UP7000PUA, already `'true'`). One unknown key in `keys` (e.g. `wakeUpWithMobile`) fails the whole read with "500 Application error". The driver reads it on every connect and sets it to `'true'` if off → `state.wakeOnLan`. Samsung 2016-17 ("Power On with Mobile"), Roku sticks and Google TV have no network-settable equivalent. |
+| A file someone else holds open in append mode can't be renamed to rotate it | launchd's `StandardOutPath` and up.mjs's `'a'` fd would keep writing into `hearth.log.1`. `rotate()` copies to `.1` and truncates in place; O_APPEND writers carry on at offset 0. |
+| lgtv2 copies its config, so `reconnect` can't be changed after construction | Run it with `reconnect: 0` and call `client.connect()` from the driver's own backoff timer. After trying wss and ws it reports `ECONNFAILED`, which counts as unreachable. |
+| An `'error'` emitted twice on a socket with only a `once('error')` listener crashes Node | Seen in SSDP (12 sends, one listener) and Cast. Always use `on('error')`. |
+| `fetch` can't set the `Host` header | Host/Origin tests use `node:http` requests (test/resilience.test.js). |
+| A late answer from a slow Roku could overwrite a newer one | `#tick()` numbers each read and drops older ones; the interval skips while a read is in flight. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | Apple TV needs Python: pyatv is Python-only | `npm run up` creates `~/.hearth/py` (override `HEARTH_VENV`; shared by every HEARTH_HOME, so a scratch server reuses it) and pins `pyatv==PYATV_VERSION` (src/atv-bridge.js). No python3 ≥ 3.10 → it prints a skip line and Hearth runs; Apple TVs answer 503 "needs Python 3 and pyatv". The bridge isn't cached as failed, so installing later works without a restart. |
 | `brew upgrade python` leaves a venv whose `bin/python` symlink dangles | `up.mjs` runs the venv's python; if it fails it rebuilds with `venv --clear` and reinstalls pyatv. |

@@ -114,7 +114,10 @@ export class RokuDriver extends Driver {
   start() {
     if (this.#poll) return;
     this.#tick();
-    this.#poll = setInterval(() => this.#tick(), POLL_MS);
+    // A slow Roku (two requests, 3 s timeouts each) must not stack up polls.
+    this.#poll = setInterval(() => {
+      if (!this.#inFlight) this.#tick();
+    }, POLL_MS);
     this.#poll.unref?.();
   }
 
@@ -123,7 +126,20 @@ export class RokuDriver extends Driver {
     return this.#tick();
   }
 
+  #inFlight = 0;
+  #seq = 0;
+  #applied = 0;
+  // Ticks can overlap (a refresh after a key press while a poll is out); an
+  // older read that answers late must never overwrite a newer one.
+  #apply(seq, patch) {
+    if (seq < this.#applied) return;
+    this.#applied = seq;
+    this.setState(patch);
+  }
+
   async #tick() {
+    const seq = ++this.#seq;
+    this.#inFlight++;
     try {
       const info = await this.#info();
       const active = info.power === 'on' ? await this.#ecp('GET', '/query/active-app').catch(() => '') : '';
@@ -138,9 +154,11 @@ export class RokuDriver extends Driver {
       // Paused at the same spot: keep the old read so nothing is re-sent.
       const was = this.state.media;
       if (media && was && media.state === was.state && media.position === was.position) media = was;
-      this.setState({ online: true, power: info.power, app, appTitle, media });
+      this.#apply(seq, { online: true, power: info.power, app, appTitle, media });
     } catch {
-      this.setState({ online: false, power: 'off', app: null, appTitle: null, media: null });
+      this.#apply(seq, { online: false, power: 'off', app: null, appTitle: null, media: null });
+    } finally {
+      this.#inFlight--;
     }
   }
 

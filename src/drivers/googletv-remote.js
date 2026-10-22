@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import tls from 'node:tls';
 import forge from 'node-forge';
-import { HearthError, offline } from '../errors.js';
+import { asOffline, HearthError, offline } from '../errors.js';
 import { decode, first, frame, str, sub, unframe } from '../proto.js';
 
 // Google's Android TV Remote protocol v2 — the one the Google TV phone app
@@ -96,12 +96,21 @@ class Channel extends EventEmitter {
         sock.setTimeout(0);
         resolve(this);
       });
-      sock.on('data', (d) => this.#onData(d));
+      sock.on('data', (d) => {
+        // A malformed frame drops this connection (it reconnects), never the process.
+        try {
+          this.#onData(d);
+        } catch (err) {
+          sock.destroy(err);
+        }
+      });
       sock.once('timeout', () => sock.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
-      sock.once('error', (err) => {
+      // Persistent: a socket can emit 'error' more than once.
+      sock.on('error', (err) => {
         if (!done) {
           done = true;
-          reject(['ECONNREFUSED', 'EHOSTUNREACH', 'EHOSTDOWN', 'ETIMEDOUT', 'ENETUNREACH'].includes(err.code) ? offline() : err);
+          // ECONNRESET in the handshake means "unknown certificate" here (see AtvRemote).
+          reject(err.code === 'ECONNRESET' ? err : asOffline(err));
         }
       });
       sock.once('close', () => {
@@ -142,6 +151,8 @@ class Channel extends EventEmitter {
 
   #onData(chunk) {
     const [msgs, rest] = unframe(Buffer.concat([this.#buf, chunk]));
+    // Remote messages are tiny; a buffer this big is a garbage length prefix.
+    if (rest.length > 64 * 1024) throw new Error('Remote frame too large');
     this.#buf = rest;
     for (const raw of msgs) {
       const msg = decode(raw);
@@ -212,16 +223,28 @@ export class AtvRemote extends EventEmitter {
   #ch = null;
   ready = false;
 
-  constructor({ host, port = 6466, cert, key, model = 'Hearth', vendor = 'Hearth' }) {
+  #heardAt = 0;
+  #watchdog = null;
+
+  // The TV pings every ~5 s. With the socket timeout off, a TV that vanished
+  // (Wi-Fi dropped, unplugged) leaves a half-open socket that still looks
+  // "ready", so no message for `silenceMs` drops it and the driver reconnects.
+  constructor({ host, port = 6466, cert, key, model = 'Hearth', vendor = 'Hearth', silenceMs = 15_000 }) {
     super();
-    Object.assign(this, { host, port, certPem: cert, keyPem: key, model, vendor });
+    Object.assign(this, { host, port, certPem: cert, keyPem: key, model, vendor, silenceMs });
   }
 
   async connect(timeout = 8000) {
     const ch = new Channel();
     this.#ch = ch;
-    ch.on('message', (msg) => this.#onMessage(msg));
+    this.#heardAt = Date.now();
+    ch.on('message', (msg) => {
+      this.#heardAt = Date.now();
+      this.#onMessage(msg);
+    });
     ch.on('close', () => {
+      clearInterval(this.#watchdog);
+      this.#watchdog = null;
       const was = this.ready;
       this.ready = false;
       if (this.#ch === ch) this.#ch = null;
@@ -239,6 +262,8 @@ export class AtvRemote extends EventEmitter {
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.off('ready', onReady);
+        // Don't leave the half-set-up channel open behind us.
+        ch.close();
         reject(new HearthError(401, 'The TV didn’t accept Hearth’s remote. Unlock the full remote again.'));
       }, timeout);
       const onReady = () => {
@@ -251,6 +276,11 @@ export class AtvRemote extends EventEmitter {
         if (!this.ready) reject(new HearthError(401, 'The TV no longer recognises Hearth. Unlock the full remote again.'));
       });
     });
+    clearInterval(this.#watchdog);
+    this.#watchdog = setInterval(() => {
+      if (Date.now() - this.#heardAt > this.silenceMs) ch.close();
+    }, Math.max(50, Math.min(5000, this.silenceMs / 3)));
+    this.#watchdog.unref?.();
     return this;
   }
 
@@ -293,6 +323,8 @@ export class AtvRemote extends EventEmitter {
 
   close() {
     this.ready = false;
+    clearInterval(this.#watchdog);
+    this.#watchdog = null;
     this.#ch?.close();
     this.#ch = null;
   }

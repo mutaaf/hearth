@@ -38,7 +38,13 @@ export async function wake(macs, ip) {
   if (subnet) targets.add(subnet);
   if (ip && net.isIPv4(ip)) targets.add(ip);
   const socket = dgram.createSocket('udp4');
-  await new Promise((resolve) => socket.bind(resolve));
+  // A send to an unreachable network errors asynchronously; without a
+  // listener that 'error' would crash Hearth. A wake is best-effort anyway.
+  socket.on('error', () => {});
+  await new Promise((resolve, reject) => {
+    socket.once('error', reject);
+    socket.bind(resolve);
+  });
   socket.setBroadcast(true);
   try {
     for (let round = 0; round < 3; round++) {
@@ -53,6 +59,8 @@ export async function wake(macs, ip) {
       if (round < 2) await new Promise((r) => setTimeout(r, 120));
     }
   } finally {
-    socket.close();
+    try {
+      socket.close();
+    } catch {}
   }
 }

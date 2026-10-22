@@ -140,6 +140,11 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 - **Apple TV says it "needs Python 3 and pyatv".** Install Python 3.10+ (`brew install python` on a Mac) and run `npm run up` again. No restart needed.
 - **Apple TV never shows the numbers.** On the Apple TV: Settings → AirPlay and HomeKit → Allow Access → **Anyone on the Same Network**. Type the code within a minute; tap *Show the number again* for a fresh one.
 - **Phone can't open the link.** Your phone must be on the same Wi-Fi, and the computer's firewall must allow incoming connections for Node.
+- **"Unknown host" (421).** Hearth only answers to local names, which blocks a trick called DNS rebinding. Local names are an IP address on your network, `something.local`, a single word like `mac-mini`, or your friendly address. If you reach it through your own domain name (a reverse proxy, Tailscale MagicDNS), add it: `HEARTH_ALLOWED_HOSTS=hearth.example.ts.net npm run up`.
+- **"Reconnecting…" at the top of the app.** The phone lost its live connection to Hearth. It retries by itself, and the buttons it shows may be stale until it's back. If it stays, check that the computer running Hearth is awake.
+- **"That's a lot of requests" (429).** Scanning, the connection doctor and AI notes are limited to a few per minute per device. Wait a few seconds.
+- **The saved TVs file got damaged** (power cut, disk full). Hearth starts anyway. It restores the last good copy (`~/.hearth/tvs.json.bak`), or keeps the damaged file as `tvs.json.corrupt-<time>` and starts fresh. Scenes work the same way.
+- **Logs:** `~/.hearth/hearth.log`. Every line has a time and a level. The log rotates at 5 MB and keeps 3 old copies (`hearth.log.1`–`.3`), and it never contains pairing keys.
 
 ## Privacy and security
 
