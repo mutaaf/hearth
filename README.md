@@ -90,6 +90,16 @@ From a script: `curl -X POST -H 'content-type: application/json' -d '{"app":"you
 
 Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support).
 
+## Away from home: Light Racer
+
+When your phone can't reach Hearth (you've left the house, or Wi-Fi is off), the app doesn't show an error. It turns into **Light Racer**, a light-cycle game played on a field of aurora. You eat sparks to grow your wall like a snake and box the other riders in.
+- **Controls:** swipe to steer, tap a side to turn, hold to boost. Arrow keys, space and gamepads work too.
+- **Coming home:** when Hearth answers again, the remote comes back on its own. If you're mid-race, it waits until the race ends.
+- **Any time:** you can play it from Settings → **Play Light Racer**.
+- **Offline copy:** [mutaafaziz.com/hearth/racer/](https://mutaafaziz.com/hearth/racer/) is the same game on its own. Add it to your home screen once and it plays with no internet at all.
+
+Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page keep an offline copy of itself. So with the app open or in the background, leaving home switches it to the game. But opening Hearth from the home screen with no connection to home shows the phone's own "can't connect" page. For a guaranteed offline game, add the `/hearth/racer/` link above to the home screen too.
+
 ## Troubleshooting
 
 **First, tap Fix.** Every TV has a **Fix connection** button. It's on a card that stops answering, on the remote's "Not responding" banner, in the TV's ⚙ settings, in Health, and as a bulk action. Health also has **Fix every connection**. It checks, in order:

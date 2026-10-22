@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Light Racer",
+  "short_name": "Light Racer",
+  "description": "Hearth's light-cycle game. Plays offline, wherever you are.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#03040a",
+  "theme_color": "#03040a",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

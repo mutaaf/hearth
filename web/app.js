@@ -4,6 +4,7 @@
 import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { createInstall } from './install.js';
+import { createAway, keepOffline } from './away.js'; // away: Light Racer
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
@@ -697,6 +698,7 @@ async function pairAgain(tv, how) {
 
 // ── Install on home screens + share with family ──────────
 const install = createInstall({ api, note, isDemo: Boolean(demo) });
+const away = createAway({ isDemo: Boolean(demo) });
 
 // ── Routing ──────────────────────────────────────────────
 function route() {
@@ -747,6 +749,7 @@ function render() {
 // ── Live updates ─────────────────────────────────────────
 function connectEvents() {
   const es = demo ? demo.events() : new EventSource('/api/events');
+  away.watch(demo ? null : es);
   es.addEventListener('hello', (e) => {
     tvs.clear();
     for (const t of JSON.parse(e.data)) tvs.set(t.id, t);
@@ -884,6 +887,9 @@ function onPress(el, info) {
       return allOff();
     case 'forget':
       return forget();
+    case 'racer':
+      $('#settingsSheet').close();
+      return away.play();
     case 'test-feel':
       feedback('success');
       return note(navigator.vibrate ? 'Bzzt! That’s the feel.' : 'On iPhone, haptics need iOS 18 and Safari.');
@@ -1002,3 +1008,4 @@ wire();
 tickClock();
 setInterval(tickClock, 30_000);
 connectEvents();
+keepOffline();

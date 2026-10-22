@@ -160,7 +160,8 @@ const VENDOR = {
 };
 
 async function serveStatic(res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  if (rel.endsWith('/')) rel += 'index.html'; // racer/ → racer/index.html
   const file = VENDOR[rel] ?? path.resolve(WEB, rel);
   if (!VENDOR[rel] && !file.startsWith(WEB + path.sep)) throw notFound('Page');
   let body;

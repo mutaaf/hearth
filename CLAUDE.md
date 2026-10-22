@@ -58,6 +58,9 @@ web/setup.js           the caveman setup wizard (turn on → find → [wake] →
 web/skin-8bit.css      8-bit pocket-console skin (only under <html data-skin="8bit">)
 web/launcher.js|.css   the app launcher: "Watch" strip on the house (hold = every / selected TVs) and the
                        "Streaming" grid on a TV's Apps panel (tap = this TV), ✓/✕ chips per TV
+web/away.js|.css       away mode: SSE error → probes api/health; 3 misses → Light Racer in a frame (racer/?away=1);
+                       postMessage {hearth:'home'|'back'|'retry'}; keepOffline() registers web/sw.js on secure origins
+web/racer/             Light Racer (canvas game + aurora-field sky), own manifest + sw.js; public at /hearth/racer/
 web/demo.js            pretend TVs for the public demo only (has a slice of the catalog)
 site/                  landing page for mutaafaziz.com/hearth
 scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
@@ -191,6 +194,8 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | `tv` objects are live: `relocate()` mutates `tv.ip` | Capture `startIp` before scanning; comparing `hub.get(id).ip` with `tv.ip` is always equal. |
 | `arp -n <ip>` spawned from Node sees "no entry" (and `netstat -rn` shows no LAN routes) on this Mac, while the same command in a shell works | Seen 2026-10-21; likely macOS Local Network privacy filtering what Node's child processes can read. `macFor()` then returns null: Google TVs added without a MAC can't be woken, and MAC-based self-healing falls back to id matching. Granting Node Local Network access (System Settings → Privacy & Security → Local Network) may fix it. Not reproducible in tests. |
 | An LG that is already off when Hearth starts never connects, so lgtv2 never emits `close` | The driver marks it `off` on a connection error before the first connect; before this it stayed at the boot-time `unknown` (seen 2026-10-21, Living Room TV fully off, no ping). |
+| Service workers only register on secure origins (HTTPS or localhost) | `http://azizfamily.local` can't cache the app, so a cold launch away from home shows the browser's error page; away mode only kicks in when the page is already loaded. The public `/hearth/racer/` (HTTPS) is the offline-installable copy. `localhost` gets `web/sw.js`, so test cold-offline there. |
+| CSS `display` on a class beats the `hidden` attribute | racer.css sets `[hidden] { display: none !important }`; `.ghost`/`.go` are `display:block`. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | Apple TV needs Python: pyatv is Python-only | `npm run up` creates `~/.hearth/py` (override `HEARTH_VENV`; shared by every HEARTH_HOME, so a scratch server reuses it) and pins `pyatv==PYATV_VERSION` (src/atv-bridge.js). No python3 ≥ 3.10 → it prints a skip line and Hearth runs; Apple TVs answer 503 "needs Python 3 and pyatv". The bridge isn't cached as failed, so installing later works without a restart. |
 | `brew upgrade python` leaves a venv whose `bin/python` symlink dangles | `up.mjs` runs the venv's python; if it fails it rebuilds with `venv --clear` and reinstalls pyatv. |

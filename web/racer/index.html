@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Light Racer</title>
+  <meta name="description" content="Hearth's light-cycle game. Plays offline, wherever you are.">
+  <meta name="theme-color" content="#03040a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Light Racer">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Monoton&family=Martian+Mono:wdth,wght@87.5,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="racer.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
+  <canvas id="field" aria-hidden="true"></canvas>
+  <canvas id="board" aria-hidden="true"></canvas>
+  <div class="slot" id="slot" aria-hidden="true"></div>
+  <div class="touch" id="touch" aria-label="Steer: swipe, tap a side to turn, hold to boost"></div>
+
+  <header class="hud" id="hud">
+    <div class="hud-score"><small>Score</small><b id="score">0</b></div>
+    <div class="hud-wave"><small>Wave</small><b id="wave">1</b></div>
+    <div class="hud-boost" aria-label="Boost"><small>Boost</small><span class="meter"><i id="boost"></i></span></div>
+    <div class="hud-btns">
+      <button type="button" id="muteBtn" aria-label="Sound"></button>
+      <button type="button" id="pauseBtn" aria-label="Pause">❚❚</button>
+    </div>
+  </header>
+
+  <div class="home-pill" id="homePill" hidden>
+    <span>🏠 You're home. The remote is ready.</span>
+    <button type="button" data-act="back">Back to the remote</button>
+  </div>
+
+  <section class="card" id="title">
+    <p class="kicker" id="kicker">Hearth arcade</p>
+    <h1 class="logo"><span>Light</span><span>Racer</span></h1>
+    <p class="lede" id="lede">Ride a ribbon of aurora. Eat sparks to grow your wall, box the other riders in, and don't touch anything.</p>
+    <button type="button" class="go" data-act="start">Race</button>
+    <ul class="how">
+      <li><b>Swipe</b> to steer</li>
+      <li><b>Tap a side</b> to turn</li>
+      <li><b>Hold</b> to boost</li>
+    </ul>
+    <p class="best" id="bestLine"></p>
+    <button type="button" class="ghost" data-act="back" id="closeBtn" hidden>Back to the remote</button>
+  </section>
+
+  <section class="card" id="over" hidden>
+    <p class="kicker">Derezzed</p>
+    <h2 class="big" id="overScore">0</h2>
+    <p class="newbest" id="newBest" hidden>New best</p>
+    <dl class="stats" id="overStats"></dl>
+    <button type="button" class="go" data-act="start">Race again</button>
+    <button type="button" class="ghost" data-act="retry" id="retryBtn" hidden>Check for home again</button>
+  </section>
+
+  <section class="card small" id="paused" hidden>
+    <p class="kicker">Paused</p>
+    <button type="button" class="go" data-act="resume">Keep racing</button>
+    <button type="button" class="ghost" data-act="quit">Quit race</button>
+  </section>
+
+  <div class="banner" id="banner" aria-live="polite"></div>
+
+  <script src="../vendor/aurora-field.min.js" defer></script>
+  <script src="../shapes.js" defer></script>
+  <script type="module" src="racer.js"></script>
+</body>
+</html>

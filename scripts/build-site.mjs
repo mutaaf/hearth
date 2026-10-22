@@ -21,6 +21,14 @@ cpSync(
 );
 cpSync(path.join(ROOT, 'src', 'insight-schema.js'), path.join(DEMO, 'vendor', 'insight-schema.js'));
 
+// /hearth/racer/: Light Racer on its own, installable and offline. Its
+// relative ../ imports (feel.js, shapes.js, vendor/) land beside the landing page.
+cpSync(path.join(ROOT, 'web', 'racer'), path.join(OUT, 'racer'), { recursive: true });
+cpSync(path.join(ROOT, 'web', 'feel.js'), path.join(OUT, 'feel.js'));
+cpSync(path.join(ROOT, 'web', 'shapes.js'), path.join(OUT, 'shapes.js'));
+mkdirSync(path.join(OUT, 'vendor'), { recursive: true });
+cpSync(path.join(DEMO, 'vendor', 'aurora-field.min.js'), path.join(OUT, 'vendor', 'aurora-field.min.js'));
+
 // demo.js must run before app.js reads window.HearthDemo.
 const demoHtml = path.join(DEMO, 'index.html');
 const html = readFileSync(demoHtml, 'utf8');
@@ -40,4 +48,4 @@ writeFileSync(
   path.join(ROOT, 'dist', '_headers'),
   '/hearth/*\n  Cache-Control: no-transform, max-age=300\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n',
 );
-console.log('Built dist/hearth (landing + demo)');
+console.log('Built dist/hearth (landing + demo + racer)');
