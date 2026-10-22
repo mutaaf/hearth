@@ -28,6 +28,25 @@ North star: **anyone can turn a house full of slow, ad-ridden smart TVs into one
 - **Samsung that matches the TV**, 2016-17 sets included: the app on screen (REST), real volume and mute (UPnP), real on/asleep/off (probed on a KU6290), REST launch fallback
 - **No stale state anywhere:** every command is re-checked a moment later; Google TVs report standby; quiet Cast sockets are dropped; LG/Roku standby clears "now playing"; polling speeds up while the app is open
 
+## Road to the App Store (current focus)
+Make Hearth robust enough to charge for, then ship it native.
+1. **Resilient core:**
+   - No single TV, socket or bad response can crash or wedge the server.
+   - Every network call has a timeout.
+   - Every reconnect backs off with jitter and cleans up after itself.
+   - Pairings survive a corrupt or half-written store.
+2. **Honest live state:** heartbeats on the live stream; the app shows "reconnecting…" instead of stale buttons. Commands get one clear result: done, retried, or why not.
+3. **Operations:**
+   - Logs that rotate and never contain keys.
+   - A health endpoint that reports every driver.
+   - Crash-safe restarts.
+   - A support bundle a user can send.
+4. **Security on the LAN:**
+   - Only this household's phones can control or forget TVs.
+   - DNS-rebinding and cross-site protection.
+5. **Chaos tests:** fake TVs that drop mid-command, answer garbage, go slow, or change IP.
+6. **Native app:** backlogged in [backlog/native-app.md](backlog/native-app.md). Works on any network, no home server needed.
+
 ## Next
 1. **Aurora:** a one-screen remote with a joystick pad and smart "what's on" information, and aurora-field visuals across the app (in progress).
 2. **Unlock full remote on Google TV:** Google's remote protocol v2 (TLS 6466/6467) for arrow keys and power. Optional, because Google always requires typing a one-time code shown on the TV.
