@@ -564,6 +564,7 @@ function sendKey(key, opts = {}) {
     m.classList.add('bump');
   }
   const body = { key, ...(opts.hold ? { hold: Math.round(opts.hold) } : {}) };
+  modes?.noteKey(key); // playing or browsing? (Stream Center)
   keyQueue = keyQueue.then(() => {
     const t0 = performance.now();
     return api('POST', `/tvs/${id}/key`, body).then(() => noteLatency(performance.now() - t0));

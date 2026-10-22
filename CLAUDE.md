@@ -60,6 +60,10 @@ web/launcher.js|.css   the app launcher: "Watch" strip on the house (hold = ever
                        "Streaming" grid on a TV's Apps panel (tap = this TV), ✓/✕ chips per TV
 web/away.js|.css       away mode: SSE error → probes api/health; 3 misses → Light Racer in a frame (racer/?away=1);
                        postMessage {hearth:'home'|'back'|'retry'}; keepOffline() registers web/sw.js on secure origins
+web/playback.js        shared: state.media parsers (Roku media-player, LG media pipeline, Apple TV) + phaseOf()
+                       (TV signal → this phone's last keys → time) → playback | browse | other
+web/stream.js|.css     the Stream Center ("Watch" mode): tap surface = play/pause, sides/swipes = skip, hold = scrub,
+                       live progress; modes.js auto-switches to it when phaseOf() says playback
 web/racer/             Light Racer (canvas game + aurora-field sky), own manifest + sw.js; public at /hearth/racer/
 web/demo.js            pretend TVs for the public demo only (has a slice of the catalog)
 site/                  landing page for mutaafaziz.com/hearth
@@ -196,6 +200,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | An LG that is already off when Hearth starts never connects, so lgtv2 never emits `close` | The driver marks it `off` on a connection error before the first connect; before this it stayed at the boot-time `unknown` (seen 2026-10-21, Living Room TV fully off, no ping). |
 | Service workers only register on secure origins (HTTPS or localhost) | `http://azizfamily.local` can't cache the app, so a cold launch away from home shows the browser's error page; away mode only kicks in when the page is already loaded. The public `/hearth/racer/` (HTTPS) is the offline-installable copy. `localhost` gets `web/sw.js`, so test cold-offline there. |
 | CSS `display` on a class beats the `hidden` attribute | racer.css sets `[hidden] { display: none !important }`; `.ghost`/`.go` are `display:block`. |
+| Not every TV can say "playing" | Roku `/query/media-player` (state, position, duration, is_live), LG `ssap://com.webos.media/getForegroundAppInfo` (playState only, webOS 4+; apps that skip the webOS media pipeline say nothing), Apple TV via pyatv (state + position). Samsung and Google TV over Cast give nothing, so `phaseOf()` falls back to this phone's last keys (play/skip → watching, arrows in the last 30 s → browsing) and 90 s settled in a streaming app. |
 | macOS has no `timeout` binary | Don't rely on it in scripts. |
 | Apple TV needs Python: pyatv is Python-only | `npm run up` creates `~/.hearth/py` (override `HEARTH_VENV`; shared by every HEARTH_HOME, so a scratch server reuses it) and pins `pyatv==PYATV_VERSION` (src/atv-bridge.js). No python3 ≥ 3.10 → it prints a skip line and Hearth runs; Apple TVs answer 503 "needs Python 3 and pyatv". The bridge isn't cached as failed, so installing later works without a restart. |
 | `brew upgrade python` leaves a venv whose `bin/python` symlink dangles | `up.mjs` runs the venv's python; if it fails it rebuilds with `venv --clear` and reinstalls pyatv. |

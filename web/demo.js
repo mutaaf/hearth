@@ -90,13 +90,14 @@
 
   var tvs = [
     tv('demo-living', 'lg', 'Living Room', 'Downstairs', 'OLED65C1PUB', '192.168.1.40', true,
-      { online: true, power: 'on', volume: 18, muted: false, app: 'netflix' }),
+      { online: true, power: 'on', volume: 18, muted: false, app: 'netflix', media: { state: 'playing', position: null, duration: null, live: false, at: Date.now(), source: 'lg' } }),
     tv('demo-upstairs', 'androidtv', 'Upstairs TV', 'Upstairs', 'TCL 65A300W', '192.168.1.48', true,
       { online: true, power: 'on', volume: 53, muted: false, app: null }),
     tv('demo-kids', 'samsung', 'Kids’ Room', 'Upstairs', 'UN43TU7000', '192.168.1.41', true,
       { online: true, power: 'on', app: null }),
     tv('demo-media', 'appletv', 'Media Room', 'Downstairs', '4K (2nd gen)', '192.168.1.71', true,
-      { online: true, power: 'on', app: 'com.netflix.Netflix', appTitle: 'Netflix', nowPlaying: 'Stranger Things: Chapter One', playing: 'playing' }),
+      { online: true, power: 'on', app: 'com.netflix.Netflix', appTitle: 'Netflix', nowPlaying: 'Stranger Things: Chapter One', playing: 'playing',
+        media: { state: 'playing', position: 1234000, duration: 2940000, live: false, at: Date.now(), source: 'appletv' } }),
     tv('demo-basement', 'roku', 'Basement', 'Downstairs', 'Streaming Stick 3840R', '192.168.1.53', true,
       { online: true, power: 'standby', app: null }),
     tv('demo-gameroom', 'lg', 'Game Room', 'Basement', 'OLED55C2PUA', '192.168.1.44', true,
@@ -141,12 +142,20 @@
       throw new Error('Muting (the Apple TV passes volume to the TV, and has no network mute) isn’t supported on this TV');
     } else if (name === 'mute') {
       if (s.muted != null) change(t, { muted: !s.muted });
-    } else if (t.brand === 'appletv' && (name === 'play' || name === 'pause') && s.nowPlaying) {
-      change(t, { playing: name === 'play' ? 'playing' : 'paused' });
+    } else if ((name === 'play' || name === 'pause') && s.media) {
+      // Pretend players keep their place: freeze or resume the clock.
+      var m = s.media;
+      var pos = m.position == null ? null : m.position + (m.state === 'playing' ? Date.now() - m.at : 0);
+      var next = name === 'play' ? 'playing' : 'paused';
+      change(t, { playing: t.brand === 'appletv' ? next : s.playing, media: Object.assign({}, m, { state: next, position: pos, at: Date.now() }) });
+    } else if ((name === 'rewind' || name === 'forward') && s.media && s.media.position != null) {
+      var mm = s.media;
+      var now = mm.position + (mm.state === 'playing' ? Date.now() - mm.at : 0) + (name === 'forward' ? 10000 : -10000);
+      change(t, { media: Object.assign({}, mm, { position: Math.max(0, Math.min(mm.duration || now, now)), at: Date.now() }) });
     } else if (name === 'home' && t.brand === 'appletv') {
-      change(t, { app: null, appTitle: null, nowPlaying: null, playing: null });
+      change(t, { app: null, appTitle: null, nowPlaying: null, playing: null, media: null });
     } else if (name === 'home' && t.brand === 'lg') {
-      change(t, { app: 'com.webos.app.home' });
+      change(t, { app: 'com.webos.app.home', media: null });
     } else if (name === 'source' && t.brand !== 'samsung') {
       throw new Error('The "source" button isn\'t supported on this TV');
     }

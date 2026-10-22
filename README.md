@@ -90,6 +90,19 @@ From a script: `curl -X POST -H 'content-type: application/json' -d '{"app":"you
 
 Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support).
 
+## A remote that knows what you're doing
+
+The remote changes with what's on the TV:
+- **Something playing:** it becomes the **Stream Center**.
+  - Show name, live progress bar, and a big play/pause orb.
+  - Tap anywhere to pause. Tap or swipe a side to skip, hold a side to scrub, swipe down to go back.
+  - Volume, plus **Browse** for the D-pad.
+- **Looking for something to watch:** the D-pad.
+- **A web browser:** a trackpad and keyboard.
+- **A game or console:** a gamepad.
+
+Roku, LG and Apple TV report whether they're playing. For Samsung and Google TV, Hearth goes by what you pressed: play means watching, arrows mean browsing. You can always switch with the Remote · Watch · Trackpad · Gamepad bar.
+
 ## Away from home: Light Racer
 
 When your phone can't reach Hearth (you've left the house, or Wi-Fi is off), the app doesn't show an error. It turns into **Light Racer**, a light-cycle game played on a field of aurora. You eat sparks to grow your wall like a snake and box the other riders in.

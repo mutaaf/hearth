@@ -9,6 +9,8 @@
 //    trackpad), typing goes straight to the TV, and "?" shows every shortcut.
 import { classify, KINDS, suggestedMode, summarize } from './activity.js';
 import { feedback, haptic } from './feel.js';
+import { keyMemory, phaseOf } from './playback.js';
+import { createStream } from './stream.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -119,7 +121,7 @@ export function createModes({ api, getTv, sendKey, note }) {
           <p>Arrows · <kbd>Enter</kbd>/<kbd>Space</kbd> A</p><p><kbd>⌫</kbd>/<kbd>Esc</kbd> B</p><p><kbd>X</kbd> play/pause · <kbd>I</kbd> info</p>
           <p><kbd>[</kbd>/<kbd>]</kbd> rewind/forward</p></div>
       </div>
-      <p class="mono kb-foot">Press <kbd>?</kbd> any time · <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch modes</p>
+      <p class="mono kb-foot">Press <kbd>?</kbd> any time · <kbd>1</kbd>–<kbd>4</kbd> switch modes</p>
       <button type="button" class="cta small" data-kb-close>Got it</button>
     </div></div>`,
   );
@@ -130,6 +132,7 @@ export function createModes({ api, getTv, sendKey, note }) {
       <span class="act-chip" id="actChip"><i></i><b></b><small></small></span>
       <div class="mode-seg" role="tablist" aria-label="Remote style">
         <button type="button" role="tab" data-mode="remote" aria-selected="true">Remote</button>
+        <button type="button" role="tab" data-mode="stream" aria-selected="false">Watch</button>
         <button type="button" role="tab" data-mode="trackpad" aria-selected="false">Trackpad</button>
         <button type="button" role="tab" data-mode="gamepad" aria-selected="false">Gamepad</button>
       </div>
@@ -187,6 +190,15 @@ export function createModes({ api, getTv, sendKey, note }) {
     </section>`,
   );
   const $ = (s) => remote.querySelector(s);
+  // The Stream Center ("Watch"): what you want while something plays.
+  const keys = keyMemory();
+  const stream = createStream({ remote, sendKey, getTv, onBrowse: () => setMode('remote') });
+  // Remote, or Watch when something is playing; browsers and games win.
+  function suggest(t, a) {
+    const base = suggestedMode(a);
+    if (base !== 'remote') return base;
+    return phaseOf(t, a, keys.get(t.id)).phase === 'playback' ? 'stream' : 'remote';
+  }
 
   function setMode(next, { isAuto = false, silent = false } = {}) {
     if (next === mode) {
@@ -256,7 +268,8 @@ export function createModes({ api, getTv, sendKey, note }) {
     renderChip(t);
     $('#kbBtn').hidden = !finePointer();
     const a = activityOf(t);
-    const suggested = suggestedMode(a);
+    const suggested = suggest(t, a);
+    stream.render(t);
     const before = lastSuggested.get(t.id);
     lastSuggested.set(t.id, suggested);
     if (suggested !== before) {
@@ -264,8 +277,11 @@ export function createModes({ api, getTv, sendKey, note }) {
       const pref = group ? loadPrefs()[t.id]?.[group] : null;
       if (suggested !== 'remote' && pref !== 'remote' && mode !== suggested) {
         setMode(suggested, { isAuto: true, silent: true });
-        feedback('success');
-        note(suggested === 'trackpad' ? `🌐 Browser on ${t.name}: trackpad + keyboard ready` : `🎮 ${a.label} on ${t.name}: gamepad ready`);
+        if (suggested === 'stream') haptic('tap'); // playback started: quietly bring the Stream Center
+        else {
+          feedback('success');
+          note(suggested === 'trackpad' ? `🌐 Browser on ${t.name}: trackpad + keyboard ready` : `🎮 ${a.label} on ${t.name}: gamepad ready`);
+        }
       } else if (suggested === 'remote' && auto && mode !== 'remote') {
         setMode('remote', { isAuto: true, silent: true });
       }
@@ -528,9 +544,9 @@ export function createModes({ api, getTv, sendKey, note }) {
         e.stopPropagation();
         return toggleShortcuts();
       }
-      if (!inField && ['1', '2', '3'].includes(e.key)) {
+      if (!inField && ['1', '2', '3', '4'].includes(e.key)) {
         e.stopPropagation();
-        return setMode(['remote', 'trackpad', 'gamepad'][Number(e.key) - 1]);
+        return setMode(['remote', 'stream', 'trackpad', 'gamepad'][Number(e.key) - 1]);
       }
       if (inField) return;
       if (mode === 'trackpad') {
@@ -557,11 +573,19 @@ export function createModes({ api, getTv, sendKey, note }) {
     true,
   );
 
-  // Keep "· 42m" honest while the remote is open.
+  // Keep "· 42m" honest, and notice "settled into watching", while open.
   setInterval(() => {
     const t = getTv();
-    if (t && !remote.hidden) renderChip(t);
-  }, 30_000);
+    if (t && !remote.hidden) update(t);
+  }, 15_000);
 
-  return { update, enter, leave, get mode() { return mode; } };
+  // Every key this phone sends is a hint: arrows = browsing, play = watching.
+  function noteKey(key) {
+    const t = getTv();
+    if (!t) return;
+    keys.note(t.id, key);
+    update(t);
+  }
+
+  return { update, enter, leave, noteKey, get mode() { return mode; } };
 }
