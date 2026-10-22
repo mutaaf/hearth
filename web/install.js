@@ -88,7 +88,7 @@ function art(kind) {
   return '';
 }
 
-export function createInstall({ api, note, isDemo = false }) {
+export function createInstall({ api, note, isDemo = false, invite = async () => null }) {
   let deferred = null; // Android/desktop Chrome's own install prompt, when offered (HTTPS only)
   let link = isDemo ? location.href.split('#')[0].replace(/[?&]skin=[^&]*/, '') : `${location.origin}/`;
 
@@ -97,11 +97,16 @@ export function createInstall({ api, note, isDemo = false }) {
     deferred = e;
   });
 
-  api('GET', '/info')
-    .then((info) => {
-      if (info?.friendlyUrl) link = info.friendlyUrl;
-    })
-    .catch(() => {});
+  let info = null;
+  const loadInfo = () =>
+    (info ??= api('GET', '/info')
+      .then((i) => {
+        if (i?.friendlyUrl) link = i.friendlyUrl;
+      })
+      .catch(() => {
+        info = null; // e.g. before this phone joined the house: try again later
+      }));
+  let shareLink = link; // the link being shared: an invite when the house is locked
 
   const sheet = document.createElement('dialog');
   sheet.className = 'sheet install-sheet';
@@ -137,15 +142,20 @@ export function createInstall({ api, note, isDemo = false }) {
 
   // "Send to family": the iOS/Android share sheet (Messages, WhatsApp, Mail),
   // a QR code to scan from another phone, and a copy button.
-  function share() {
+  // When the house is locked the link is a one-time invite: it lets one phone
+  // in without typing the house code.
+  async function share() {
     haptic('tap');
-    const qr = isDemo ? '' : `<img class="inst-qr" alt="QR code for ${esc(link)}" src="api/qr.svg?u=${encodeURIComponent(link)}">`;
+    await loadInfo();
+    const inv = await invite(link).catch(() => null);
+    shareLink = inv ?? link;
+    const qr = isDemo ? '' : `<img class="inst-qr" alt="QR code to open Hearth" src="api/qr.svg?u=${encodeURIComponent(shareLink)}">`;
     sheet.innerHTML = `
       <div class="sheet-grip"></div>
       <h3>Get Hearth on another phone or iPad</h3>
-      <p class="sub">Send this link to your family. They open it on the home Wi-Fi, then tap Add to Home Screen.</p>
+      <p class="sub">${inv ? 'Scan this with the new phone, or send it the link. It lets <b>one</b> phone into the house, once, within a day, on the home Wi-Fi.' : 'Send this link to your family. They open it on the home Wi-Fi, then tap Add to Home Screen.'}</p>
       ${qr}
-      <p class="inst-link mono">${esc(link)}</p>
+      <p class="inst-link mono">${esc(inv ? link : shareLink)}${inv ? ' · invite' : ''}</p>
       <div class="inst-share-btns">
         ${navigator.share ? '<button type="button" class="cta wide" data-press="up" data-install="native-share">Send with Messages…</button>' : ''}
         <button type="button" class="ghost wide" data-press="up" data-install="copy">Copy link</button>
@@ -159,7 +169,7 @@ export function createInstall({ api, note, isDemo = false }) {
       await navigator.share({
         title: 'Hearth',
         text: 'Our TV remote 📺 Open this on the home Wi-Fi, then tap Share → Add to Home Screen.',
-        url: link,
+        url: shareLink,
       });
       feedback('success');
     } catch {}
@@ -167,11 +177,11 @@ export function createInstall({ api, note, isDemo = false }) {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(shareLink);
       feedback('success');
       note('Link copied');
     } catch {
-      note(link);
+      note(shareLink);
     }
   }
 

@@ -5,6 +5,7 @@ import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, s
 import { createSetup } from './setup.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
+import { createHousehold } from './household.js'; // who's in the house
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
@@ -74,9 +75,12 @@ async function api(method, path, body) {
     throw new Error('Can’t reach Hearth right now');
   }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) household.locked(); // this phone was removed from the house
   if (!res.ok) throw new Error(data.error || `Something went wrong (${res.status})`);
   return data;
 }
+
+const household = createHousehold({ api, note, isDemo: Boolean(demo) });
 
 let noteTimer;
 function note(message, error = false) {
@@ -708,7 +712,7 @@ async function pairAgain(tv, how) {
 }
 
 // ── Install on home screens + share with family ──────────
-const install = createInstall({ api, note, isDemo: Boolean(demo) });
+const install = createInstall({ api, note, isDemo: Boolean(demo), invite: household.invite });
 const away = createAway({ isDemo: Boolean(demo) });
 
 // ── Routing ──────────────────────────────────────────────
@@ -788,6 +792,7 @@ function connectEvents() {
       if (liveEs !== es) return;
       document.documentElement.classList.add('stale');
       if (es.readyState === 2 && !esRetry) {
+        household.recheck();
         esRetry = setTimeout(reconnectEvents, esDelay);
         esDelay = Math.min(30_000, esDelay * 2);
       }
@@ -840,6 +845,7 @@ function tickClock() {
 function onPress(el, info) {
   const d = el.dataset;
   if (d.install) return install.handle(el);
+  if (d.house) return household.handle(el);
   if (d.doctor) return doctor.handle(el); // doctor
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
@@ -1050,5 +1056,5 @@ function wire() {
 wire();
 tickClock();
 setInterval(tickClock, 30_000);
-connectEvents();
+household.gate().then(connectEvents);
 keepOffline();

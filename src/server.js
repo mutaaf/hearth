@@ -8,6 +8,7 @@ import { catalogView } from './catalog.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { badRequest, HearthError, isUnreachable, notFound } from './errors.js';
 import { createHostCheck, createLimiter } from './guard.js';
+import { COOKIE } from './household.js';
 import { log } from './log.js';
 import { qrSvg } from './qr.js';
 import { runDoctor, runDoctorAll } from './doctor.js';
@@ -123,6 +124,24 @@ function routes(hub) {
   ];
 }
 
+// ── the household: which phones may work the TVs (src/household.js) ──
+function householdRoutes(household) {
+  const id = '([\\w-]+)';
+  const r = (method, pattern, fn) => [method, new RegExp(`^/api/household${pattern}$`), fn];
+  return [
+    r('GET', '/devices', (_, __, ___, req) => ({ code: household.code, devices: household.devices(req.device?.id) })),
+    r('POST', '/invite', () => household.invite()),
+    r('POST', '/code', (_, body) => household.setCode(body.code ?? null)),
+    r('PATCH', `/devices/${id}`, ([d], body) => household.rename(d, body.name)),
+    r('DELETE', `/devices/${id}`, ([d]) => household.revoke(d)),
+  ];
+}
+
+// This computer itself (the browser on the Mac running Hearth, scripts, `npm
+// run up`) is always in the house: it's how the first phone gets the code.
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const deviceCookie = (token) => `${COOKIE}=${token}; Path=/; Max-Age=315360000; HttpOnly; SameSite=Strict`;
+
 const scenesOf = (hub) => {
   if (!hub.scenes) throw new HearthError(503, 'Scenes aren’t available');
   return hub.scenes;
@@ -217,21 +236,28 @@ const LIMITED = [
   ['POST', /^\/api\/tvs$/, 'add'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models)$/, 'ai'],
+  ['POST', /^\/api\/household\/join$/, 'join'],
 ];
 const SSE_MAX_BUFFER = 512 * 1024; // a phone this far behind is gone; drop it
 
-export function createServer(hub, { hostCheck = createHostCheck(), limiter = createLimiter() } = {}) {
-  const table = routes(hub);
-  const listeners = new Set();
+// `household`: a Household (src/household.js) to require a joined phone for
+// the API; null leaves it open to anyone on the LAN (tests, HEARTH_OPEN=1).
+export function createServer(hub, { hostCheck = createHostCheck(), limiter = createLimiter(), household = null, trustLoopback = true } = {}) {
+  const table = [...routes(hub), ...(household ? householdRoutes(household) : [])];
+  const listeners = new Map(); // SSE response → device id (null: this computer / open)
   const viewersChanged = () => hub.setViewers?.(listeners.size);
   const drop = (res) => {
     if (!listeners.delete(res)) return;
     viewersChanged();
     res.destroy();
   };
+  // A phone removed from the house loses its live stream at once.
+  household?.on('revoked', (deviceId) => {
+    for (const [res, d] of listeners) if (d === deviceId) drop(res);
+  });
   const broadcast = (event, data) => {
     const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of listeners) {
+    for (const res of listeners.keys()) {
       // A phone that stopped reading (asleep, walked out of Wi-Fi without
       // closing) would buffer forever and keep "someone's watching" on.
       if (res.destroyed || res.writableLength > SSE_MAX_BUFFER) drop(res);
@@ -261,11 +287,34 @@ export function createServer(hub, { hostCheck = createHostCheck(), limiter = cre
           throw new HearthError(429, `That's a lot of requests. Try again in ${Math.ceil(wait / 1000)} s.`);
         }
       }
+      // The household: the app shell and /api/health (away mode's probe) are
+      // public; every other API call needs a phone that joined (or this computer).
+      if (url.pathname.startsWith('/api/')) {
+        req.device = household?.identify(req) ?? null;
+        const local = !household || (trustLoopback && LOOPBACK.has(req.socket.remoteAddress));
+        if (url.pathname === '/api/household' && req.method === 'GET') {
+          return sendJson(res, 200, { locked: Boolean(household), trusted: local || Boolean(req.device), thisComputer: Boolean(household) && local, device: req.device ? household.view(req.device, req.device.id) : null });
+        }
+        if (url.pathname === '/api/household/join' && req.method === 'POST' && household) {
+          const body = await readJson(req);
+          const joined = await household.join({
+            code: typeof body.code === 'string' || typeof body.code === 'number' ? String(body.code) : undefined,
+            invite: typeof body.invite === 'string' ? body.invite.slice(0, 100) : undefined,
+            name: body.name,
+            ua: req.headers['user-agent'],
+          });
+          res.setHeader('set-cookie', deviceCookie(joined.token));
+          return sendJson(res, 200, { ok: true, device: joined.device });
+        }
+        if (!local && !req.device && url.pathname !== '/api/health') {
+          throw new HearthError(401, 'This phone isn’t part of the house yet');
+        }
+      }
       if (url.pathname === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
         res.write(`event: hello\ndata: ${JSON.stringify(hub.list())}\n\n`);
         res.write(`event: nearby\ndata: ${JSON.stringify(hub.nearby)}\n\n`);
-        listeners.add(res);
+        listeners.set(res, req.device?.id ?? null);
         viewersChanged();
         const ping = setInterval(() => {
           if (res.destroyed || res.writableLength > SSE_MAX_BUFFER) return drop(res);

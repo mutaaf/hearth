@@ -9,6 +9,7 @@ import { chmod, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { log, startLogRotation } from '../src/log.js';
 import { hearthHome, Store } from '../src/store.js';
+import { Household } from '../src/household.js';
 
 const PORT = Number(process.env.HEARTH_PORT) || 8770;
 const HOST = process.env.HEARTH_HOST || '0.0.0.0';
@@ -47,7 +48,9 @@ async function serve() {
   hub.startAutoDiscovery();
   hub.scenes = await new Scenes({ hub }).init();
   hub.scenes.start();
-  const server = createServer(hub);
+  // Only phones that joined the house may work the TVs (HEARTH_OPEN=1: anyone on the LAN).
+  const household = process.env.HEARTH_OPEN === '1' ? null : await new Household().init();
+  const server = createServer(hub, { household });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is busy. Is Hearth already running? Try: npm run down`);
     else log.error('[hearth] server failed:', err?.stack ?? err);
@@ -61,6 +64,9 @@ async function serve() {
     if (process.env.HEARTH_FRIENDLY_URL) console.log(`  Friendly address:   ${process.env.HEARTH_FRIENDLY_URL}`);
     console.log('');
     if (ip) qrcode.generate(url, { small: true }, (qr) => console.log(qr.replace(/^/gm, '  ')));
+    // (Never the code itself: this output ends up in log files.)
+    if (household) console.log(`  New phones join with the house code: open http://localhost:${PORT} here → ⚙ → Phones in this house, or run: npm run code\n`);
+    else console.log('  HEARTH_OPEN=1: anyone on this network can use Hearth.\n');
     console.log(`  ${hub.tvs.length} TV${hub.tvs.length === 1 ? '' : 's'} remembered. Ctrl+C to stop.\n`);
   });
   // A hung driver stop() can't block exit: 5 s, then out anyway.
@@ -79,10 +85,17 @@ async function serve() {
   process.on('SIGTERM', shutdown);
 }
 
+// The house code, for the person at this computer (their terminal only).
+async function showCode() {
+  const household = await new Household().init();
+  console.log(`\n  House code: ${household.code.replace(/(\d{3})(\d{3})/, '$1 $2')}\n\n  Type it on a new phone when Hearth asks. ${household.devices().length} phone(s) in the house.\n`);
+}
+
 const command = process.argv[2];
 if (command === 'scan') await scan().then(() => process.exit(0));
+else if (command === 'code') await showCode().then(() => process.exit(0));
 else if (!command || command === 'serve') await serve();
 else {
-  console.log('Usage: hearth [serve|scan]');
+  console.log('Usage: hearth [serve|scan|code]');
   process.exit(1);
 }

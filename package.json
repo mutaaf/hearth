@@ -1,6 +1,6 @@
 {
   "name": "hearth",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "One remote for every TV in the house. Finds your LG, Samsung, Roku and Google TV devices on the Wi-Fi and gives every phone a fast, ad-free remote.",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "down": "node scripts/down.mjs",
     "start": "node bin/hearth.js",
     "scan": "node bin/hearth.js scan",
+    "code": "node bin/hearth.js code",
     "test": "node --test \"test/*.test.js\"",
     "build:site": "node scripts/build-site.mjs",
     "deploy:site": "node scripts/build-site.mjs && npx --yes wrangler deploy"

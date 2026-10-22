@@ -1,0 +1,115 @@
+/* The door: a phone that isn't in the house yet. One big number pad, six
+   embers that light as you type, and the house opens when the code is right. */
+html.at-door body { overflow: hidden; }
+html.at-door.stale::after { display: none; } /* not "Reconnecting…": the phone is just not in yet */
+.door {
+  position: fixed; inset: 0; z-index: 97; display: grid; place-items: center; overflow-y: auto;
+  padding: max(20px, var(--safe-t)) 16px max(20px, var(--safe-b));
+  background: radial-gradient(90% 55% at 50% 0%, var(--signal-soft), transparent 70%), var(--bg);
+  color: var(--ink); animation: doorin .5s cubic-bezier(.2, .9, .2, 1);
+}
+@keyframes doorin { from { opacity: 0; } }
+.door.opening { pointer-events: none; animation: dooropen .7s cubic-bezier(.6, 0, .2, 1) forwards; }
+@keyframes dooropen { to { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
+
+/* Drifting embers behind everything (aurora and classic). */
+.door-sky { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.door-sky i { position: absolute; width: 70vmax; aspect-ratio: 1; border-radius: 50%; filter: blur(60px); opacity: .35; animation: drift 18s ease-in-out infinite alternate; }
+.door-sky i:nth-child(1) { left: -30vmax; top: -20vmax; background: radial-gradient(circle, var(--signal), transparent 65%); }
+.door-sky i:nth-child(2) { right: -35vmax; top: 20vh; background: radial-gradient(circle, var(--cyan, #f5a524), transparent 65%); opacity: .18; animation-duration: 23s; }
+.door-sky i:nth-child(3) { left: 10vw; bottom: -45vmax; background: radial-gradient(circle, #ff2d55, transparent 65%); opacity: .2; animation-duration: 27s; }
+@keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.15); } }
+
+.door-card { position: relative; width: min(100%, 360px); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.door-mark { width: 76px; height: 76px; border-radius: 24px; overflow: hidden; box-shadow: 0 14px 40px -12px var(--signal); margin-bottom: 14px; }
+.door-mark img { width: 100%; height: 100%; display: block; }
+.door h2 { margin: 6px 0 6px; font-size: clamp(30px, 9vw, 38px); letter-spacing: -.04em; line-height: 1; font-weight: 800; }
+.door-sub { margin: 0 0 22px; font-size: 15px; line-height: 1.45; color: var(--ink-soft); max-width: 30ch; }
+.door-sub b { color: var(--ink); }
+
+.door-cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%; max-width: 312px; }
+.door-cells span:nth-child(3) { margin-right: 10px; }
+.door-cells span {
+  aspect-ratio: 4 / 5; border-radius: 14px; display: grid; place-items: center; font-size: 28px; font-weight: 800; line-height: 1;
+  background: var(--body); border: 1.5px solid var(--body-edge); color: var(--signal);
+  transition: border-color .15s, box-shadow .2s, transform .15s;
+}
+.door-cells span.filled { border-color: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft), 0 0 24px -6px var(--signal); transform: translateY(-2px); }
+.door-cells span.next { border-color: var(--ink-faint); }
+.door-cells span.next::after { content: ''; width: 40%; height: 3px; border-radius: 3px; background: var(--signal); align-self: end; margin-bottom: 18%; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.door.checking .door-cells span { animation: think .8s ease-in-out infinite; }
+.door.checking .door-cells span:nth-child(2n) { animation-delay: .2s; }
+@keyframes think { 50% { opacity: .45; } }
+.door.wrong .door-cells { animation: shake .45s cubic-bezier(.36, .07, .19, .97); }
+@keyframes shake { 20%, 60% { transform: translateX(-9px); } 40%, 80% { transform: translateX(9px); } }
+.door.welcome .door-cells span { background: var(--signal); color: #fff; border-color: var(--signal); box-shadow: 0 0 30px var(--signal); }
+
+.door-msg { min-height: 2.6em; margin: 10px 0 6px; font-size: 11px; line-height: 1.3; color: #e2482a; display: grid; place-items: center; }
+
+.door-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; width: 100%; max-width: 300px; }
+.door-pad button {
+  height: clamp(58px, 8.4dvh, 72px); border-radius: 999px; font: 700 26px/1 var(--display); font-variant-numeric: tabular-nums;
+  background: var(--key); color: var(--key-ink); box-shadow: 0 3px 0 var(--key-edge), var(--shadow);
+  transition: transform .08s, box-shadow .08s; touch-action: manipulation;
+}
+.door-pad button.pressed { transform: translateY(3px) scale(.97); box-shadow: 0 0 0 var(--key-edge); }
+.door-pad .door-del { background: transparent; box-shadow: none; color: var(--ink-soft); }
+.door-pad .door-del svg { width: 30px; height: 30px; }
+
+.door-help { margin-top: 22px; font-size: 13px; color: var(--ink-soft); max-width: 32ch; }
+.door-help summary { cursor: pointer; list-style: none; font-weight: 600; color: var(--signal); }
+.door-help summary::-webkit-details-marker { display: none; }
+.door-help p { margin: 8px 0 0; line-height: 1.5; }
+.door-help b { color: var(--ink); }
+
+/* Aurora: glass keys over the night sky. */
+[data-skin="aurora"] .door { background: radial-gradient(90% 55% at 50% 0%, #ff6a2b26, transparent 70%), var(--bg); }
+[data-skin="aurora"] .door-sky i { opacity: .42; }
+[data-skin="aurora"] .door-pad button:not(.door-del), [data-skin="aurora"] .door-cells span {
+  background: var(--glass-1); border-color: var(--hair); box-shadow: inset 0 1px 0 #ffffff14; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+[data-skin="aurora"] .door-pad button:not(.door-del) { border: 1px solid var(--hair); }
+[data-skin="aurora"] .door-cells span.filled { background: #ff6a2b1f; border-color: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft), 0 0 28px -4px var(--signal); }
+[data-skin="aurora"] .door.welcome .door-cells span { background: linear-gradient(135deg, #ff8a4c, var(--signal)); }
+
+/* 8-bit: a cartridge lock screen. */
+[data-skin="8bit"] .door { background: var(--bg); }
+[data-skin="8bit"] .door-sky { display: none; }
+[data-skin="8bit"] .door-mark { border-radius: 0; box-shadow: 6px 6px 0 #0c0b10; image-rendering: pixelated; }
+[data-skin="8bit"] .door h2 { font-size: 18px; line-height: 1.5; letter-spacing: 0; }
+[data-skin="8bit"] .door-cells span { border-radius: 0; background: var(--lcd-2); border: 0; box-shadow: inset 0 0 0 3px var(--lcd-1); color: var(--lcd-0); font-family: var(--display); font-size: 16px; }
+[data-skin="8bit"] .door-cells span.filled { box-shadow: inset 0 0 0 3px var(--lcd-0); background: var(--lcd-3); transform: none; }
+[data-skin="8bit"] .door-cells span.next::after { background: var(--lcd-0); border-radius: 0; }
+[data-skin="8bit"] .door.welcome .door-cells span { background: var(--signal); color: #fff; box-shadow: none; }
+[data-skin="8bit"] .door-pad button { border-radius: 0; font-size: 18px; box-shadow: 4px 4px 0 #0c0b10; }
+[data-skin="8bit"] .door-pad .door-del { box-shadow: none; }
+[data-skin="8bit"] .door-msg, [data-skin="8bit"] .door-help { font-family: var(--display); font-size: 8px; line-height: 1.8; }
+
+/* Phones in this house (Settings). */
+.house-code {
+  width: 100%; display: grid; justify-items: center; gap: 4px; padding: 16px; margin: 4px 0 14px; border-radius: 22px;
+  background: var(--body); border: 1px dashed var(--body-edge); color: var(--ink);
+}
+.house-code small { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.house-code b { font-size: 34px; letter-spacing: .14em; font-weight: 700; color: var(--signal); }
+.house-code.shown { border-style: solid; border-color: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft); }
+.phones { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.phones li { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 10px 8px 14px; border-radius: 18px; background: var(--body); border: 1px solid var(--body-edge); }
+.ph-ico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--signal-soft); color: var(--signal); font-size: 18px; }
+.ph-meta { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ph-name { width: 100%; min-width: 0; font: 600 15px var(--display); color: var(--ink); background: transparent; border: 0; border-bottom: 1px dashed transparent; padding: 2px 0; }
+.ph-name:focus { outline: none; border-bottom-color: var(--signal); }
+.ph-meta small { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.phones .danger.small { flex: none; min-height: 38px; padding: 0 12px; font-size: 12px; }
+.ph-empty { justify-content: center; font-size: 11px; color: var(--ink-soft); }
+.sub.small { font-size: 10px; margin: 12px 0 0; }
+[data-skin="aurora"] :is(.house-code, .phones li) { background: var(--glass-1); border-color: var(--hair); }
+[data-skin="aurora"] .house-code.shown { border-color: var(--signal); }
+[data-skin="8bit"] :is(.house-code, .phones li, .ph-ico, .phones .danger) { border-radius: 0; }
+[data-skin="8bit"] .house-code b { font-family: var(--display); font-size: 20px; letter-spacing: .1em; }
+[data-skin="8bit"] .ph-name { font-family: var(--display); font-size: 9px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .door, .door.opening, .door-sky i, .door.wrong .door-cells, .door.checking .door-cells span, .door-cells span.next::after { animation: none; }
+}

@@ -84,11 +84,12 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 | `npm run down` | Stop it |
 | `npm start` | Run in the foreground (see logs live) |
 | `npm run scan` | List TVs on the network from the terminal |
+| `npm run code` | Show the house code (the 6 digits a new phone types once) |
 | `npm test` | Run the test suite (no TV needed) |
 
-From a script: `curl -X POST -H 'content-type: application/json' -d '{"app":"youtubetv","tvs":"all","wake":true}' http://<hearth>:8770/api/launch` opens YouTube TV everywhere and returns a result per TV. `GET /api/catalog` lists the app keys.
+From a script on the computer running Hearth (it's always in the house): `curl -X POST -H 'content-type: application/json' -d '{"app":"youtubetv","tvs":"all","wake":true}' http://<hearth>:8770/api/launch` opens YouTube TV everywhere and returns a result per TV. `GET /api/catalog` lists the app keys.
 
-Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support).
+Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support), `HEARTH_OPEN=1` (no house code: anyone on the Wi-Fi can use it).
 
 ## A remote that knows what you're doing
 
@@ -148,7 +149,9 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 
 ## Privacy and security
 
-Hearth talks only to devices on your home network. TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser. Anyone on your home Wi-Fi can open the remote, just like the TV makers' own apps. Commands require a JSON request, so a random website can't press buttons on your TV through your browser.
+Hearth talks only to devices on your home network. TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser.
+
+**Only your household's phones can work the TVs.** Being on the Wi-Fi isn't enough: a new phone sees a number pad and types the 6-digit **house code** once, or scans an invite from a phone that's already in (⚙ → Get Hearth on another phone; an invite works for one phone, within a day). To see the code, open ⚙ → **Phones in this house** on any phone that's in, open Hearth on the computer running it (that computer is always in), or run `npm run code`. The same screen lists every phone, lets you rename one, hold to remove one (it's cut off at once), or pick a new code (phones already in stay in). Wrong codes are rate limited, and after 20 wrong codes in an hour typing a code pauses (invites still work). Commands require a JSON request, so a random website can't press buttons on your TV through your browser.
 
 ## Make your old smart TVs fast again
 
