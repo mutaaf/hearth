@@ -48,19 +48,45 @@ const PATTERNS = {
 // *landing* (pointerdown/touchstart) isn't one — lifting it (pointerup/touchend)
 // is. So on iOS, a buzz asked for during a press is played on release.
 // (Holds can't buzz on iOS for the same reason; Android buzzes throughout.)
+// The switch stays in the page, rendered but off-screen: a display:none or
+// <head>-hosted one is ignored by some iOS versions.
+let iosSwitch = null;
 function iosTick() {
-  const label = document.createElement('label');
-  label.ariaHidden = 'true';
-  label.style.display = 'none';
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.setAttribute('switch', '');
-  label.append(input);
-  document.head.append(label);
-  label.click();
-  label.remove();
+  if (!iosSwitch?.isConnected) {
+    iosSwitch = document.createElement('label');
+    iosSwitch.ariaHidden = 'true';
+    iosSwitch.style.cssText = 'position:fixed;left:-200px;top:0;width:40px;height:24px;opacity:0.01;pointer-events:none;';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.tabIndex = -1;
+    input.setAttribute('switch', '');
+    iosSwitch.append(input);
+    (document.body ?? document.documentElement).append(iosSwitch);
+  }
+  iosSwitch.click();
 }
 const canVibrate = typeof navigator.vibrate === 'function';
+const iosVersion = (() => {
+  const ua = navigator.userAgent;
+  const m = ua.match(/OS (\d+)_\d+.*like Mac OS X/);
+  if (m) return Number(m[1]);
+  // iPadOS asks for desktop sites and says "Macintosh"; its Safari version tracks iOS.
+  if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return Number(ua.match(/Version\/(\d+)/)?.[1] ?? 0);
+  return 0;
+})();
+// → 'vibrate' (Android), 'ios' (iPhone/iPad on iOS 18+), 'old-ios', or 'none' (computers).
+export function hapticSupport() {
+  if (canVibrate) return 'vibrate';
+  if (iosVersion >= 18) return 'ios';
+  if (iosVersion) return 'old-ios';
+  return 'none';
+}
+export const HAPTIC_HINT = {
+  vibrate: 'Feel every press',
+  ios: 'Feel every press · needs iPhone Settings → Sounds & Haptics → System Haptics',
+  'old-ios': 'Needs iOS 18 or newer (update your iPhone)',
+  none: 'This device can’t vibrate · works on phones',
+};
 let pendingIos = 0;
 if (!canVibrate) {
   const flush = () => {

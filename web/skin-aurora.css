@@ -35,7 +35,7 @@
 }
 [data-skin="aurora"] .grain { mix-blend-mode: screen; opacity: .07; }
 [data-skin="aurora"] .aurora-only { display: revert !important; }
-[data-skin="aurora"] .slider { display: grid !important; }
+[data-skin="aurora"] .slider, [data-skin="aurora"] .rocker-ch { display: flex !important; }
 [data-skin="aurora"] .orb-key { display: grid !important; }
 [data-skin="aurora"] .orb-field { display: block !important; }
 [data-skin="aurora"] .orb-stage, [data-skin="aurora"] .house-stage { display: block !important; }
@@ -137,7 +137,15 @@
 @keyframes ticker { from { opacity: 0; transform: translateY(8px); } }
 
 /* The orb */
-[data-skin="aurora"] .orb-zone { display: block; position: relative; flex: 1; min-height: calc(var(--pad) + 24px); }
+/* The orb zone is three columns that never overlap: channel rail | orb | volume
+   rail. The orb takes what's left of the width (container units: the remote's
+   own width, not the window's), so narrow phones shrink the orb, not the rails. */
+[data-skin="aurora"] .device { container-type: inline-size; }
+[data-skin="aurora"] .orb-zone {
+  --rail: 56px; --gap: 14px;
+  --pad: min(calc(100cqw - 2 * var(--rail) - 2 * var(--gap)), 34dvh, 300px);
+  display: block; position: relative; flex: 1; min-height: calc(var(--pad) + 24px);
+}
 [data-skin="aurora"] .orb-field { position: absolute; inset: -10px -16px; width: calc(100% + 32px); height: calc(100% + 20px); pointer-events: none; }
 [data-skin="aurora"] .orb-stage { position: absolute; left: 50%; top: 50%; width: var(--pad); height: var(--pad); transform: translate(-50%, -50%); pointer-events: none; }
 [data-skin="aurora"] .pad {
@@ -178,28 +186,45 @@
   transition: transform .1s, background .15s, box-shadow .15s; z-index: 2;
 }
 .orb-key.pressed { transform: scale(.9); background: var(--glass-2); box-shadow: 0 0 24px -4px var(--signal); }
-.orb-key.tl { left: 64px; top: 0; } .orb-key.tr { right: 64px; top: 0; }
-.orb-key.bl { left: 64px; bottom: 0; } .orb-key.br { right: 64px; bottom: 0; }
+/* Tucked into the orb's corners, inside the rails. */
+.orb-key.tl { left: calc(var(--rail, 56px) + 6px); top: 0; } .orb-key.tr { right: calc(var(--rail, 56px) + 6px); top: 0; }
+.orb-key.bl { left: calc(var(--rail, 56px) + 6px); bottom: 0; } .orb-key.br { right: calc(var(--rail, 56px) + 6px); bottom: 0; }
 .orb-key.power-key { color: #fff; background: linear-gradient(135deg, #ff8a4c, var(--signal)); border-color: #ffffff33; box-shadow: 0 0 30px -6px var(--signal); }
 .orb-key.power-key .charge { position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--signal); opacity: 0; transform: scale(.8); transition: opacity .2s, transform .45s; }
 .orb-key.power-key.charged .charge { opacity: 1; transform: scale(1); }
 .device.offline .orb-key.power-key { animation: beckon 2.4s ease-in-out infinite; }
 @keyframes beckon { 50% { box-shadow: 0 0 46px 2px var(--signal); } }
 
-/* Edge sliders: drag, hold or tap */
-.slider {
-  position: absolute; top: 50%; transform: translateY(-50%); width: 50px; height: min(62%, 240px); border-radius: 999px; z-index: 2;
-  display: grid !important; grid-template-rows: 1fr auto 1fr; place-items: center; overflow: hidden; touch-action: none;
+/* Volume: a real slider (fill = the TV's level; slide anywhere, it follows
+   the finger). Channel: a two-button rocker. Both sit in their own rail. */
+.slider, .rocker-ch {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: var(--rail, 56px); height: min(calc(var(--pad) + 16px), 290px);
+  flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; border-radius: 24px;
   background: var(--glass-1); border: 1px solid var(--hair); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  -webkit-user-select: none; user-select: none; transition: box-shadow .2s;
+  -webkit-user-select: none; user-select: none; touch-action: none; -webkit-touch-callout: none;
 }
-.slider.vol { right: 0; } .slider.ch { left: 0; }
-.slider span { position: relative; z-index: 1; }
-.slider .up, .slider .down { font-size: 22px; color: var(--ink); opacity: .8; }
-.slider .lbl { font-size: 8.5px; text-transform: uppercase; color: var(--ink-soft); letter-spacing: .1em; }
-.slider .fill { position: absolute !important; left: 0; right: 0; bottom: 0; height: 0; z-index: 0; background: linear-gradient(0deg, #ff6a2b88, #5ee7ff22); transition: height .3s cubic-bezier(.2, .8, .2, 1); }
+.slider { right: 0; padding: 8px 0; justify-content: flex-start; cursor: ns-resize; transition: box-shadow .2s, transform .2s cubic-bezier(.2, .9, .2, 1.2); }
+.rocker-ch { left: 0; }
+.slider .fill {
+  position: absolute; inset: 0; z-index: 0; transform-origin: bottom; transform: scaleY(var(--level, 0));
+  background: linear-gradient(0deg, #ff6a2bcc, #ff8a4c99 60%, #ffb18a66); transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+}
+.slider:not(.absolute) .fill { display: none; }
+.slider .cap, .slider .val { position: relative; z-index: 1; pointer-events: none; }
+.slider .cap { flex: none; width: 100%; height: 44px; display: grid; place-items: center; font-size: 26px; font-weight: 300; line-height: 1; color: var(--ink); }
+.slider .val { margin: auto 0 2px; font-size: 15px; font-weight: 700; letter-spacing: -.02em; color: #fff; text-shadow: 0 1px 6px #0009; }
+.slider .cap.hit { animation: caphit .28s ease-out; }
+@keyframes caphit { 40% { transform: scale(1.35); color: #fff; text-shadow: 0 0 12px var(--signal); } }
 .slider.active { box-shadow: 0 0 34px -6px var(--signal); }
-.slider .up.hit, .slider .down.hit { color: #fff; text-shadow: 0 0 10px var(--signal); }
+.slider.sliding { transform: translateY(-50%) scaleX(1.08); }
+.slider.sliding .fill { transition: transform .06s linear; }
+.slider:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+
+.rocker-ch .cap { flex: 1; width: 100%; display: grid; place-items: center; color: var(--ink); transition: background .12s; }
+.rocker-ch .cap svg { width: 24px; height: 24px; }
+.rocker-ch .up svg { transform: rotate(-90deg); } .rocker-ch .down svg { transform: rotate(90deg); }
+.rocker-ch .cap.pressed { background: var(--glass-2); color: #fff; box-shadow: inset 0 0 24px -6px var(--signal); }
+.rocker-ch .lbl { flex: none; width: 60%; padding: 6px 0; text-align: center; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); border-block: 1px solid var(--hair); }
 
 /* Smart dock */
 [data-skin="aurora"] .smart-dock {
@@ -251,7 +276,8 @@
 
 /* Short phones: shrink the orb and the strip so it still fits one screen. */
 @media (max-height: 700px) {
-  [data-skin="aurora"] .device { --pad: min(58vw, 30dvh, 240px); gap: 8px; }
+  [data-skin="aurora"] .device { gap: 8px; }
+  [data-skin="aurora"] .orb-zone { --pad: min(calc(100cqw - 2 * var(--rail) - 2 * var(--gap)), 30dvh, 240px); }
   [data-skin="aurora"] .hud { padding: 10px 12px 10px 14px; }
   [data-skin="aurora"] .hud-title { font-size: 24px; }
   [data-skin="aurora"] .hud-vol { width: 60px; height: 60px; }
@@ -259,6 +285,5 @@
   .dock-item { height: 52px; }
 }
 @media (max-width: 380px) {
-  .orb-key.tl, .orb-key.bl { left: 54px; } .orb-key.tr, .orb-key.br { right: 54px; }
-  .slider { width: 44px; }
+  [data-skin="aurora"] .orb-zone { --rail: 50px; --gap: 10px; }
 }

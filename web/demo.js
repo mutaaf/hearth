@@ -439,6 +439,12 @@
       return { ok: true };
     }],
     ['POST', /^\/tvs\/([\w-]+)\/key$/, function (m, body) { key(find(m[1]), body.key); return { ok: true }; }],
+    ['POST', /^\/tvs\/([\w-]+)\/volume$/, function (m, body) {
+      var t = find(m[1]);
+      if (!t.capabilities.volumeLevel) throw new Error('Setting the volume level isn’t supported on this TV');
+      change(t, { volume: Math.max(0, Math.min(100, Math.round(Number(body.level) || 0))), muted: false });
+      return { ok: true };
+    }],
     ['POST', /^\/tvs\/([\w-]+)\/power$/, function (m, body) {
       var t = find(m[1]);
       if (body.on) {

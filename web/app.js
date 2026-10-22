@@ -1,7 +1,7 @@
 // Hearth web app. No framework, no build step: state lives in `tvs`, the
 // server pushes changes over /api/events, and render() repaints. Touch feel
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
-import { applySkin, feedback, gesturePad, haptic, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
+import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
@@ -360,7 +360,7 @@ function renderAurora(t) {
   $('#hudVol').textContent = v == null ? '±' : t.state.muted ? '×' : v;
   $('#hudVolLabel').textContent = t.state?.muted ? 'muted' : 'vol';
   $('#hudVolArc').setAttribute('stroke-dasharray', `${v == null ? 0 : t.state.muted ? 0 : v} 100`);
-  $('#volFill').style.height = `${v == null || t.state.muted ? 0 : v}%`;
+  renderVolSlider(t);
 
   const lines = insights(t);
   const ticker = $('#hudTicker');
@@ -418,59 +418,141 @@ function renderDock(t) {
   if (dock.innerHTML !== html) dock.innerHTML = html;
 }
 
-// Edge sliders: tap the top/bottom half, hold to repeat, or drag to scrub.
+// The volume slider (aurora): a real slider when the TV can set a level —
+// slide anywhere on it and the fill follows your finger (a full slide is 40
+// steps, so one swipe can't blast the room), with a tick per step. Tap the
+// top/bottom for one step, hold to keep going. TVs that only know up/down get
+// the same feel, one step per notch of slide. Channel is a plain rocker.
+const VOL_SPAN = 40;
+let volDrag = null; // { level } while a finger is sliding
+function renderVolSlider(t) {
+  const el = $('#volSlider');
+  if (!el) return;
+  const v = volDrag ? volDrag.level : t.state?.volume;
+  const known = v != null && !t.state?.muted;
+  el.classList.toggle('absolute', Boolean(t.capabilities?.volumeLevel && t.state?.volume != null));
+  el.style.setProperty('--level', known ? v / 100 : 0);
+  $('#volVal').textContent = t.state?.muted && !volDrag ? 'mute' : v == null ? 'vol' : v;
+  el.setAttribute('aria-valuenow', v ?? 0);
+}
+
 function setupSliders() {
-  for (const el of document.querySelectorAll('.slider')) {
-    const keys = el.dataset.slider === 'vol' ? ['volup', 'voldown'] : ['chup', 'chdown'];
-    let s = null;
-    const end = () => {
-      if (!s) return;
-      clearTimeout(s.timer);
-      el.classList.remove('active');
-      el.querySelectorAll('.hit').forEach((h) => h.classList.remove('hit'));
-      s = null;
-    };
-    const hit = (up) => {
-      const h = el.querySelector(up ? '.up' : '.down');
-      h.classList.add('hit');
-      setTimeout(() => h.classList.remove('hit'), 120);
-    };
-    el.addEventListener('pointerdown', (e) => {
-      end();
+  const el = $('#volSlider');
+  if (!el) return;
+  let g = null;
+  let sendTimer = null;
+  let lastSent = null;
+  const tv = () => (current ? tvs.get(current) : null);
+  const absolute = () => {
+    const t = tv();
+    return Boolean(t?.capabilities?.volumeLevel && t.state?.volume != null);
+  };
+  // Send the slid level at most every 150 ms, and once more on release.
+  const sendLevel = (now = false) => {
+    if (!volDrag || volDrag.level === lastSent) return;
+    if (!now && sendTimer) return;
+    const id = current;
+    const level = volDrag.level;
+    lastSent = level;
+    api('POST', `/tvs/${id}/volume`, { level }).catch((err) => note(err.message, true));
+    if (!now) sendTimer = setTimeout(() => {
+      sendTimer = null;
+      sendLevel();
+    }, 150);
+  };
+  const flash = (up) => {
+    const cap = el.querySelector(up ? '.up' : '.down');
+    cap.classList.remove('hit');
+    void cap.offsetWidth;
+    cap.classList.add('hit');
+  };
+  const stop = () => {
+    if (!g) return;
+    clearTimeout(g.timer);
+    el.classList.remove('active', 'sliding');
+    g = null;
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (!current || e.button > 0) return;
+    stop();
+    try {
       el.setPointerCapture(e.pointerId);
-      const r = el.getBoundingClientRect();
-      const up = e.clientY < r.top + r.height / 2;
-      s = { y: e.clientY, up, dragging: false, timer: 0, delay: 380 };
-      el.classList.add('active');
-      sendKey(keys[up ? 0 : 1]);
-      hit(up);
-      const again = () => {
-        if (!s || s.dragging) return;
-        sendKey(keys[s.up ? 0 : 1], { repeat: true });
-        hit(s.up);
-        s.delay = Math.max(70, s.delay * 0.72);
-        s.timer = setTimeout(again, s.delay);
-      };
-      s.timer = setTimeout(again, s.delay);
-    });
-    el.addEventListener('pointermove', (e) => {
-      if (!s) return;
-      const dy = e.clientY - s.y;
-      if (!s.dragging && Math.abs(dy) < 12) return;
-      if (!s.dragging) {
-        s.dragging = true;
-        clearTimeout(s.timer);
+    } catch {}
+    const r = el.getBoundingClientRect();
+    const up = e.clientY < r.top + r.height / 2;
+    g = { id: e.pointerId, y: e.clientY, h: r.height, up, slid: false, steps: 0, timer: 0, delay: 420, start: tv()?.state?.volume ?? 0 };
+    el.classList.add('active');
+    haptic('tick');
+    // Hold without sliding: keep stepping, faster and faster.
+    const again = () => {
+      if (!g || g.slid) return;
+      g.held = true;
+      sendKey(g.up ? 'volup' : 'voldown', { repeat: true });
+      flash(g.up);
+      g.delay = Math.max(80, g.delay * 0.75);
+      g.timer = setTimeout(again, g.delay);
+    };
+    g.timer = setTimeout(again, g.delay);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!g || e.pointerId !== g.id || g.held) return;
+    const dy = g.y - e.clientY; // up is positive
+    if (!g.slid && Math.abs(dy) < 8) return;
+    if (!g.slid) {
+      g.slid = true;
+      clearTimeout(g.timer);
+      el.classList.add('sliding');
+    }
+    const steps = Math.round((dy / g.h) * VOL_SPAN);
+    if (absolute()) {
+      const level = Math.max(0, Math.min(100, g.start + steps));
+      if (level !== volDrag?.level) {
+        if (volDrag) haptic('tick');
+        volDrag = { level };
+        renderVolSlider(tv());
+        sendLevel();
       }
-      if (Math.abs(dy) >= 20) {
-        const up = dy < 0;
-        sendKey(keys[up ? 0 : 1], { repeat: true });
-        hit(up);
-        s.y = e.clientY;
+    } else {
+      // Up/down only: one key per step crossed.
+      while (g.steps < steps) {
+        g.steps++;
+        sendKey('volup', { repeat: true });
+        flash(true);
       }
-    });
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
-  }
+      while (g.steps > steps) {
+        g.steps--;
+        sendKey('voldown', { repeat: true });
+        flash(false);
+      }
+    }
+  });
+  const lift = (e) => {
+    if (!g || e.pointerId !== g.id) return;
+    const { slid, held, up } = g;
+    stop();
+    if (e.type === 'pointercancel') return;
+    if (slid && volDrag) {
+      clearTimeout(sendTimer);
+      sendTimer = null;
+      sendLevel(true);
+      const t = tv();
+      if (t?.state) t.state.volume = volDrag.level; // until the TV confirms
+      volDrag = null;
+      feedback('success');
+      renderVolSlider(tv());
+    } else if (!slid && !held) {
+      sendKey(up ? 'volup' : 'voldown');
+      flash(up);
+    }
+  };
+  el.addEventListener('pointerup', lift);
+  el.addEventListener('pointercancel', lift);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      sendKey(e.key === 'ArrowUp' ? 'volup' : 'voldown');
+    }
+  });
 }
 
 // Sheets over the orb get a segmented bar + a scrim to tap away.
@@ -653,6 +735,7 @@ function openEdit(id = current) {
 function openSettings() {
   for (const card of document.querySelectorAll('[data-skin-pick]')) card.classList.toggle('active', card.dataset.skinPick === prefs.skin);
   $('#prefHaptics').checked = prefs.haptics;
+  $('#prefHapticsHint').textContent = HAPTIC_HINT[hapticSupport()];
   $('#prefSound').checked = soundOn();
   health.renderAiSettings($('#aiSettings')); // health
   openSheet('#settingsSheet');
@@ -940,8 +1023,12 @@ function onPress(el, info) {
       $('#settingsSheet').close();
       return away.play();
     case 'test-feel':
+      if (!prefs.haptics) {
+        savePrefs({ haptics: true });
+        $('#prefHaptics').checked = true;
+      }
       feedback('success');
-      return note(navigator.vibrate ? 'Bzzt! That’s the feel.' : 'On iPhone, haptics need iOS 18 and Safari.');
+      return note({ vibrate: 'Bzzt! That’s the feel.', ios: 'Feel that? If not: iPhone Settings → Sounds & Haptics → System Haptics.', 'old-ios': 'iPhone haptics need iOS 18 or newer.', none: 'Haptics work on phones, not computers.' }[hapticSupport()]);
   }
 }
 
@@ -1014,7 +1101,7 @@ function wire() {
 
   $('#prefHaptics').addEventListener('change', (e) => {
     savePrefs({ haptics: e.target.checked });
-    haptic('press');
+    if (e.target.checked) feedback('success'); // (on iPhone the switch itself taps too)
   });
   $('#prefSound').addEventListener('change', (e) => {
     savePrefs({ sound: e.target.checked });

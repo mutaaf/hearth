@@ -174,11 +174,16 @@
           <button type="button" class="orb-key tr aurora-only" data-press="down" data-key="home" aria-label="Home"><svg><use href="#i-home"/></svg></button>
           <button type="button" class="orb-key bl aurora-only" data-press="down" data-key="menu" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
           <button type="button" class="orb-key br power-key aurora-only" data-press="long" data-action="power" aria-label="Power (hold: every TV off)"><span class="charge" aria-hidden="true"></span><svg><use href="#i-power"/></svg></button>
-          <div class="slider vol aurora-only" data-slider="vol" role="group" aria-label="Volume: drag or hold">
-            <span class="up" aria-hidden="true">+</span><span class="fill" id="volFill"></span><span class="lbl mono">vol</span><span class="down" aria-hidden="true">−</span>
+          <div class="slider vol aurora-only" id="volSlider" role="slider" tabindex="0" aria-label="Volume: slide up or down, or tap + and −" aria-valuemin="0" aria-valuemax="100">
+            <span class="fill" id="volFill"></span>
+            <span class="cap up" aria-hidden="true">+</span>
+            <span class="val mono" id="volVal" aria-hidden="true">vol</span>
+            <span class="cap down" aria-hidden="true">−</span>
           </div>
-          <div class="slider ch aurora-only" data-slider="ch" role="group" aria-label="Channel: drag or hold">
-            <span class="up" aria-hidden="true">⌃</span><span class="lbl mono">ch</span><span class="down" aria-hidden="true">⌄</span>
+          <div class="rocker-ch aurora-only" role="group" aria-label="Channel">
+            <button type="button" class="cap up" data-press="repeat" data-key="chup" aria-label="Channel up"><svg><use href="#i-chevron"/></svg></button>
+            <span class="lbl mono" aria-hidden="true">ch</span>
+            <button type="button" class="cap down" data-press="repeat" data-key="chdown" aria-label="Channel down"><svg><use href="#i-chevron"/></svg></button>
           </div>
         <div class="pad" id="pad" aria-label="Direction pad. Push, hold, swipe, or drag like a joystick.">
           <span class="pad-knob" aria-hidden="true"></span>
@@ -321,8 +326,8 @@
       </button>
     </div>
     <div class="toggles">
-      <label class="toggle"><span><b>Haptics</b><small class="mono">Feel every press</small></span><input type="checkbox" id="prefHaptics"></label>
-      <label class="toggle"><span><b>Sounds</b><small class="mono">Clicks and chip blips</small></span><input type="checkbox" id="prefSound"></label>
+      <label class="toggle"><span><b>Haptics</b><small class="mono" id="prefHapticsHint">Feel every press</small></span><input type="checkbox" switch id="prefHaptics"></label>
+      <label class="toggle"><span><b>Sounds</b><small class="mono">Clicks and chip blips</small></span><input type="checkbox" switch id="prefSound"></label>
     </div>
     <!-- health: AI insights settings (rendered by health.js) -->
     <div class="toggles" id="aiSettings"></div>
