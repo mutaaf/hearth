@@ -137,3 +137,10 @@ test('install helpers: /api/info and a QR code for the share link', async () => 
   assert.match(await res.text(), /<svg[^>]+viewBox="0 0 \d+ \d+"/);
   assert.equal((await fetch(`${base}/api/qr.svg?u=javascript:alert(1)`)).status, 400);
 });
+
+test('pull to refresh: every TV re-reads its state', async () => {
+  const res = await fetch(`${base}/api/refresh`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(typeof body.refreshed, 'number');
+});

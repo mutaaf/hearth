@@ -78,6 +78,7 @@ function routes(hub) {
       return hub.driver(tv).toast(message).then(() => ({ ok: true }));
     }),
     r('POST', '/all/power', (_, body) => hub.powerAll(Boolean(body.on))),
+    r('POST', '/refresh', () => hub.refreshAll()), // pull to refresh
     // ── the cross-brand app launcher ──
     r('GET', '/catalog', () => catalogView()),
     r('GET', '/catalog/status', (_, __, url) => catalogStatus(hub, { fresh: url.searchParams.has('fresh') })),
@@ -237,6 +238,7 @@ const LIMITED = [
   ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models)$/, 'ai'],
   ['POST', /^\/api\/household\/join$/, 'join'],
+  ['POST', /^\/api\/refresh$/, 'refresh'],
 ];
 const SSE_MAX_BUFFER = 512 * 1024; // a phone this far behind is gone; drop it
 

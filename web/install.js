@@ -2,6 +2,7 @@
 // Works out which device and browser this is, then shows the exact taps with
 // a little picture of where to tap. Also: "Share Hearth" (link + QR) so one
 // person can send it to the whole family.
+import { canShare, copy as copyText, isPhone, smsHref } from './native.js';
 import { feedback, haptic } from './feel.js';
 
 const ua = navigator.userAgent;
@@ -88,6 +89,8 @@ function art(kind) {
   return '';
 }
 
+const SHARE_TEXT = 'Our TV remote 📺 Open this on the home Wi-Fi, then tap Share → Add to Home Screen.';
+
 export function createInstall({ api, note, isDemo = false, invite = async () => null }) {
   let deferred = null; // Android/desktop Chrome's own install prompt, when offered (HTTPS only)
   let link = isDemo ? location.href.split('#')[0].replace(/[?&]skin=[^&]*/, '') : `${location.origin}/`;
@@ -157,7 +160,8 @@ export function createInstall({ api, note, isDemo = false, invite = async () => 
       ${qr}
       <p class="inst-link mono">${esc(inv ? link : shareLink)}${inv ? ' · invite' : ''}</p>
       <div class="inst-share-btns">
-        ${navigator.share ? '<button type="button" class="cta wide" data-press="up" data-install="native-share">Send with Messages…</button>' : ''}
+        ${canShare() ? '<button type="button" class="cta wide" data-press="up" data-install="native-share">Send with Messages…</button>'
+          : isPhone() ? `<a class="cta wide" href="${esc(smsHref(`${SHARE_TEXT} ${shareLink}`))}">Send with Messages…</a>` : ''}
         <button type="button" class="ghost wide" data-press="up" data-install="copy">Copy link</button>
       </div>
       <div class="sheet-actions"><button type="button" class="ghost" data-press="up" data-install="open">How to install</button><button type="button" class="cta small" data-close>Done</button></div>`;
@@ -168,7 +172,7 @@ export function createInstall({ api, note, isDemo = false, invite = async () => 
     try {
       await navigator.share({
         title: 'Hearth',
-        text: 'Our TV remote 📺 Open this on the home Wi-Fi, then tap Share → Add to Home Screen.',
+        text: SHARE_TEXT,
         url: shareLink,
       });
       feedback('success');
@@ -176,13 +180,10 @@ export function createInstall({ api, note, isDemo = false, invite = async () => 
   }
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(shareLink);
+    if (await copyText(shareLink)) {
       feedback('success');
       note('Link copied');
-    } catch {
-      note(shareLink);
-    }
+    } else note(shareLink);
   }
 
   // A gentle banner on phones and iPads that haven't installed it yet.

@@ -1,11 +1,13 @@
 // Hearth web app. No framework, no build step: state lives in `tvs`, the
 // server pushes changes over /api/events, and render() repaints. Touch feel
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
-import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, keepAwake, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
+import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
 import { createHousehold } from './household.js'; // who's in the house
+import { createPull } from './pull.js';
+import { awake, badge, launch, noZoom, onResume, persist } from './native.js';
 import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
@@ -126,6 +128,7 @@ function tint(text) {
 function renderHouse() {
   const list = [...tvs.values()];
   const on = list.filter(isOn).length;
+  badge(on); // the app icon: how many TVs are on
   $('#empty').hidden = list.length > 0;
   $('#units').hidden = list.length === 0;
   $('#allOff').disabled = list.length === 0;
@@ -805,6 +808,9 @@ function route() {
   if (t) {
     const changed = current !== t.id;
     current = t.id;
+    try {
+      localStorage.setItem('hearth.lastTv', t.id); // the "Remote" home-screen shortcut
+    } catch {}
     $('#house').hidden = true;
     $('#remote').hidden = false;
     if (changed) {
@@ -824,14 +830,14 @@ function route() {
       }
     }
     renderRemote();
-    keepAwake(true);
+    awake(true);
     unmountHouseField();
     mountOrb();
   } else {
     current = null;
     $('#remote').hidden = true;
     $('#house').hidden = false;
-    keepAwake(false);
+    awake(false);
     modes?.leave();
     unmountOrb();
     mountHouseField();
@@ -888,6 +894,7 @@ function connectEvents() {
     // First visit with no TVs: go straight into setup.
     if (!greeted && !tvs.size && !setup.isOpen) setup.open();
     if (!greeted) scenes.load();
+    if (!greeted) followLaunch();
     launcher.load();
     greeted = true;
     bulk.prune();
@@ -1135,7 +1142,7 @@ function wire() {
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && current) keepAwake(true);
+    if (document.visibilityState === 'visible' && current) awake(true);
   });
   window.addEventListener('hashchange', route);
 }
@@ -1143,5 +1150,46 @@ function wire() {
 wire();
 tickClock();
 setInterval(tickClock, 30_000);
+// ── Native: home-screen shortcuts, pull to refresh, coming back to the app ──
+const launched = launch();
+noZoom();
+persist();
+
+// Pull to refresh (and coming back after a while): every TV re-reads what
+// it's doing, then the live stream restarts with the full, fresh picture.
+async function refreshAll() {
+  await api('POST', '/refresh', {});
+  if (!demo) reconnectEvents();
+  const t = current && tvs.get(current);
+  if (t) loadExtras(t);
+  scenes.load();
+  launcher.load();
+}
+createPull({ onRefresh: refreshAll });
+onResume(() => {
+  if (!demo && document.querySelector('.door') == null) refreshAll().catch(() => {});
+});
+
+// A shortcut asked for something: do it once the TVs are known.
+function followLaunch() {
+  if (launched.go === 'last') {
+    let id = null;
+    try {
+      id = localStorage.getItem('hearth.lastTv');
+    } catch {}
+    const t = (id && tvs.get(id)) || [...tvs.values()].find(isOn) || [...tvs.values()][0];
+    if (t) location.hash = `#/tv/${t.id}`;
+    if (t && launched.mode) setTimeout(() => modes?.set(launched.mode), 300);
+  }
+  if (launched.action === 'all-off' && tvs.size) {
+    location.hash = '#/';
+    const btn = $('#allOff');
+    btn.classList.add('beckon');
+    setTimeout(() => btn.classList.remove('beckon'), 6000);
+    note('Hold the button to turn every TV off');
+  }
+  launched.go = launched.action = null;
+}
+
 household.gate().then(connectEvents);
 keepOffline();

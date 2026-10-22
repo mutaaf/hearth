@@ -91,6 +91,13 @@ From a script on the computer running Hearth (it's always in the house): `curl -
 
 Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support), `HEARTH_OPEN=1` (no house code: anyone on the Wi-Fi can use it).
 
+## Feels like a real app
+
+- **Pull to refresh** from the top of the house list or a remote: every TV re-reads what it's doing. Coming back to the app after half a minute does the same by itself.
+- **Long-press the app icon** (Android, installed): jump to the last remote, Watch, Everything off, or Light Racer.
+- The **screen stays on** while a remote is open, even on the plain-http home address (a tiny silent video stands in for the Wake Lock API there).
+- **Send with Messages** works without the share sheet, the app icon shows how many TVs are on (where the phone allows badges), and pinch-zoom never kicks in while you're mashing buttons.
+
 ## A remote that knows what you're doing
 
 The remote changes with what's on the TV:

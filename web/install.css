@@ -52,3 +52,4 @@
 [data-skin="aurora"] .install-banner { background: var(--glass-1); border-color: #ff6a2b44; box-shadow: 0 0 40px -16px var(--signal); }
 [data-skin="aurora"] .inst-steps li { background: var(--glass-1); border-color: var(--hair); }
 [data-skin="aurora"] .inst-ico { background: var(--glass-2); }
+a.cta { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }

@@ -587,5 +587,5 @@ export function createModes({ api, getTv, sendKey, note }) {
     update(t);
   }
 
-  return { update, enter, leave, noteKey, get mode() { return mode; } };
+  return { update, enter, leave, noteKey, set: (m) => setMode(m), get mode() { return mode; } };
 }

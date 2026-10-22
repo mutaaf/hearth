@@ -426,6 +426,16 @@ export class Hub extends EventEmitter {
     this.#settleTimers.set(id, timers);
   }
 
+  // Pull to refresh: every TV re-reads what it's doing now (4 s cap each), and
+  // a nearby scan starts in the background. → { refreshed: n }
+  async refreshAll(timeoutMs = 4000) {
+    const jobs = [...this.#drivers.values()].filter((d) => d.refresh).map((d) =>
+      Promise.race([Promise.resolve().then(() => d.refresh()), new Promise((r) => setTimeout(r, timeoutMs).unref?.())]).catch(() => {}));
+    this.scan().catch(() => {});
+    await Promise.all(jobs);
+    return { refreshed: jobs.length };
+  }
+
   // How many app screens are open (SSE clients). Drivers that poll go faster
   // while someone's looking and slow down when nobody is.
   viewers = 0;

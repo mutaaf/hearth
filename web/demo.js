@@ -502,6 +502,7 @@
       if (body.backspace && t.brand === 'samsung') throw new Error('Deleting text on this Samsung isn\'t supported (type it again from the start)');
       return { ok: true };
     }],
+    ['POST', /^\/refresh$/, function () { return { refreshed: tvs.length }; }],
     ['POST', /^\/all\/power$/, function () {
       var paired = tvs.filter(function (t) { return t.paired; });
       paired.forEach(function (t) {

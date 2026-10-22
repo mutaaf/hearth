@@ -425,18 +425,3 @@ function ripple(pad, e) {
   el.addEventListener('animationend', () => el.remove());
 }
 
-// ── Keep the phone awake while the remote is open ──
-let lock = null;
-export async function keepAwake(on) {
-  try {
-    if (on && !lock && 'wakeLock' in navigator && document.visibilityState === 'visible') {
-      lock = await navigator.wakeLock.request('screen');
-      lock.addEventListener('release', () => (lock = null));
-    } else if (!on && lock) {
-      await lock.release();
-      lock = null;
-    }
-  } catch {
-    lock = null;
-  }
-}
