@@ -1,7 +1,6 @@
 import { parseLgMedia } from '../../web/playback.js';
-import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import LGTV, { POWER_STATES } from 'lgtv2';
 import WebSocket from 'ws';
 import { Backoff } from '../backoff.js';
@@ -39,10 +38,11 @@ const SSAP = {
 const PAIR_TIMEOUT = 60_000;
 const PIN_TIMEOUT = 120_000;
 
-// lgtv2's signed app manifest; PIN pairing sends the same one.
-const MANIFEST = JSON.parse(
-  readFileSync(path.join(path.dirname(fileURLToPath(import.meta.resolve('lgtv2'))), 'pairing.json'), 'utf8'),
-).manifest;
+// lgtv2's signed app manifest; PIN pairing sends the same one. pairing.json
+// isn't in lgtv2's exports, so it's required relative to lgtv2 itself, the
+// way lgtv2 loads it (and the way the phone app's node:module shim answers).
+const lgtv2Require = createRequire(createRequire(import.meta.url).resolve('lgtv2'));
+const MANIFEST = lgtv2Require('./pairing.json').manifest;
 // lgtv2 reports "tried every port" as ECONNFAILED; that's "not there" too.
 const gone = (err) => isUnreachable(err) || err?.code === 'ECONNFAILED';
 
