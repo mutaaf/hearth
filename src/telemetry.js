@@ -156,6 +156,31 @@ export class Telemetry {
   }
 
   // ── Reading ─────────────────────────────────
+  // Time on per local calendar day, the last `n` days (oldest first), only
+  // over the part of each day Hearth was watching. For the energy report.
+  onByDay(id, n = 14) {
+    const r = this.tvs.get(id);
+    if (!r) return [];
+    const now = this.now();
+    const out = [];
+    const midnight = new Date(now);
+    midnight.setHours(0, 0, 0, 0);
+    for (let i = n - 1; i >= 0; i--) {
+      const start = new Date(midnight);
+      start.setDate(start.getDate() - i);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const from = Math.max(start.getTime(), r.first);
+      const to = Math.min(end.getTime(), now);
+      if (to <= from) continue;
+      let initial = false;
+      for (const x of r.power) if (x.t <= from) initial = x.v;
+      const day = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      out.push({ day, from, to, spanMs: to - from, onMs: Math.round(fractionTrue(r.power, from, to, initial) * (to - from)) });
+    }
+    return out;
+  }
+
   // How this TV goes off. `last`: 'off' when it powered down first and left
   // the network after (a normal switch-off, or it was asked to), 'lost' when
   // it vanished while on (unplugged, Wi-Fi). `autoOff`: it keeps switching

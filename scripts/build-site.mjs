@@ -20,6 +20,8 @@ cpSync(
   path.join(DEMO, 'vendor', 'aurora-field.min.js'),
 );
 cpSync(path.join(ROOT, 'src', 'insight-schema.js'), path.join(DEMO, 'vendor', 'insight-schema.js'));
+cpSync(path.join(ROOT, 'src', 'bill-schema.js'), path.join(DEMO, 'vendor', 'bill-schema.js'));
+for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) cpSync(path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', f), path.join(DEMO, 'vendor', f));
 
 // /hearth/racer/: Light Racer on its own, installable and offline. Its
 // relative ../ imports (feel.js, shapes.js, vendor/) land beside the landing page.

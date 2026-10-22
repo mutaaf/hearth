@@ -79,9 +79,15 @@ export async function listModels(provider, key) {
   return ids;
 }
 
+// Models on Workers AI that can read a photo (the bill's charges box).
+export const EDGE_VISION_MODELS = ['@cf/google/gemma-4-26b-a4b-it', '@cf/mistralai/mistral-small-3.1-24b-instruct'];
+
+// A user turn with an optional image, in the OpenAI-style parts most APIs take.
+const userParts = (user, image) => (image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: image.dataUrl } }] : user);
+
 // ── One JSON answer per provider ─────────────
-async function completeEdge({ env, model, system, user, signal }) {
-  const body = { messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: 1100 };
+async function completeEdge({ env, model, system, user, image, signal }) {
+  const body = { messages: [{ role: 'system', content: system }, { role: 'user', content: userParts(user, image) }], max_tokens: 1100 };
   if (/gemma-4|qwen3|glm/.test(model)) body.chat_template_kwargs = { enable_thinking: false };
   const res = await env.AI.run(model, body, { signal });
   const text = typeof res === 'string' ? res : res?.response ?? res?.choices?.[0]?.message?.content ?? '';
@@ -89,15 +95,15 @@ async function completeEdge({ env, model, system, user, signal }) {
   return { text: typeof text === 'string' ? text : JSON.stringify(text), inTokens: u.prompt_tokens || 0, outTokens: u.completion_tokens || 0, neurons: u.neurons || 0 };
 }
 
-async function completeAnthropic({ key, model, system, user }) {
+async function completeAnthropic({ key, model, system, user, image, schema = INSIGHT_SCHEMA }) {
   const client = new Anthropic({ apiKey: key, maxRetries: 1, timeout: 45_000 });
   const params = {
     model,
     max_tokens: 4000,
     system,
-    messages: [{ role: 'user', content: user }],
+    messages: [{ role: 'user', content: image ? [{ type: 'image', source: { type: 'base64', media_type: image.mime, data: image.base64 } }, { type: 'text', text: user }] : user }],
     // Low effort keeps it quick and cheap; the schema guarantees parseable JSON.
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: INSIGHT_SCHEMA } },
+    output_config: { effort: 'low', format: { type: 'json_schema', schema } },
   };
   // Opus/Sonnet 5.5 and Fable get the server-side refusal fallback by default.
   const fallback = /^claude-(opus-5|sonnet-5-5|fable)/.test(model);
@@ -109,11 +115,11 @@ async function completeAnthropic({ key, model, system, user }) {
   return { text, inTokens: msg.usage?.input_tokens || 0, outTokens: msg.usage?.output_tokens || 0, neurons: 0, model: msg.model || model };
 }
 
-async function completeCompatible({ provider, key, model, system, user }) {
+async function completeCompatible({ provider, key, model, system, user, image }) {
   const p = PROVIDERS[provider];
   const client = new OpenAI({ apiKey: key, baseURL: p.baseURL, maxRetries: 1, timeout: 45_000 });
   const reasoning = (provider === 'openai' && /^(gpt-5|o\d)/.test(model)) || (provider === 'gemini' && /^gemini-(2\.5|[3-9])/.test(model));
-  const messages = [{ role: 'system', content: system }, { role: 'user', content: user }];
+  const messages = [{ role: 'system', content: system }, { role: 'user', content: userParts(user, image) }];
   const base = { model, messages, response_format: { type: 'json_object' } };
   let res;
   try {
@@ -131,10 +137,11 @@ async function completeCompatible({ provider, key, model, system, user }) {
   };
 }
 
-export function complete({ provider, env, key, model, system, user, signal }) {
-  if (provider === 'edge') return completeEdge({ env, model, system, user, signal });
-  if (provider === 'anthropic') return completeAnthropic({ key, model, system, user });
-  return completeCompatible({ provider, key, model, system, user });
+// `image` ({ mime, base64, dataUrl }) and `schema` are optional (the bill reader).
+export function complete({ provider, env, key, model, system, user, image = null, schema, signal }) {
+  if (provider === 'edge') return completeEdge({ env, model, system, user, image, signal });
+  if (provider === 'anthropic') return completeAnthropic({ key, model, system, user, image, schema });
+  return completeCompatible({ provider, key, model, system, user, image });
 }
 
 // A short, key-free message when a provider call fails.

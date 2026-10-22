@@ -154,6 +154,7 @@ export function createHealth({ root, note, haptic, feedback, demo }) {
         .join('')}</div>
       <button type="button" class="cta h-wide" data-press="up" data-h="diagnose-all">Run diagnostics on every TV</button>
       <button type="button" class="ghost h-wide" data-press="up" data-doctor="all">Fix every connection</button>
+      <button type="button" class="ghost h-wide" data-press="up" data-action="energy">⚡ What your TVs cost</button>
       <p class="h-foot mono">Scores come from what Hearth measures: speed, reliability, connection, software, wake-ups and control. ${loadAi().on ? 'AI notes are written by ' + (loadAi().mode === 'byok' ? 'your own AI key' : 'Gemma 4 on Hearth Cloud') + ' from an anonymised report.' : 'AI notes are off.'}</p>`);
   }
 

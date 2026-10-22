@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="install.css">
   <link rel="stylesheet" href="scenes.css">
   <link rel="stylesheet" href="health.css">
+  <link rel="stylesheet" href="energy.css">
   <link rel="stylesheet" href="modes.css">
   <link rel="stylesheet" href="doctor.css">
   <link rel="stylesheet" href="launcher.css">
@@ -287,6 +288,7 @@
   <section id="sceneEditor" class="setup scene-editor" hidden aria-label="Scene editor"></section>
   <!-- health: report cards, diagnostics, AI notes (health.js) -->
   <section id="health" class="health" hidden aria-label="Health and diagnostics"></section>
+  <section id="energy" class="energy" hidden aria-label="What your TVs cost"></section>
 
   <!-- ─────────── Sheets ─────────── -->
   <dialog class="sheet" id="bulkSheet"></dialog>
@@ -333,6 +335,7 @@
     <!-- health: AI insights settings (rendered by health.js) -->
     <div class="toggles" id="aiSettings"></div>
     <div class="toggles">
+      <button type="button" class="toggle" data-press="up" data-action="energy"><span><b>What your TVs cost</b><small class="mono">Add your power bill · cost per TV · a year of TV</small></span><span aria-hidden="true">⚡</span></button>
       <button type="button" class="toggle" data-press="up" data-house="phones"><span><b>Phones in this house</b><small class="mono">House code · who's in · remove a phone</small></span><span aria-hidden="true">🔑</span></button>
       <button type="button" class="toggle" data-press="up" data-install="share"><span><b>Get Hearth on another phone or iPad</b><small class="mono">Link · QR code · Send with Messages</small></span><span aria-hidden="true">📲</span></button>
       <button type="button" class="toggle" data-press="up" data-install="open"><span><b>Put Hearth on this home screen</b><small class="mono">Opens like a real app</small></span><span aria-hidden="true">➕</span></button>

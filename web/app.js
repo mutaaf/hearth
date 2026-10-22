@@ -12,6 +12,7 @@ import { createBulk } from './bulk.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
 import { createHealth } from './health.js'; // health
+import { createEnergy } from './energy.js';
 import { createDoctor } from './doctor.js'; // doctor
 import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
@@ -773,6 +774,8 @@ function openSettings() {
 
 // ── health: report cards + diagnostics + AI notes ─────────
 const health = createHealth({ root: $('#health'), note, haptic, feedback, demo });
+// ── energy: what each TV costs (power bill → price per kWh) ──
+const energy = createEnergy({ root: $('#energy'), api, note, haptic, feedback, demo, getTvs: () => tvs });
 
 // ── Setup wizard ─────────────────────────────────────────
 const setup = createSetup({
@@ -934,6 +937,7 @@ function connectEvents() {
     if (t.state?.online && !wasOnline) launcher.statusSoon();
     if (location.hash.includes(t.id) && !current) route();
     else render();
+    energy.live();
   });
   es.addEventListener('removed', (e) => {
     const { id } = JSON.parse(e.data);
@@ -963,6 +967,7 @@ function onPress(el, info) {
   const d = el.dataset;
   if (d.install) return install.handle(el);
   if (d.house) return household.handle(el);
+  if (d.en) return energy.handle(el);
   if (d.doctor) return doctor.handle(el); // doctor
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
@@ -1038,6 +1043,10 @@ function onPress(el, info) {
     case 'tv-health':
       $('#editSheet').close();
       return health.openTv(editing);
+    case 'energy':
+      haptic('tap');
+      $('#settingsSheet').close();
+      return energy.open();
     case 'tv-health-now':
       haptic('tap');
       return health.openTv(current);

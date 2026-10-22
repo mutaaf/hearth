@@ -59,6 +59,13 @@ export class Insights {
     return { ...result, cached: false };
   }
 
+  // A power bill → numbers (see src/bill-schema.js). `request` is already
+  // scrubbed lines or a cropped photo (src/energy.js billRequest). Not cached.
+  async bill(request, { provider = 'edge', model = null, key = '' } = {}) {
+    if (!PROVIDER_RE.test(provider) || provider === 'auto') provider = 'edge';
+    return this.#post('/bill', { ...request, provider, ...(model ? { model } : {}) }, provider === 'edge' ? '' : key, 70_000);
+  }
+
   models(provider, key) {
     if (!PROVIDER_RE.test(provider)) throw new HearthError(400, 'Unknown provider');
     return this.#post('/models', { provider }, key, 20_000);

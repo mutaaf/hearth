@@ -20,6 +20,7 @@ const { version } = JSON.parse(await readFile(path.join(ROOT, 'package.json'), '
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -106,6 +107,27 @@ function routes(hub) {
         key: req.headers['x-hearth-key'] ?? '',
         refresh: Boolean(body.refresh),
       })),
+    // ── energy: what each TV costs (the bill is read by AI; only numbers are kept) ──
+    r('GET', '/energy', () => hub.energyReport()),
+    r('POST', '/energy/bill', (_, body, _url, req) =>
+      hub.readBill(body, {
+        provider: String(body.provider ?? 'edge'),
+        model: body.model ? String(body.model).slice(0, 120) : null,
+        key: req.headers['x-hearth-key'] ?? '',
+      })),
+    r('PUT', '/energy/price', async (_, body) => {
+      await hub.energy.setPrice(body);
+      return hub.energyReport();
+    }),
+    r('DELETE', '/energy/bill', async () => {
+      await hub.energy.clear();
+      return hub.energyReport();
+    }),
+    r('PATCH', `/energy/tvs/${id}`, async ([tv], body) => {
+      hub.get(tv);
+      await hub.energy.setWatts(tv, { onW: body.onW, standbyW: body.standbyW });
+      return hub.energyReport();
+    }),
     r('POST', '/ai/models', (_, body, _url, req) => hub.insights.models(String(body.provider ?? 'auto'), req.headers['x-hearth-key'] ?? '')),
     // ── trackpad + keyboard (browser / search) ──
     r('POST', `/tvs/${id}/pointer`, ([tv], body) => {
@@ -148,7 +170,9 @@ const scenesOf = (hub) => {
   return hub.scenes;
 };
 
-async function readJson(req) {
+// A cropped bill photo is the only big body.
+const BIG_BODY = new Set(['/api/energy/bill']);
+async function readJson(req, max = 64 * 1024) {
   // Requiring JSON forces a CORS preflight, so a random web page open on
   // someone's laptop can't quietly POST commands to the TVs.
   if (!/^application\/json\b/i.test(req.headers['content-type'] ?? '')) {
@@ -158,7 +182,7 @@ async function readJson(req) {
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 64 * 1024) throw badRequest('Request too large');
+    if (size > max) throw new HearthError(413, 'Request too large');
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
@@ -179,6 +203,9 @@ function sendJson(res, status, data) {
 const VENDOR = {
   'vendor/aurora-field.min.js': path.join(ROOT, 'node_modules', 'aurora-field', 'dist', 'aurora-field.min.js'),
   'vendor/insight-schema.js': path.join(ROOT, 'src', 'insight-schema.js'),
+  'vendor/bill-schema.js': path.join(ROOT, 'src', 'bill-schema.js'),
+  'vendor/pdf.min.mjs': path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'),
+  'vendor/pdf.worker.min.mjs': path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'),
 };
 
 async function serveStatic(res, pathname) {
@@ -236,7 +263,7 @@ const LIMITED = [
   ['POST', /^\/api\/scan$/, 'scan'],
   ['POST', /^\/api\/tvs$/, 'add'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
-  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models)$/, 'ai'],
+  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models|energy\/bill)$/, 'ai'],
   ['POST', /^\/api\/household\/join$/, 'join'],
   ['POST', /^\/api\/refresh$/, 'refresh'],
 ];
@@ -345,7 +372,7 @@ export function createServer(hub, { hostCheck = createHostCheck(), limiter = cre
         for (const [method, pattern, handler] of table) {
           const m = url.pathname.match(pattern);
           if (!m || method !== req.method) continue;
-          const body = method === 'GET' || method === 'DELETE' ? {} : await readJson(req);
+          const body = method === 'GET' || method === 'DELETE' ? {} : await readJson(req, BIG_BODY.has(url.pathname) ? 2_400_000 : undefined);
           return sendJson(res, 200, await handler(m.slice(1), body, url, req));
         }
         throw notFound('API route');

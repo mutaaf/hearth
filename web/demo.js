@@ -503,6 +503,28 @@
       return { ok: true };
     }],
     ['POST', /^\/refresh$/, function () { return { refreshed: tvs.length }; }],
+    // ── energy: pretend watts, a fortnight of pretend viewing, a pretend bill ──
+    ['GET', /^\/energy$/, function () { return energyReport(); }],
+    ['PUT', /^\/energy\/price$/, function (m, body) {
+      var p = Number(body.pricePerKwh);
+      if (!(p >= 0.01 && p <= 2)) throw new Error('Price per kWh should be between 0.01 and 2 (e.g. 0.17 for 17¢)');
+      energy.price = { pricePerKwh: p, currency: energy.price.currency, source: 'manual' };
+      return energyReport();
+    }],
+    ['DELETE', /^\/energy\/bill$/, function () { energy.price = { pricePerKwh: 0.17, currency: 'USD', source: 'default' }; energy.bill = null; return energyReport(); }],
+    ['PATCH', /^\/energy\/tvs\/([\w-]+)$/, function (m, body) {
+      energy.watts[m[1]] = body.onW == null && body.standbyW == null ? undefined : { onW: body.onW, standbyW: body.standbyW };
+      return energyReport();
+    }],
+    ['POST', /^\/energy\/bill$/, function () {
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          energy.bill = { currency: 'USD', pricePerKwh: 0.1447, priceSource: 'bill', total: 142.37, kwh: 918, days: 30, start: '2026-09-01', end: '2026-09-30', energyRate: 0.0921, fixed: 9.5, confidence: 'high', note: 'Demo: a pretend bill. At home, Hearth reads yours.', via: 'gemma-4-26b-a4b-it', at: Date.now() };
+          energy.price = { pricePerKwh: 0.1447, currency: 'USD', source: 'bill' };
+          resolve(energyReport());
+        }, 1800);
+      });
+    }],
     ['POST', /^\/all\/power$/, function () {
       var paired = tvs.filter(function (t) { return t.paired; });
       paired.forEach(function (t) {
@@ -596,6 +618,35 @@
       ai: ai,
       aiPayload: { v: 1, brand: t.brand, model: t.model, year: p.year, platform: { os: p.os, version: p.ver }, scores: { overall: p.score, grade: grade(p.score) }, stats: { commands: 96, successPct: 97.9, p50Ms: p.p50, p95Ms: p.p95 } },
     };
+  }
+
+  // ── energy (demo) ──
+  var energy = { price: { pricePerKwh: 0.17, currency: 'USD', source: 'default' }, bill: null, watts: {} };
+  var DEMO_WATTS = { lg: [88, 0.5, '65″ · OLED · 2022'], samsung: [71, 0.5, '55″ · LED · 2021'], roku: [3, 1.5, 'streaming stick'], androidtv: [64, 1.5, '50″ · LED · 2022'], appletv: [3, 0.3, 'Apple TV box'] };
+  function energyReport() {
+    var price = energy.price.pricePerKwh;
+    var r2 = function (x) { return Math.round(x * 100) / 100; };
+    var rows = tvs.filter(function (t) { return t.paired; }).map(function (t, k) {
+      var w = DEMO_WATTS[t.brand] || [70, 0.5, 'unknown size · LED'];
+      var mine = energy.watts[t.id];
+      var onW = mine && mine.onW != null ? mine.onW : w[0];
+      var sbW = mine && mine.standbyW != null ? mine.standbyW : w[1];
+      var daily = [];
+      var onSum = 0;
+      for (var i = 13; i >= 0; i--) {
+        var d = new Date(Date.now() - i * 86400000);
+        var onH = Math.round((2 + 3 * Math.abs(Math.sin((i + 1) * (k + 2) * 1.7)) + (d.getDay() % 6 === 0 ? 2.5 : 0)) * 10) / 10;
+        onSum += onH;
+        var kwh = (onH * onW + (24 - onH) * sbW) / 1000;
+        daily.push({ day: d.toISOString().slice(0, 10), onH: onH, kwh: Math.round(kwh * 1000) / 1000, cost: r2(kwh * price) });
+      }
+      var onHDay = onSum / 14;
+      var kwhDay = (onHDay * onW + (24 - onHDay) * sbW) / 1000;
+      return { id: t.id, name: t.name, brand: t.brand, model: t.model, watts: { on: onW, standby: sbW, basis: w[2], yours: !!mine, estimate: { on: w[0], standby: w[1] } }, trackedH: 336, onHPerDay: Math.round(onHDay * 10) / 10, kwhPerDay: Math.round(kwhDay * 1000) / 1000, perMonth: r2(kwhDay * 30.44 * price), perYear: r2(kwhDay * 365 * price), standbyPerYear: r2(((24 - onHDay) * sbW / 1000) * 365 * price), daily: daily };
+    });
+    var sum = function (k) { return r2(rows.reduce(function (a, r) { return a + r[k]; }, 0)); };
+    var kwhMonth = rows.reduce(function (a, r) { return a + r.kwhPerDay * 30.44; }, 0);
+    return { price: energy.price, bill: energy.bill, tvs: rows, house: { perMonth: sum('perMonth'), perYear: sum('perYear'), standbyPerYear: sum('standbyPerYear'), kwhPerMonth: Math.round(kwhMonth * 10) / 10, shareOfBill: energy.bill ? Math.round((kwhMonth / energy.bill.kwh) * 1000) / 10 : null, trackedH: 336 }, at: Date.now() };
   }
 
   window.HearthDemo = {

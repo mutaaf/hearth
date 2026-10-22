@@ -12,9 +12,10 @@ import { RokuDriver } from './drivers/roku.js';
 import { SamsungDriver } from './drivers/samsung.js';
 // ── health: telemetry, diagnostics, rating, AI insights ──
 import { diagnose } from './diagnostics.js';
-import { anonymise, rate } from './health.js';
+import { anonymise, modelYear, rate } from './health.js';
 import { Insights } from './llm.js';
 import { instrument, Telemetry } from './telemetry.js';
+import { billRequest, Energy } from './energy.js';
 
 export const DRIVERS = { lg: LgDriver, samsung: SamsungDriver, roku: RokuDriver, androidtv: GoogleTvDriver, appletv: AppleTvDriver };
 
@@ -28,7 +29,7 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
-  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights, macForFn = macFor, forbiddenIp = isForbiddenTarget } = {}) {
+  constructor({ store, drivers = DRIVERS, discoverFn = discover, probeFn = probe, telemetry, insights, energy, macForFn = macFor, forbiddenIp = isForbiddenTarget } = {}) {
     super();
     // Loopback, link-local, multicast…: never a TV, and never somewhere the
     // icon proxy or a driver should be pointed (tests with fake TVs on
@@ -38,6 +39,7 @@ export class Hub extends EventEmitter {
     // ── health ──
     this.telemetry = telemetry ?? new Telemetry({ dir: store?.dir ?? null });
     this.insights = insights ?? new Insights();
+    this.energy = energy ?? new Energy({ dir: store?.dir ?? null });
     this.diag = new Map();
     this.store = store;
     this.driverClasses = drivers;
@@ -48,6 +50,7 @@ export class Hub extends EventEmitter {
 
   async init() {
     await this.telemetry.load();
+    await this.energy.load();
     this.tvs = await this.store.load();
     for (const tv of this.tvs) this.#attach(tv);
     return this;
@@ -378,6 +381,7 @@ export class Hub extends EventEmitter {
       this.#activitySince.delete(id);
       await driver?.stop();
       this.telemetry.forget(id); // ── health
+      this.energy.forget(id);
       this.insights.forget(id);
       this.diag.delete(id);
       this.tvs = this.tvs.filter((t) => t !== tv);
@@ -485,6 +489,19 @@ export class Hub extends EventEmitter {
     const data = await diagnose(tv, this.view(tv), this.#drivers.get(id));
     this.diag.set(id, { at: Date.now(), data });
     return this.health(id);
+  }
+
+  // ── energy: what each TV costs to run ──
+  energyReport() {
+    return this.energy.report(this.tvs, this.telemetry, (tv) => modelYear(tv.brand, tv.model)?.year ?? null);
+  }
+
+  // The phone sends scrubbed charge lines or a cropped photo; Hearth Cloud's
+  // AI reads the numbers; only those are kept.
+  async readBill(body, { provider, model, key }) {
+    const data = await this.insights.bill(billRequest(body), { provider, model, key });
+    await this.energy.setBill(data.bill, { via: data.model ?? null });
+    return { ...this.energyReport(), read: { model: data.model, providerLabel: data.providerLabel, billedTo: data.billedTo, ms: data.ms, costUsd: data.costUsd } };
   }
 
   report() {
