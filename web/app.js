@@ -160,7 +160,7 @@ function renderHouse() {
           <span class="unit-state mono"><span class="led"></span>${esc(statusWord(t))}</span>
         </div>
         ${t.paired ? '' : '<span class="unit-pair mono">Tap to connect</span>'}
-        ${t.paired && !t.state?.online ? `<button type="button" class="unit-fix" data-press="up" data-doctor="fix" data-tv="${esc(t.id)}">Fix</button>` : ''}
+        ${t.paired && !t.state?.online && !wentOff(t) ? `<button type="button" class="unit-fix" data-press="up" data-doctor="fix" data-tv="${esc(t.id)}">Fix</button>` : ''}
       </article>`)
     .join('');
   if (list.length) firstPaint = false;
@@ -182,6 +182,34 @@ function renderSwitcher() {
   }
 }
 
+// A paired TV that isn't answering. If it switched off normally there's
+// nothing to fix (still paired): say how to turn it on, and say so plainly
+// when it keeps switching itself off. Only a TV that vanished while on gets
+// the doctor.
+const wentOff = (t) => t.paired && !t.state?.online && t.off?.last === 'off';
+function renderFixBanner(t) {
+  const show = t.paired && !t.state?.online;
+  $('#fixBanner').hidden = !show;
+  if (!show) return;
+  const auto = t.off?.autoOff;
+  const btn = $('#fixBannerBtn');
+  btn.dataset.tv = t.id;
+  if (auto) {
+    $('#fixBannerTitle').textContent = `Turns itself off after ~${auto.minutes} min`;
+    $('#fixBannerText').textContent = 'A setting on the TV does it. Hearth is still connected.';
+    btn.textContent = 'How to stop it';
+    btn.removeAttribute('data-doctor');
+    btn.dataset.action = 'tv-health-now';
+  } else {
+    const off = wentOff(t);
+    $('#fixBannerTitle').textContent = off ? 'Switched off' : 'Not responding';
+    $('#fixBannerText').textContent = off ? (t.canWake ? 'Tap power to wake it, or use its own remote. Still connected.' : 'Turn it on with its own remote. Still connected.') : 'Asleep, unplugged, or moved?';
+    btn.textContent = off ? 'Check it' : 'Fix it';
+    btn.dataset.doctor = 'fix';
+    delete btn.dataset.action;
+  }
+}
+
 function renderRemote() {
   const t = tvs.get(current);
   if (!t) return;
@@ -196,8 +224,7 @@ function renderRemote() {
   $('#rLed').className = `led ${ledClass(t)}`;
   $('#p-remote').classList.toggle('offline', !t.state?.online);
   $('#pairBanner').hidden = t.paired;
-  $('#fixBanner').hidden = !(t.paired && !t.state?.online); // doctor
-  $('#fixBannerBtn').dataset.tv = t.id;
+  renderFixBanner(t);
 
   const showMeter = caps.volumeLevel && t.state?.volume != null;
   $('#meter').hidden = !showMeter;
@@ -1011,6 +1038,9 @@ function onPress(el, info) {
     case 'tv-health':
       $('#editSheet').close();
       return health.openTv(editing);
+    case 'tv-health-now':
+      haptic('tap');
+      return health.openTv(current);
     case 'edit':
       haptic('tap');
       return openEdit();

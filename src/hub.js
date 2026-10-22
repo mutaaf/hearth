@@ -140,6 +140,7 @@ export class Hub extends EventEmitter {
       capabilities: driver?.capabilities ?? {},
       state: driver?.state ?? { online: false, power: 'unknown' },
       since: this.#since.get(tv.id) ?? null,
+      off: this.telemetry.offPattern(tv.id), // { last: 'off'|'lost'|null, autoOff }
       activity: this.#activity(tv, driver),
     };
   }

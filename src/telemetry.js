@@ -115,7 +115,9 @@ export class Telemetry {
     const started = this.pendingWake.get(id);
     if (started !== undefined) {
       if (on || (online && s.power !== 'off')) {
-        push(r.wakes, { t: started, ok: true, ms: t - started }, CAP.wakes);
+        // Turned on by hand long after the wake gave up isn't a working wake.
+        const ok = t - started <= WAKE_WINDOW;
+        push(r.wakes, ok ? { t: started, ok, ms: t - started } : { t: started, ok }, CAP.wakes);
         this.pendingWake.delete(id);
       } else if (t - started > WAKE_WINDOW) {
         push(r.wakes, { t: started, ok: false }, CAP.wakes);
@@ -154,6 +156,42 @@ export class Telemetry {
   }
 
   // ── Reading ─────────────────────────────────
+  // How this TV goes off. `last`: 'off' when it powered down first and left
+  // the network after (a normal switch-off, or it was asked to), 'lost' when
+  // it vanished while on (unplugged, Wi-Fi). `autoOff`: it keeps switching
+  // itself off after the same time on, with nobody pressing power on any TV
+  // (a Roku's power-off reaches its TV over HDMI-CEC) → a sleep timer.
+  offPattern(id) {
+    const r = this.tvs.get(id);
+    if (!r?.power.length) return { last: null, autoOff: null };
+    const now = this.now();
+    const asks = [];
+    for (const rec of this.tvs.values()) for (const c of rec.cmds) if (/^power(Off|All)/.test(c.a)) asks.push(c.t);
+    const asked = (t) => asks.some((a) => a <= t + 2000 && t - a < 30_000);
+    const offline = r.online.filter((x) => !x.v).map((x) => x.t);
+    const lostAt = (t) => offline.some((o) => Math.abs(o - t) < 2000); // power and network gone at once
+    const sessions = [];
+    let start = null;
+    for (const p of r.power) {
+      if (p.v) start = p.t;
+      else if (start != null) {
+        sessions.push({ start, end: p.t });
+        start = null;
+      }
+    }
+    const lastDrop = r.power.findLast((p) => !p.v);
+    const last = r.last.online || !lastDrop ? null : lostAt(lastDrop.t) && !asked(lastDrop.t) ? 'lost' : 'off';
+    const itself = sessions.filter((x) => x.end > now - 14 * DAY && x.end - x.start >= 3 * 60_000 && !asked(x.end) && !lostAt(x.end));
+    let best = [];
+    for (const x of itself) {
+      const near = itself.filter((y) => Math.abs(y.end - y.start - (x.end - x.start)) <= 2 * 60_000);
+      if (near.length > best.length) best = near;
+    }
+    if (best.length < 2 || best.length * 2 < itself.length) return { last, autoOff: null };
+    const lens = best.map((x) => x.end - x.start).sort((a, b) => a - b);
+    return { last, autoOff: { minutes: Math.round(lens[Math.floor(lens.length / 2)] / 60_000), count: best.length, lastAt: Math.max(...best.map((x) => x.end)) } };
+  }
+
   summary(id) {
     this.#settleWakes(id);
     const r = this.rec(id);
@@ -208,7 +246,8 @@ export class Telemetry {
         up = null;
       }
     }
-    const wakes = r.wakes;
+    // Older files logged a hand switch-on 20 min later as a "working" wake.
+    const wakes = r.wakes.map((w) => (w.ok && w.ms > WAKE_WINDOW ? { t: w.t, ok: false } : w));
     const wakeOk = wakes.filter((w) => w.ok);
     const vols = r.volume.map((v) => v.v);
     const apps = { ...r.apps };
@@ -256,6 +295,7 @@ export class Telemetry {
         mutedPct: r.volume.length ? Math.round((r.volume.filter((v) => v.m).length / r.volume.length) * 100) : null,
       },
       sightings: r.sightings,
+      autoOff: this.offPattern(id).autoOff,
     };
   }
 

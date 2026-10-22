@@ -269,3 +269,50 @@ test('Worker rejects non-JSON and oversized bodies, passes other paths to assets
   assert.equal((await handle(new Request('https://x/hearth/api/insights', { method: 'POST', headers: { 'content-type': 'application/json' }, body: big }), env)).status, 413);
   assert.equal(await (await handle(new Request('https://x/hearth/demo/'), env)).text(), 'asset');
 });
+
+test('telemetry: a TV that keeps switching itself off after ~15 min', () => {
+  let now = 10_000_000;
+  const tel = new Telemetry({ now: () => now });
+  const min = 60_000;
+  const session = (id, mins, { asked = false, other = null, lost = false } = {}) => {
+    tel.state(id, { online: true, power: 'on' });
+    now += mins * min;
+    if (asked) tel.command(id, 'powerOff', true, 5);
+    if (other) tel.command(other, 'powerOff', true, 5); // a Roku's off reaches its TV over CEC
+    if (lost) tel.state(id, { online: false, power: 'off' });
+    else {
+      tel.state(id, { online: true, power: 'standby' });
+      now += 15_000;
+      tel.state(id, { online: false, power: 'off' });
+    }
+    now += 30 * min;
+  };
+  session('tv', 19, { other: 'roku' });
+  session('tv', 15);
+  assert.equal(tel.offPattern('tv').autoOff, null, 'once is not a pattern');
+  assert.equal(tel.offPattern('tv').last, 'off', 'powered down, then left the network: a normal off');
+  session('tv', 14.5);
+  session('tv', 40, { asked: true });
+  const p = tel.offPattern('tv');
+  assert.deepEqual([p.autoOff.minutes, p.autoOff.count], [15, 2]);
+  const r = rate({ id: 'tv', brand: 'samsung', paired: true, canWake: true, state: { online: false } }, tel.summary('tv'), null);
+  const f = r.findings.find((x) => /Turns itself off/.test(x.title));
+  assert.equal(f.severity, 'high');
+  assert.match(f.fix, /No Signal Power Off/);
+  // Vanished while on (unplugged): not a timer, and the doctor is the right call.
+  session('plug', 15, { lost: true });
+  session('plug', 15, { lost: true });
+  assert.deepEqual(tel.offPattern('plug'), { last: 'lost', autoOff: null });
+});
+
+test('telemetry: switching a TV on by hand long after a wake isn’t a working wake', () => {
+  let now = 1_000_000;
+  const tel = new Telemetry({ now: () => now });
+  tel.state('tv', { online: false, power: 'off' });
+  tel.wakeStart('tv');
+  now += 20 * 60_000; // nothing happened; someone found the remote
+  tel.state('tv', { online: true, power: 'on' });
+  const s = tel.summary('tv');
+  assert.equal(s.wake.ok, 0);
+  assert.equal(s.wake.successPct, 0);
+});

@@ -166,6 +166,12 @@ const WAKE_FIX = {
   androidtv: 'Google TVs only turn on from their own remote or Google Home, not over the local network.',
   appletv: 'Connect it in Hearth (the two codes); a paired Apple TV wakes over the network, and turns the TV on with it over HDMI-CEC.',
 };
+const AUTO_OFF_FIX = {
+  samsung: 'On the TV: Settings → System (General on 2018+) → Eco Solution → No Signal Power Off: Off, and Auto Power Off: Off. Also check Settings → System → Time → Sleep Timer.',
+  lg: 'On the TV: Settings → General → Eco Mode (or Energy Saving) → Auto Power Off: Off, and Time & Timer → Sleep Timer: Off.',
+  roku: 'Settings → System → Power → Auto power savings: turn it off.',
+  androidtv: 'Settings → System → Power & Energy → When inactive / Turn off display: Never.',
+};
 const PRIVACY_FIX = {
   lg: 'Settings → General → System → Additional Settings → Live Plus: Off; Support → Privacy → User Agreements: untick Viewing Information.',
   samsung: 'Settings → Support → Terms & Privacy → Viewing Information Services: Off; Interest-Based Advertisement: Off.',
@@ -182,6 +188,11 @@ export function findings(view, t, d, year, sub) {
   if (view.paired && !view.state?.online) add('info', 'Off right now', 'Being off isn’t a problem. A few checks wait until it’s on.', 'Nothing to do.');
   if (view.brand === 'appletv' ? !view.paired : !view.canWake || view.brand === 'androidtv') add('medium', 'Can’t be turned on from your phone', 'Hearth has no way to wake it from sleep.', WAKE_FIX[view.brand]);
   else if (t?.wake?.attempts >= 2 && t.wake.successPct < 60) add('high', 'Wake-ups often fail', `${t.wake.ok} of ${t.wake.attempts} worked.`, WAKE_FIX[view.brand]);
+  if (t?.autoOff) {
+    const { minutes, count } = t.autoOff;
+    const why = minutes >= 13 && minutes <= 17 ? ' 15 minutes is the usual “no signal” timer: the TV thinks nothing is playing.' : '';
+    add('high', `Turns itself off after about ${minutes} min`, `${count} times lately, with nobody pressing power.${why}`, AUTO_OFF_FIX[view.brand] ?? 'Look in the TV’s settings for Sleep Timer, Auto Power Off or No Signal Power Off and turn them off.');
+  }
   if (d?.software?.updateAvailable === true) add('medium', 'A software update is waiting', 'Updates fix bugs and security holes.', 'Install it from the TV’s settings when nobody’s watching.');
   if (t?.commands?.p95 > 700) add('medium', 'Slow to respond', `1 in 20 presses takes over ${t.commands.p95} ms.`, 'Move the router closer, use 5 GHz Wi-Fi or plug in a network cable.');
   if (d?.network?.signalDbm != null && d.network.signalDbm < -72) add('medium', 'Weak Wi-Fi', `Signal is ${d.network.signalDbm} dBm.`, 'Use a cable or add a mesh point near the TV.');

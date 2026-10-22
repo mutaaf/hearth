@@ -140,6 +140,8 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 - **Roku:** nothing to pair.
 
 
+- **A TV keeps switching itself off (and Hearth loses it).** If it goes dark after the same time again and again (often 15 minutes), a timer on the TV is doing it, not Hearth. Hearth spots the pattern and the remote's banner says *Turns itself off after ~15 min*; tap it for the setting to change. On a Samsung that's Settings → System (General on 2018+) → Eco Solution → **No Signal Power Off** and **Auto Power Off**: Off. A TV that just switched off stays connected: no Fix or re-pairing needed, turn it on and it's back.
+- **An older Samsung (2016-17) won't turn on from the phone.** When it's off it leaves the network completely, so nothing can reach it. On the TV: Settings → General → Network → Expert Settings → **Power On with Mobile** (and Samsung Instant On, if it has it). A Roku stick plugged into the TV's USB port dies with it too: give it the wall adapter.
 - **"No TVs answered".** Make sure the TV is really on, not in standby, and on the same network as the computer running Hearth. Guest Wi-Fi and some mesh "client isolation" settings block discovery. Add the TV by IP instead (Settings → Network on the TV shows it).
 - **Mac: nothing found at all.** macOS may ask to let Terminal/Node "find devices on your local network". Allow it (System Settings → Privacy & Security → Local Network).
 - **The pairing prompt never appeared.** On LG, check Settings → General → **LG Connect Apps** is on (or use *Show a number on the TV*). On Samsung, check Settings → General → External Device Manager → **Device Connection Manager**.
