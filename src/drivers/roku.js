@@ -1,3 +1,4 @@
+import { parseRokuPlayer } from '../../web/playback.js';
 import { HearthError, offline, unsupported } from '../errors.js';
 import { isMac, tvId } from '../discovery.js';
 import { Driver } from './base.js';
@@ -132,9 +133,14 @@ export class RokuDriver extends Driver {
       const home = !m || HOME_APPS.has(m[1]);
       const app = home ? null : m[1];
       const appTitle = home ? null : decode(m[2]).trim() || null;
-      this.setState({ online: true, power: info.power, app, appTitle });
+      // What the player is doing (play/pause, position): only inside an app.
+      let media = app ? parseRokuPlayer(await this.#ecp('GET', '/query/media-player').catch(() => '')) : null;
+      // Paused at the same spot: keep the old read so nothing is re-sent.
+      const was = this.state.media;
+      if (media && was && media.state === was.state && media.position === was.position) media = was;
+      this.setState({ online: true, power: info.power, app, appTitle, media });
     } catch {
-      this.setState({ online: false, power: 'off', app: null, appTitle: null });
+      this.setState({ online: false, power: 'off', app: null, appTitle: null, media: null });
     }
   }
 

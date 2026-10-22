@@ -10,7 +10,7 @@ const DEVICE_INFO = fixture('roku-device-info.xml');
 const APPS = fixture('roku-apps.xml');
 
 const received = [];
-const fake = { power: 'PowerOn', isTv: false, active: '<active-app><app>Roku</app></active-app>', forbid: false };
+const fake = { power: 'PowerOn', isTv: false, active: '<active-app><app>Roku</app></active-app>', forbid: false, player: '<player error="false" state="none"/>' };
 let server;
 let base;
 
@@ -29,6 +29,7 @@ before(async () => {
     }
     if (req.url === '/query/apps') return res.end(APPS);
     if (req.url === '/query/active-app') return res.end(fake.active);
+    if (req.url === '/query/media-player') return res.end(fake.player);
     if (req.method === 'POST') return res.end();
     res.writeHead(404);
     res.end();
@@ -42,7 +43,7 @@ after(() => server.close());
 const makeTv = () => ({ id: 'roku-test', brand: 'roku', name: 'Den', ip: '127.0.0.1', macs: [] });
 const reset = () => {
   received.length = 0;
-  Object.assign(fake, { power: 'PowerOn', isTv: false, active: '<active-app><app>Roku</app></active-app>', forbid: false });
+  Object.assign(fake, { power: 'PowerOn', isTv: false, active: '<active-app><app>Roku</app></active-app>', forbid: false, player: '<player error="false" state="none"/>' });
 };
 
 test('parseRokuDeviceInfo reads name, model, kind and MACs', () => {
@@ -121,7 +122,9 @@ test('polling reports the app on screen; standby and the home screen show nothin
   try {
     const state = new Promise((resolve) => driver.on('state', (s) => s.online && resolve(s)));
     driver.start();
-    assert.deepEqual(await state, { online: true, power: 'on', volume: null, muted: null, app: '12', appTitle: 'Netflix' });
+    const { media, ...rest } = await state;
+    assert.deepEqual(rest, { online: true, power: 'on', volume: null, muted: null, app: '12', appTitle: 'Netflix' });
+    assert.equal(media.state, 'stopped');
     // Asleep: the Roku still names the last app, but nothing is playing.
     fake.power = 'DisplayOff';
     await driver.refresh();
@@ -130,7 +133,7 @@ test('polling reports the app on screen; standby and the home screen show nothin
     fake.power = 'PowerOn';
     fake.active = '<active-app><app id="562859" type="appl">Roku Dynamic Menu</app></active-app>';
     await driver.refresh();
-    assert.deepEqual([driver.state.power, driver.state.app, driver.state.appTitle], ['on', null, null]);
+    assert.deepEqual([driver.state.power, driver.state.app, driver.state.appTitle, driver.state.media], ['on', null, null, null]);
   } finally {
     await driver.stop();
   }
@@ -149,4 +152,20 @@ test('inputs: Roku TVs list HDMI, sticks say not supported', async () => {
   assert.equal(tv.capabilities.inputs, true);
   await tv.setInput('tvinput.hdmi1');
   assert.equal(received.at(-1).url, '/launch/tvinput.hdmi1');
+});
+
+test('inside an app, the media player says playing or paused, with position', async () => {
+  reset();
+  fake.active = '<active-app><app id="12" type="appl" version="5.0">Netflix</app></active-app>';
+  fake.player = '<player error="false" state="play"><plugin bandwidth="1 bps" id="12" name="Netflix"/><position>51400 ms</position><duration>2700000 ms</duration><is_live blah="x">false</is_live></player>';
+  const driver = new RokuDriver(makeTv(), { base });
+  await driver.refresh();
+  assert.equal(driver.state.app, '12');
+  assert.deepEqual({ ...driver.state.media, at: 0 }, { state: 'playing', position: 51400, duration: 2700000, live: false, at: 0, source: 'roku' });
+  // On the home screen nobody asks the player.
+  fake.active = '<active-app><app>Roku</app></active-app>';
+  received.length = 0;
+  await driver.refresh();
+  assert.equal(driver.state.media, null);
+  assert.ok(!received.some((r) => r.url === '/query/media-player'));
 });

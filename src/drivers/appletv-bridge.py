@@ -146,6 +146,8 @@ class Device(DeviceListener, PowerListener, PushListener, AudioListener):
             if p.series_name and title and p.series_name not in title:
                 title = f"{p.series_name}: {title}"
             state["title"] = title or None
+            state["position"] = p.position
+            state["duration"] = p.total_time
             state["playing"] = {DeviceState.Playing: "playing", DeviceState.Paused: "paused",
                                 DeviceState.Loading: "loading", DeviceState.Seeking: "playing"}.get(p.device_state)
         if self.available(FeatureName.Volume):

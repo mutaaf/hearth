@@ -1,3 +1,4 @@
+import { parseLgMedia } from '../../web/playback.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,7 @@ const SSAP = {
   volume: 'ssap://audio/getVolume',
   setVolume: 'ssap://audio/setVolume',
   foreground: 'ssap://com.webos.applicationManager/getForegroundAppInfo',
+  media: 'ssap://com.webos.media/getForegroundAppInfo',
   launchPoints: 'ssap://com.webos.applicationManager/listLaunchPoints',
   launch: 'ssap://system.launcher/launch',
   inputs: 'ssap://tv/getExternalInputList',
@@ -229,12 +231,17 @@ export class LgDriver extends Driver {
       // Asleep: nothing is "playing", whatever the launcher last had up.
       this.setState({ app: on ? res.appId || null : null, inputLabel: on ? (this.#inputLabels.get(res.appId) ?? null) : null });
     });
+    // The media pipeline's play state (webOS 4+); older sets just never answer.
+    client.subscribe(SSAP.media, (err, res) => {
+      if (err || !res) return;
+      this.setState({ media: this.state.power === 'on' ? parseLgMedia(res) : null });
+    });
     client.subscribePowerState((err, res) => {
       if (err || !res) return;
       const power = res.state === 'unknown' ? 'on' : res.state;
       const was = this.state.power;
       // Asleep (Active Standby / Screen Off): nothing is "playing" any more.
-      this.setState(power === 'on' ? { power } : { power, app: null, inputLabel: null });
+      this.setState(power === 'on' ? { power } : { power, app: null, inputLabel: null, media: null });
       if (power === 'on' && was !== 'on') this.refresh();
     });
 

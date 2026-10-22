@@ -1,3 +1,4 @@
+import { fromAppleTv } from '../../web/playback.js';
 import { HearthError, offline, unsupported } from '../errors.js';
 import { getBridge } from '../atv-bridge.js';
 import { Driver } from './base.js';
@@ -67,7 +68,7 @@ export class AppleTvDriver extends Driver {
     on('closed', (msg) => {
       if (msg.key !== this.#key) return;
       this.#connected = false;
-      this.setState({ online: false, power: 'off', app: null, appTitle: null, nowPlaying: null, playing: null });
+      this.setState({ online: false, power: 'off', app: null, appTitle: null, nowPlaying: null, playing: null, media: null });
       this.#scheduleRetry();
     });
     on('restart', () => {
@@ -154,6 +155,7 @@ export class AppleTvDriver extends Driver {
       appTitle: on ? s.appTitle ?? null : null,
       nowPlaying: on ? s.title ?? null : null,
       playing: on ? s.playing ?? null : null,
+      media: on ? fromAppleTv(s) : null,
       volume: s.volume ?? null,
       unavailable: null,
     });
