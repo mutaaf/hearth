@@ -60,6 +60,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // phone itself (window.HearthHost, same { api, events } shape); everything
 // else in the app is identical.
 const demo = window.HearthDemo ?? window.HearthHost;
+if (window.HearthHost) document.documentElement.dataset.host = 'app'; // hides web-only bits (style.css)
 
 async function api(method, path, body) {
   if (demo) return demo.api(method, path, body);

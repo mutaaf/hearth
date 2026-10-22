@@ -342,7 +342,7 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       frame('done', `
         <div class="setup-art"><div class="field-art"></div></div>
         <h2>You did it! 🎉</h2>
-        <p class="say-it"><b>${esc(tv?.name)}</b> is on your remote now. Every phone on your Wi-Fi can use it.</p>
+        <p class="say-it"><b>${esc(tv?.name)}</b> is on your remote now.${window.HearthHost ? '' : ' Every phone on your Wi-Fi can use it.'}</p>
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="finish">Open the remote</button>
           <button type="button" class="ghost" data-press="up" data-setup="again">Add another TV</button>

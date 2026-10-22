@@ -526,3 +526,7 @@ svg { width: 1em; height: 1em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+/* The App Store app (window.HearthHost): no install nudges, no household
+   (the hub is on this phone), no share-the-link rows. */
+[data-host="app"] :is([data-install], [data-house="phones"]) { display: none !important; }
