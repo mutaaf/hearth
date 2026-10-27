@@ -209,7 +209,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `nowPlaying` (title, "Series: Episode"), `playing` (`playing`/`paused`/`loading`).
 - `volume` + `capabilities.volumeLevel` only when pyatv reports a level (Apple TV driving HomePods). With a TV over HDMI-CEC, volume up/down are HID presses with no level.
 - `unavailable`: set when the bridge can't start (no Python/pyatv); the app shows "Needs setup" and the reason. In `auto` mode (the venv exists) a bridge that then fails to start hands the driver to the JS transport instead.
-- **JS transport:** `power` from FetchAttentionState + SystemStatus/TVSystemStatus pushes, volume from `_iMC`/`_mcc` GetVolume (HomePods only). No `app`/`nowPlaying`/`playing` (that's MRP over AirPlay) and no typing (`capabilities.keyboard: false`; tvOS wants keyed-archiver RTI payloads). Unverified on a real Apple TV as of 2026-10-27; tested against a fake in test/appletv-js.test.js and, once by hand, against pyatv 0.18's own server-side Companion auth (`pyatv.protocols.companion.server_auth`) on 127.0.0.1.
+- **JS transport:** `power` from FetchAttentionState + SystemStatus/TVSystemStatus pushes, volume from `_iMC`/`_mcc` GetVolume (HomePods only). No `app`/`nowPlaying`/`playing` (that's MRP over AirPlay) and no typing (`capabilities.keyboard: false`; tvOS wants keyed-archiver RTI payloads). Verified on a real Apple TV by the owner on 2026-10-27 (TestFlight 2610271704: pairing with one code, remote, apps, power); also tested against a fake in test/appletv-js.test.js and, once by hand, against pyatv 0.18's own server-side Companion auth (`pyatv.protocols.companion.server_auth`) on 127.0.0.1.
 
 ## Environment nuances
 
