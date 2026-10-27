@@ -46,10 +46,10 @@
         <p class="lede">Hearth finds the LG, Samsung, Roku and Google TV devices on your Wi-Fi and turns every phone into a fast, ad-free remote. No codes. No accounts. No cloud. It lives in your house.</p>
         <div class="ctas">
           <a class="cta" href="demo/">Try the live demo</a>
-          <a class="cta-ghost" href="#install">Install in one command</a>
+          <a class="cta-ghost" href="#install">Get the iPhone app</a>
         </div>
         <ul class="proof" aria-label="Highlights">
-          <li>LG</li><li>Samsung</li><li>Roku</li><li>Google TV</li><li>Works offline</li><li>Free · MIT</li>
+          <li>LG</li><li>Samsung</li><li>Roku</li><li>Google TV</li><li>Apple TV</li><li>No computer needed</li><li>Free for one TV</li>
         </ul>
       </div>
       <p class="shape-label" id="shapeLabel" aria-hidden="true">the house</p>
@@ -230,18 +230,21 @@
 
     <section class="install" id="install" aria-labelledby="install-title">
       <div class="install-copy">
-        <p class="kicker">Install</p>
-        <h2 id="install-title">One command on a computer that stays on.</h2>
-        <p>A Mac mini, an old laptop, a Raspberry Pi. You need <a href="https://nodejs.org">Node.js 20.19+</a>. Run this, then scan the QR code it prints with your phone.</p>
+        <p class="kicker">Get it</p>
+        <h2 id="install-title">An app. Three taps. No homework.</h2>
+        <p>Download Hearth on your iPhone, open it on your home Wi-Fi and tap your TV. That’s the whole setup: no computer, no cables, no accounts, nothing to type into a terminal.</p>
+        <p class="aside">Like to tinker? Hearth is open source, and you can also <a href="https://github.com/mutaaf/hearth#readme">run it on your own computer</a> so every phone and browser in the house shares it.</p>
       </div>
-      <div class="term">
-        <div class="term-bar"><i></i><i></i><i></i><span>~/</span><button type="button" class="copy" id="copy">Copy</button></div>
-        <pre id="cmd"><span class="p" aria-hidden="true">$ </span>git clone https://github.com/mutaaf/hearth
-<span class="p" aria-hidden="true">$ </span>cd hearth &amp;&amp; npm run up</pre>
-        <div class="term-out">
-          <span>✓ Node 22.12</span>
-          <span>✓ Dependencies installed</span>
-          <span class="hot">🔥 Hearth is ready · scan the QR with your phone</span>
+      <div class="term get">
+        <div class="term-bar"><i></i><i></i><i></i><span>setup, start to finish</span></div>
+        <ol class="get-steps">
+          <li><b>1</b><span>Get <strong>Hearth</strong> on the App Store</span></li>
+          <li><b>2</b><span>Open it on your Wi-Fi and tap <strong>Allow</strong></span></li>
+          <li><b>3</b><span>Tap your TV. You’re the remote now.</span></li>
+        </ol>
+        <div class="get-foot">
+          <span class="store-badge" aria-label="Coming soon to the App Store"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.3 1.2 9.7.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.6-3.9zM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg><span><small>Coming soon to the</small>App Store</span></span>
+          <span class="hot">Free for one TV · more from $1.99, once</span>
         </div>
       </div>
     </section>
@@ -253,12 +256,12 @@
       </header>
       <div class="faq-list">
         <details>
-          <summary>Why doesn’t it just run on this website?</summary>
-          <p>On purpose. Browsers, rightly, won’t let a website reach the devices on your home network. Hearth runs inside your house, so your TVs, pairing keys and viewing habits never leave it. The demo on this page uses pretend TVs.</p>
+          <summary>Do I need a computer?</summary>
+          <p>No. The iPhone app talks to your TVs straight over your Wi-Fi, so your TVs, pairing keys and viewing habits never leave your house. (A website can’t do that, rightly, which is why the demo on this page uses pretend TVs.)</p>
         </details>
         <details>
           <summary>Will it work with my TV?</summary>
-          <p>If it’s an LG smart TV from 2014 on (webOS), a Samsung smart TV from 2016 on (Tizen), any Roku player or Roku TV, or a Google TV / Android TV, almost certainly. Google TVs get volume, mute and apps without any code; arrow keys there need Google’s one-time code, which is coming as an optional unlock. Vizio, Sony and Apple TV are on the roadmap.</p>
+          <p>If it’s an LG smart TV from 2014 on (webOS), a Samsung smart TV from 2016 on (Tizen), any Roku player or Roku TV, or a Google TV / Android TV, almost certainly. Google TVs get volume, mute and apps without any code; arrow keys there need Google’s one-time code, which is coming as an optional unlock. Apple TV is in testing now (you type a 4-digit code once). Vizio and Sony are on the roadmap.</p>
         </details>
         <details>
           <summary>Do I need codes or accounts?</summary>
@@ -278,7 +281,7 @@
         </details>
         <details>
           <summary>What does it cost?</summary>
-          <p>Nothing. It’s open source under the MIT license, with no accounts, subscriptions or ads.</p>
+          <p>Your first TV is free, forever. More TVs are a one-time purchase: $1.99 a TV, $5.99 for up to 10, or $9.99 for every TV you’ll ever own. No subscriptions, no ads, no accounts, and Family Sharing covers the whole house. The code is open source under the MIT license.</p>
         </details>
       </div>
     </section>

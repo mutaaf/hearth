@@ -333,7 +333,7 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
       const tip = brand === 'samsung'
         ? 'On the TV: Settings → General → External Device Manager → Device Connection Manager → turn it on.'
         : brand === 'appletv'
-          ? 'On the Apple TV: Settings → AirPlay and HomeKit → Allow Access → <b>Anyone on the Same Network</b>. Still stuck? Run <b>npm run up</b> on the Hearth computer (it sets up Apple TV support).'
+          ? 'On the Apple TV: Settings → AirPlay and HomeKit → Allow Access → <b>Anyone on the Same Network</b>.'
           : 'On the TV: Settings → General → Devices → External Devices → <b>LG Connect Apps</b> → On (older TVs: Settings → Network).';
       frame('pairfail', `
         <h2>Almost! Let’s try again.</h2>

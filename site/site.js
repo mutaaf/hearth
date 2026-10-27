@@ -103,16 +103,4 @@
     });
   });
 
-  // Copy the install command.
-  var copy = document.getElementById('copy');
-  copy.addEventListener('click', function () {
-    var text = 'git clone https://github.com/mutaaf/hearth\ncd hearth && npm run up';
-    var done = function (msg, ok) {
-      copy.textContent = msg;
-      copy.classList.toggle('done', ok);
-      setTimeout(function () { copy.textContent = 'Copy'; copy.classList.remove('done'); }, 1800);
-    };
-    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { done('Copied ✓', true); }, function () { done('Select to copy', false); });
-    else done('Select to copy', false);
-  });
 })();

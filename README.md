@@ -2,18 +2,15 @@
 
 **[mutaafaziz.com/hearth](https://mutaafaziz.com/hearth/)** · **[try the demo](https://mutaafaziz.com/hearth/demo/)**
 
-**One remote for every TV in the house.** Hearth finds the LG and Samsung smart TVs, Rokus, Google TVs and Apple TVs on your Wi-Fi and gives every phone in the house a fast, tactile remote: power, D-pad, volume, apps, inputs, and "Dinner's ready!" on screen. No codes, no accounts, no cloud, no ads. It runs on any always-on computer at home.
+**One remote for every TV in the house.** Hearth finds the LG and Samsung smart TVs, Rokus, Google TVs and Apple TVs on your Wi-Fi and gives every phone in the house a fast, tactile remote: power, D-pad, volume, apps, inputs, and "Dinner's ready!" on screen. No codes, no accounts, no cloud, no ads.
 
-```
-git clone https://github.com/mutaaf/hearth && cd hearth
-npm run up
-```
+**Most people want the iPhone app** (coming soon to the App Store): download it, open it on your Wi-Fi, tap your TV. No computer, nothing to install, nothing to type. Your first TV is free.
 
-Then scan the QR code it prints with your phone. That's the whole setup.
+This repo is the open-source engine behind it. You can also run it yourself on an always-on computer so every phone and browser in the house shares one Hearth; that's what the rest of this page covers.
 
 ---
 
-## Getting started (5 minutes, no tech skills needed)
+## Run it on your own computer (for tinkerers)
 
 1. **Install Node.js** (version 20.19 or newer) from [nodejs.org](https://nodejs.org) on a computer that's usually on: a Mac mini, an old laptop, a Raspberry Pi. For the full Apple TV experience it also wants Python 3.10+ (macOS: `brew install python`); without it Apple TVs still get the remote (buttons, power, apps) from Hearth's built-in JavaScript client, just not "what's playing".
 2. **Run `npm run up`** in the `hearth` folder. It installs what it needs (including Apple TV support, in its own Python environment) and starts Hearth in the background. Run it again any time; it won't start a second copy.
