@@ -86,8 +86,8 @@ export const EDGE_VISION_MODELS = ['@cf/google/gemma-4-26b-a4b-it', '@cf/mistral
 const userParts = (user, image) => (image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: image.dataUrl } }] : user);
 
 // ── One JSON answer per provider ─────────────
-async function completeEdge({ env, model, system, user, image, signal }) {
-  const body = { messages: [{ role: 'system', content: system }, { role: 'user', content: userParts(user, image) }], max_tokens: 1100 };
+async function completeEdge({ env, model, system, user, image, signal, maxTokens = 1100 }) {
+  const body = { messages: [{ role: 'system', content: system }, { role: 'user', content: userParts(user, image) }], max_tokens: maxTokens };
   if (/gemma-4|qwen3|glm/.test(model)) body.chat_template_kwargs = { enable_thinking: false };
   const res = await env.AI.run(model, body, { signal });
   const text = typeof res === 'string' ? res : res?.response ?? res?.choices?.[0]?.message?.content ?? '';
@@ -138,8 +138,8 @@ async function completeCompatible({ provider, key, model, system, user, image })
 }
 
 // `image` ({ mime, base64, dataUrl }) and `schema` are optional (the bill reader).
-export function complete({ provider, env, key, model, system, user, image = null, schema, signal }) {
-  if (provider === 'edge') return completeEdge({ env, model, system, user, image, signal });
+export function complete({ provider, env, key, model, system, user, image = null, schema, signal, maxTokens }) {
+  if (provider === 'edge') return completeEdge({ env, model, system, user, image, signal, maxTokens });
   if (provider === 'anthropic') return completeAnthropic({ key, model, system, user, image, schema });
   return completeCompatible({ provider, key, model, system, user, image });
 }

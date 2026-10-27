@@ -113,8 +113,12 @@ export const GUIDE_SYSTEM = `You are Hearth's TV setup expert. Hearth is a phone
 You receive one TV's brand, model code and software version, optionally what went wrong while connecting, and Hearth's own built-in guide for that brand. Identify the exact model family and year from the model code, then write the steps for THIS model: exact menu paths in the TV's own words for its year (menus moved between years), what appears on the TV while connecting, which settings keep it findable and able to be switched on from a phone, and fixes for the problem described.
 Rules: answer with ONLY a JSON object matching the schema. Plain, friendly, second person; one or two short sentences per item; menu paths with → between levels. Never mention other apps by name. If you aren't sure of the model year or a menu path, say so with confidence "low" and keep to what is true for the brand. Never invent a setting that the brand doesn't have.`;
 
+// Small models don't get the schema as a response format, so the prompt
+// spells out the exact keys (and keeps lists short so the answer fits).
+const SHAPE = `{"family":"…","year":2016,"os":"…","connect":{"how":"none|allow|pin|code|allow-or-pin","summary":"one sentence","before":["Settings → …"],"onTv":"what shows on the TV, or null"},"keepReachable":[{"title":"…","path":"Settings → …"}],"troubleshoot":[{"when":"setup|refused|no-prompt|not-found|drops|wont-wake|auto-off|other","fix":"…"}],"quirks":["…"],"confidence":"high|medium|low"}`;
+
 export const guidePrompt = (device, symptom, builtIn) =>
-  `TV: ${JSON.stringify(device)}\nWhat happened: ${JSON.stringify(symptom)}\nHearth's built-in guide for this brand (improve on it for this exact model): ${JSON.stringify(builtIn ?? null).slice(0, 3000)}`;
+  `TV: ${JSON.stringify(device)}\nWhat happened: ${JSON.stringify(symptom)}\nHearth's built-in guide for this brand (improve on it for this exact model): ${JSON.stringify(builtIn ?? null).slice(0, 2500)}\n\nAnswer with exactly this JSON shape and nothing else (at most 3 keepReachable, 5 troubleshoot, 3 quirks):\n${SHAPE}`;
 
 const str = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const list = (v, n, f) => (Array.isArray(v) ? v.map(f).filter(Boolean).slice(0, n) : []);

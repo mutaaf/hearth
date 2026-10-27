@@ -276,7 +276,7 @@ async function device(req, env) {
     let lastErr = null;
     for (const m of EDGE_MODELS) {
       try {
-        const r = await complete({ provider: 'edge', env, key: '', model: m, system: GUIDE_SYSTEM, user: guidePrompt(dev, symptom, body.builtIn), schema: GUIDE_SCHEMA, signal: abort.signal });
+        const r = await complete({ provider: 'edge', env, key: '', model: m, system: GUIDE_SYSTEM, user: guidePrompt(dev, symptom, body.builtIn), schema: GUIDE_SCHEMA, signal: abort.signal, maxTokens: 1800 });
         const guide = validateGuide(extractJson(r.text));
         if (!guide) throw Object.assign(new Error('The AI’s answer wasn’t usable.'), { userFacing: true });
         const used = r.model || m;
