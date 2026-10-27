@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Backoff } from './backoff.js';
 import { HearthError } from './errors.js';
+import { closeJsTransport, getJsTransport } from './atv/transport.js';
 import { log } from './log.js';
 
 // Apple TVs speak Companion/AirPlay with HAP pairing; pyatv (Python) is the
@@ -210,13 +211,36 @@ export class AtvBridge extends EventEmitter {
 
 // One bridge per Hearth process, created on first use. Tests swap in a fake.
 let shared = null;
+let injected = false;
 export function getBridge() {
   shared ??= new AtvBridge();
   return shared;
 }
 export function setBridge(bridge) {
   shared = bridge;
+  injected = bridge != null;
 }
 export async function closeBridge() {
   await shared?.close?.();
+  await closeJsTransport();
+}
+
+// Which Apple TV transport to use: pyatv through this bridge, or the pure-JS
+// Companion client (src/atv/transport.js). HEARTH_ATV=js|python forces one.
+// Otherwise the bridge when its venv exists (`npm run up` made it), and JS
+// where there's no Python at all (the phone app, a bare install). 'auto'
+// also lets the driver fall back to JS if the bridge then fails to start.
+export function atvMode(env = process.env) {
+  const forced = String(env.HEARTH_ATV ?? '').toLowerCase();
+  if (forced === 'js') return 'js';
+  if (forced === 'python' || forced === 'bridge' || injected) return 'bridge';
+  if (process.platform === 'ios' || process.platform === 'android') return 'js';
+  try {
+    return existsSync(venvPython()) ? 'auto' : 'js';
+  } catch {
+    return 'js';
+  }
+}
+export function getAtvTransport(mode = atvMode()) {
+  return mode === 'js' ? getJsTransport() : getBridge();
 }

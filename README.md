@@ -15,7 +15,7 @@ Then scan the QR code it prints with your phone. That's the whole setup.
 
 ## Getting started (5 minutes, no tech skills needed)
 
-1. **Install Node.js** (version 20.19 or newer) from [nodejs.org](https://nodejs.org) on a computer that's usually on: a Mac mini, an old laptop, a Raspberry Pi. For Apple TVs it also needs Python 3.10+ (macOS: `brew install python`); without it everything else still works.
+1. **Install Node.js** (version 20.19 or newer) from [nodejs.org](https://nodejs.org) on a computer that's usually on: a Mac mini, an old laptop, a Raspberry Pi. For the full Apple TV experience it also wants Python 3.10+ (macOS: `brew install python`); without it Apple TVs still get the remote (buttons, power, apps) from Hearth's built-in JavaScript client, just not "what's playing".
 2. **Run `npm run up`** in the `hearth` folder. It installs what it needs (including Apple TV support, in its own Python environment) and starts Hearth in the background. Run it again any time; it won't start a second copy.
 3. **Open the link on your phone.** Scan the QR code, or type the address it shows: `http://<your-computer>.local:8770` (or the `http://192.168…:8770` number). Your phone has to be on the same Wi-Fi.
 4. **Follow the setup screens.** Turn the TV on and tap the big button. Hearth finds it and connects:
@@ -75,7 +75,7 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 
 **About Google TV.** Hearth talks to Google TVs over Cast, which any phone on your Wi-Fi may use, so there's nothing to pair and no code. Cast covers volume, mute, asleep-or-on and launching apps that have a Cast app (Max, Hulu, Peacock, ESPN, Tubi, Pluto TV, Sling, Fubo, Crunchyroll and Apple TV don't, so Hearth says so instead of failing silently). Arrow keys and power live in Google's separate remote protocol, which always requires typing a one-time code shown on the TV. That's coming as an optional *Unlock full remote*.
 
-**About Apple TV.** Hearth uses [pyatv](https://pyatv.dev), the open-source implementation of Apple's own remote protocols, in one small helper process. The first code pairs *Companion* (buttons, power, apps); the second pairs *AirPlay*, which tells Hearth what's playing the moment it changes. iPads, Macs and HomePods also announce themselves on the network; Hearth only lists Apple TVs. Volume buttons go to the TV over HDMI-CEC, so Hearth can't show a level unless the Apple TV plays through HomePods.
+**About Apple TV.** Hearth uses [pyatv](https://pyatv.dev), the open-source implementation of Apple's own remote protocols, in one small helper process. The first code pairs *Companion* (buttons, power, apps); the second pairs *AirPlay*, which tells Hearth what's playing the moment it changes. iPads, Macs and HomePods also announce themselves on the network; Hearth only lists Apple TVs. Volume buttons go to the TV over HDMI-CEC, so Hearth can't show a level unless the Apple TV plays through HomePods. Without Python, Hearth speaks Companion itself (pure JavaScript, the same code the phone app uses): one code, the full remote, no "what's playing" and no typing into search boxes.
 
 ### Commands
 
@@ -90,7 +90,7 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 
 From a script on the computer running Hearth (it's always in the house): `curl -X POST -H 'content-type: application/json' -d '{"app":"youtubetv","tvs":"all","wake":true}' http://<hearth>:8770/api/launch` opens YouTube TV everywhere and returns a result per TV. `GET /api/catalog` lists the app keys.
 
-Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support), `HEARTH_OPEN=1` (no house code: anyone on the Wi-Fi can use it).
+Settings via environment: `HEARTH_PORT` (default `8770`), `HEARTH_HOME` (default `~/.hearth`, where your TVs and pairing keys are saved), `HEARTH_VENV` (default `~/.hearth/py`, the Python environment for Apple TV support), `HEARTH_ATV` (`js` or `python` to force one Apple TV client; by default pyatv when its environment exists, else the built-in one), `HEARTH_OPEN=1` (no house code: anyone on the Wi-Fi can use it).
 
 ## What your TVs cost
 
@@ -157,7 +157,8 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 - **The pairing prompt never appeared.** On LG, check Settings → General → **LG Connect Apps** is on (or use *Show a number on the TV*). On Samsung, check Settings → General → External Device Manager → **Device Connection Manager**.
 - **Roku says no.** Recent Roku OS versions can block network remotes. On the Roku: Settings → System → Advanced system settings → **Control by mobile apps** → Network access → **Default** (or Permissive).
 - **Google TV not found.** It's found over Cast, so it must be on the same network as the computer running Hearth (not a guest network). Nothing needs to be switched on in the TV for this. Guest mode isn't needed either.
-- **Apple TV says it "needs Python 3 and pyatv".** Install Python 3.10+ (`brew install python` on a Mac) and run `npm run up` again. No restart needed.
+- **Apple TV says it "needs Python 3 and pyatv".** That's `HEARTH_ATV=python` without Python: install Python 3.10+ (`brew install python` on a Mac) and run `npm run up` again (no restart needed), or drop the setting to use the built-in client.
+- **Apple TV has no "what's playing".** It's on the built-in client (no Python). Install Python 3.10+, run `npm run up`, then restart Hearth and pair the Apple TV again for the second code.
 - **Apple TV never shows the numbers.** On the Apple TV: Settings → AirPlay and HomeKit → Allow Access → **Anyone on the Same Network**. Type the code within a minute; tap *Show the number again* for a fresh one.
 - **Phone can't open the link.** Your phone must be on the same Wi-Fi, and the computer's firewall must allow incoming connections for Node.
 - **"Unknown host" (421).** Hearth only answers to local names, which blocks a trick called DNS rebinding. Local names are an IP address on your network, `something.local`, a single word like `mac-mini`, or your friendly address. If you reach it through your own domain name (a reverse proxy, Tailscale MagicDNS), add it: `HEARTH_ALLOWED_HOSTS=hearth.example.ts.net npm run up`.
