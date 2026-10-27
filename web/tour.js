@@ -70,6 +70,18 @@ const TOURS = {
   ],
   remote: [
     {
+      sel: ['#modeBar .mode-seg'],
+      move: 'tap',
+      title: 'Four remotes in one',
+      body: 'Remote for menus, Watch for what’s playing, Trackpad for typing and pointing, Gamepad for games. It switches to Watch by itself when a show starts.',
+    },
+    {
+      sel: ['#scSurface'],
+      move: 'swipe',
+      title: 'Watching something',
+      body: 'Tap to play or pause. Swipe or tap a side to skip, hold a side to scrub, swipe down to go back.',
+    },
+    {
       sel: ['#orbStage', '#pad'],
       move: 'drag',
       title: 'The pad',
@@ -176,7 +188,7 @@ export function createTour() {
     const step = steps[at];
     // The house redraws its cards on every TV update: point at the new one.
     if (step.sel && !step.el?.isConnected) step.el = pick(step.sel) ?? step.el;
-    if (step.el && !step.el.isConnected) return;
+    if (step.el && !visible(step.el)) return;
     const spot = root.querySelector('.tour-spot');
     const tip = root.querySelector('.tour-tip');
     const vw = innerWidth;
@@ -300,6 +312,9 @@ export function createTour() {
     },
     get open() {
       return Boolean(root);
+    },
+    get name() {
+      return root ? name : '';
     },
     end,
   };

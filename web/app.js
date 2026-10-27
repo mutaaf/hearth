@@ -865,6 +865,7 @@ function tourSoon() {
 function route() {
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
   const t = m && tvs.get(m[1]);
+  if (tour.open && tour.name !== (t ? 'remote' : 'house')) tour.end(); // about the screen we're leaving
   if (t) {
     const changed = current !== t.id;
     current = t.id;
