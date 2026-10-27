@@ -3,6 +3,7 @@
 // full-screen sheet built from big buttons — no typing required.
 import { feedback, haptic } from './feel.js';
 import { track } from './analytics.js';
+import { quip } from './quips.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const EMOJI = ['🌙', '🍿', '📚', '☀️', '🎮', '🏈', '🧸', '🎉', '🛋️', '🍽️', '🎬', '✨'];
@@ -114,7 +115,7 @@ export function createScenes({ api, getTvs, note }) {
       progress.set(data.id, data);
       if (data.done) {
         feedback(data.ok ? 'success' : 'error');
-        note(data.ok ? `${data.name} ✓` : `${data.name}: some TVs didn’t follow`, !data.ok);
+        note(data.ok ? quip('scene', { scene: data.name }) : `${data.name}: some TVs didn’t follow`, data.ok ? 'success' : true);
         setTimeout(() => {
           progress.delete(data.id);
           render();

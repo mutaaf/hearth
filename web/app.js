@@ -4,6 +4,8 @@
 import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { currentScreen, screen, scrollDepth, track } from './analytics.js';
+import { plain, quip } from './quips.js';
+import { createEggs } from './eggs.js';
 import { createTour } from './tour.js';
 import { createGuide } from './guide.js';
 import { hydrate, tvIconImg } from './icons.js';
@@ -95,16 +97,65 @@ async function api(method, path, body) {
 }
 
 const household = createHousehold({ api, note, isDemo: Boolean(demo) });
+const eggs = createEggs({ note, feedback, savePrefs: (p) => (savePrefs(p), refreshFields(), render()) });
+document.querySelector('.masthead .brand')?.addEventListener('click', () => eggs.logo());
 
 let noteTimer;
-function note(message, error = false) {
-  if (error) track('ui_error', { message: String(message).slice(0, 80), screen: currentScreen() ?? '' });
+// The toast. kind: true/'error', 'success', 'wake', or info (default).
+// It sits in the top layer (popover), so it shows over open sheets too, and
+// it's never blank: an empty or junk message becomes a friendly line.
+const NOTE_ICON = { error: '!', success: '✓', wake: '⚡', info: '' };
+function note(message, kind = false) {
+  const type = kind === true ? 'error' : kind || 'info';
+  const text = plain(message, type === 'error' ? quip('oops') : '');
+  if (!text) return;
+  if (type === 'error') track('ui_error', { message: text.slice(0, 80), screen: currentScreen() ?? '' });
   const el = $('#note');
-  el.textContent = message;
-  el.classList.toggle('error', error);
+  el.querySelector('.note-text').textContent = text;
+  el.querySelector('.note-ico').textContent = NOTE_ICON[type] ?? '';
+  el.dataset.kind = type;
+  const ms = type === 'error' ? 4600 : Math.min(4200, 1900 + text.length * 28);
+  el.style.setProperty('--note-ms', `${ms}ms`);
+  try {
+    if (el.matches(':popover-open')) el.hidePopover();
+    el.showPopover(); // above any open <dialog>
+  } catch {}
+  el.classList.remove('show');
+  void el.offsetWidth; // restart the entrance and the timer bar
   el.classList.add('show');
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => el.classList.remove('show'), error ? 4200 : 2200);
+  noteTimer = setTimeout(hideNote, ms);
+}
+function hideNote() {
+  const el = $('#note');
+  el.classList.remove('show');
+  clearTimeout(noteTimer);
+  setTimeout(() => {
+    if (el.classList.contains('show')) return;
+    try {
+      el.hidePopover();
+    } catch {}
+  }, 400);
+}
+// Flick it away (up), or tap it.
+{
+  const el = document.querySelector('#note');
+  let y0 = null;
+  el?.addEventListener('pointerdown', (e) => (y0 = e.clientY));
+  el?.addEventListener('pointermove', (e) => {
+    if (y0 == null) return;
+    const dy = Math.min(0, e.clientY - y0);
+    el.style.translate = `0 ${dy}px`;
+  });
+  const up = (e) => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0;
+    y0 = null;
+    el.style.translate = '';
+    if (dy < -24 || Math.abs(dy) < 6) hideNote();
+  };
+  el?.addEventListener('pointerup', up);
+  el?.addEventListener('pointercancel', up);
 }
 
 const isOn = (t) => t.state?.online && t.state.power === 'on';
@@ -495,6 +546,8 @@ function setupSliders() {
     const level = volDrag.level;
     lastSent = level;
     api('POST', `/tvs/${id}/volume`, { level }).catch((err) => note(err.message, true));
+    clearTimeout(sendLevel.egg);
+    sendLevel.egg = setTimeout(() => !volDrag && eggs.volume(level), 700); // where it came to rest
     if (!now) sendTimer = setTimeout(() => {
       sendTimer = null;
       sendLevel();
@@ -727,7 +780,7 @@ function noteWaking(id) {
   const t = tvs.get(id);
   if (!t || isOn(t) || isUnknown(t) || !canWakeNow(t) || Date.now() - wakeNoted < 20_000) return;
   wakeNoted = Date.now();
-  note(`Waking ${t.name}… your press goes through once it’s on.`);
+  note(quip('wakingPress', { tv: t.name }), 'wake');
 }
 // Keys go through one queue so a fast swipe-swipe-tap arrives in order.
 let keyQueue = Promise.resolve();
@@ -745,6 +798,7 @@ function sendKey(key, opts = {}) {
   noteWaking(id);
   const body = { key, ...(opts.hold ? { hold: Math.round(opts.hold) } : {}) };
   modes?.noteKey(key); // playing or browsing? (Stream Center)
+  eggs.key(key);
   keyQueue = keyQueue.then(() => {
     const t0 = performance.now();
     return api('POST', `/tvs/${id}/key`, body).then(() => noteLatency(performance.now() - t0));
@@ -762,7 +816,8 @@ async function power(id, on) {
   sound(on ? 'on' : 'off');
   try {
     await api('POST', `/tvs/${id}/power`, { on });
-    note(on ? `Waking ${t.name}…` : `${t.name} off`);
+    note(on ? quip('waking', { tv: t.name }) : quip('tvOff', { tv: t.name }), on ? 'wake' : 'success');
+    eggs.power(id);
   } catch (err) {
     feedback('error');
     note(err.message, true);
@@ -781,7 +836,8 @@ async function allOff() {
       note(`Couldn’t reach: ${failed.map((f) => f.name).join(', ')}`, true);
     } else {
       feedback('success');
-      note('Every screen is off. 🌙');
+      note(quip('allOff'), 'success');
+      eggs.allOff();
     }
   } catch (err) {
     feedback('error');
@@ -793,7 +849,8 @@ async function say(message) {
   try {
     await api('POST', `/tvs/${current}/toast`, { message });
     feedback('success');
-    note('Sent to the screen');
+    note(quip('sent'), 'success');
+    eggs.said(message);
   } catch (err) {
     feedback('error');
     note(err.message, true);
@@ -1010,6 +1067,7 @@ function connectEvents() {
     if (!greeted) scenes.load();
     if (!greeted) followLaunch();
     if (!greeted && !window.HearthDemo) setTimeout(() => guide.checkTickets(), 5000); // answers to "send it to us"
+    if (!greeted) setTimeout(() => eggs.opened(), 2500);
     launcher.load();
     greeted = true;
     bulk.prune();

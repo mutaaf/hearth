@@ -97,7 +97,7 @@
 [data-skin="aurora"][data-mode="light"] .scrim { background: #2a1d1266; }
 [data-skin="aurora"][data-mode="light"] :is(.sheet, .setup) { background: #fbf7f1; color: var(--ink); }
 [data-skin="aurora"][data-mode="light"] .sheet::backdrop { background: #2a1d1266; }
-[data-skin="aurora"][data-mode="light"] .note { background: #fffdf9; box-shadow: 0 14px 34px -16px #6b4a2a66; }
+[data-skin="aurora"][data-mode="light"] .note { background: #fffdf9e6; color: #161821; box-shadow: 0 16px 36px -16px #6b4a2a66, 0 0 0 1px #14161f12 inset; }
 [data-skin="aurora"][data-mode="light"] .app-icon { box-shadow: 0 0 0 1px #14161f12, 0 12px 24px -12px #6b4a2a88; }
 [data-skin="aurora"][data-mode="light"] .switch.active { background: linear-gradient(135deg, #fff, #fff8f2); border-color: var(--signal); color: var(--ink); }
 

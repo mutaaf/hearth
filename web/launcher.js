@@ -6,6 +6,7 @@
 import { feedback, haptic } from './feel.js';
 import { brandSvg, hydrate, tvIconImg } from './icons.js';
 import { track } from './analytics.js';
+import { plain, quip } from './quips.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const REASONS = { 'not-installed': 'not installed', unsupported: 'can’t open', off: 'off', offline: 'off', unpaired: 'not connected' };
@@ -212,9 +213,9 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
       feedback(good ? 'success' : 'error');
       if (res.results.length === 1) {
         const r = res.results[0];
-        note(r.ok ? `Opening ${title}${r.woke ? ' (woke it up)' : ''}` : `${title}: ${r.error}`, !r.ok);
+        note(r.ok ? `${quip('launch', { app: title })}${r.woke ? ' (Woke it up first.)' : ''}` : `${title}: ${plain(r.error)}`, r.ok ? 'success' : true);
       } else {
-        note(good === res.results.length ? `${title} on all ${good} TVs ✓` : `${title}: ${good} of ${res.results.length} TVs`, good === 0);
+        note(good === res.results.length ? quip('launchAll', { app: title, n: good }) : `${title}: ${good} of ${res.results.length} TVs`, good === 0 ? true : 'success');
       }
       if (res.results.length > 1 || !res.results[0].ok) showResults(key, res.results, where);
       // Opening an app tells us it's installed; failures may mean the cache is stale.

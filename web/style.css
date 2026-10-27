@@ -521,14 +521,36 @@ html.scrolled .masthead {
 @keyframes fall { to { transform: translate(var(--dx), 110dvh) rotate(var(--rot)); opacity: .8; } }
 
 /* ── Toast note ────────────────────────────── */
+/* A popover (top layer: above sheets). Glass pill, an icon disc per kind,
+   a spring in, and a thin bar that drains while it's up. */
 .note {
-  position: fixed; left: 50%; top: max(14px, var(--safe-t)); z-index: 95;
-  transform: translate(-50%, -160%); padding: 12px 18px; border-radius: 16px; max-width: calc(100% - 32px);
-  background: var(--key); color: var(--key-ink); font-size: 15px; font-weight: 550; box-shadow: 0 16px 40px -10px #000a;
-  visibility: hidden; transition: transform .35s cubic-bezier(.2, .9, .2, 1), visibility 0s .35s;
+  position: fixed; inset: max(12px, var(--safe-t)) auto auto 50%; margin: 0; z-index: 95;
+  display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(calc(100% - 28px), 440px);
+  padding: 10px 16px 10px 10px; border: 0; border-radius: 20px; overflow: hidden;
+  background: var(--key); color: var(--key-ink); font: 600 15px/1.3 var(--display);
+  box-shadow: 0 18px 40px -14px #000a, 0 0 0 1px #ffffff14 inset;
+  -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5);
+  transform: translate(-50%, -140%) scale(.92); opacity: 0; visibility: hidden;
+  transition: transform .45s cubic-bezier(.2, 1.4, .3, 1), opacity .2s, visibility 0s .45s;
+  touch-action: none; cursor: pointer;
 }
-.note.show { transform: translate(-50%, 0); visibility: visible; transition-delay: 0s; }
-.note.error { background: #c8341a; color: #fff; }
+.note.show { transform: translate(-50%, 0) scale(1); opacity: 1; visibility: visible; transition-delay: 0s; }
+.note::backdrop { display: none; }
+.note-ico {
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font: 800 15px/1 var(--display); font-style: normal; color: #fff;
+  background: radial-gradient(circle at 35% 30%, #ffb27d, var(--signal) 70%); box-shadow: 0 0 14px -2px var(--signal);
+}
+.note-ico:empty::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px #fff; }
+.note[data-kind="success"] .note-ico { background: radial-gradient(circle at 35% 30%, #8ff0b0, #1fa35a 75%); box-shadow: 0 0 14px -2px #1fa35a; }
+.note[data-kind="wake"] .note-ico { background: radial-gradient(circle at 35% 30%, #ffe08a, #f2a516 75%); box-shadow: 0 0 14px -2px #f2a516; }
+.note[data-kind="error"] .note-ico { background: radial-gradient(circle at 35% 30%, #ff9a86, #c8341a 75%); box-shadow: 0 0 14px -2px #c8341a; }
+.note-text { min-width: 0; text-wrap: pretty; }
+.note-time { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: currentColor; opacity: .18; transform-origin: left; transform: scaleX(0); }
+.note.show .note-time { animation: note-time var(--note-ms, 2400ms) linear forwards; }
+@keyframes note-time { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.note[data-kind="error"] { box-shadow: 0 18px 40px -14px #000a, 0 0 0 1.5px #c8341a88 inset; }
+@media (prefers-reduced-motion: reduce) { .note { transition: opacity .2s, visibility 0s .2s; transform: translate(-50%, 0); } .note.show .note-time { animation: none; } }
 
 /* ── Demo banner (mutaafaziz.com/hearth/demo only) ── */
 .demo-bar {

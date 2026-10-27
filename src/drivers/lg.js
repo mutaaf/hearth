@@ -4,10 +4,11 @@ import path from 'node:path';
 import LGTV, { POWER_STATES } from 'lgtv2';
 import WebSocket from 'ws';
 import { Backoff } from '../backoff.js';
-import { HearthError, isUnreachable, offline, unsupported } from '../errors.js';
+import { badRequest, HearthError, isUnreachable, offline, unsupported } from '../errors.js';
 import { isMac } from '../discovery.js';
 import { keyCode } from '../keys.js';
 import { hearthHome } from '../store.js';
+import { TOAST_ICON } from '../toast-icon.js';
 import { Driver } from './base.js';
 
 // LG webOS (2014+). Talks SSAP over a websocket on :3001 (wss) or :3000 (ws);
@@ -45,6 +46,17 @@ const lgtv2Require = createRequire(createRequire(import.meta.url).resolve('lgtv2
 const MANIFEST = lgtv2Require('./pairing.json').manifest;
 // lgtv2 reports "tried every port" as ECONNFAILED; that's "not there" too.
 const gone = (err) => isUnreachable(err) || err?.code === 'ECONNFAILED';
+
+// Text a TV's own font can draw: no emoji or variation selectors, plain quotes.
+export function tvText(message) {
+  return String(message ?? '')
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0F\u200D]/gu, '')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
 
 export class LgDriver extends Driver {
   static brand = 'lg';
@@ -497,8 +509,13 @@ export class LgDriver extends Driver {
     if (enter) await this.#request(SSAP.enter);
   }
 
+  // webOS draws toasts with its own font, which has no emoji: a message with
+  // one could show up blank. So emoji go, Hearth's flame goes in as the icon,
+  // and curly quotes become plain ones.
   async toast(message) {
-    await this.#request(SSAP.toast, { message: String(message).slice(0, 120) });
+    const text = tvText(message);
+    if (!text) throw badRequest('Type a message with some words in it');
+    await this.#request(SSAP.toast, { message: text, iconData: TOAST_ICON, iconExtension: 'png' });
   }
 
   // ── Connection doctor: read-only. Waits for the websocket to either

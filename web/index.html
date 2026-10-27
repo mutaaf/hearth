@@ -269,11 +269,11 @@
       <section class="panel" id="p-say" data-panel="say" hidden>
         <h3 class="panel-title mono">Say something on screen</h3>
         <div class="chips big" id="quickMsgs">
-          <button type="button" class="chip" data-press="up" data-msg="Dinner’s ready! 🍽️">🍽️ Dinner’s ready</button>
-          <button type="button" class="chip" data-press="up" data-msg="Screens off in 10 minutes ⏰">⏰ 10 minutes left</button>
-          <button type="button" class="chip" data-press="up" data-msg="Bedtime 🌙">🌙 Bedtime</button>
-          <button type="button" class="chip" data-press="up" data-msg="Homework first 📚">📚 Homework first</button>
-          <button type="button" class="chip" data-press="up" data-msg="Come downstairs please 👋">👋 Come downstairs</button>
+          <button type="button" class="chip" data-press="up" data-msg="Dinner’s ready! Pause it. The show will wait. Dinner won’t.">🍽️ Dinner’s ready</button>
+          <button type="button" class="chip" data-press="up" data-msg="10 minutes of screen time left. Make them count.">⏰ 10 minutes left</button>
+          <button type="button" class="chip" data-press="up" data-msg="Bedtime. Even the TV needs its beauty sleep.">🌙 Bedtime</button>
+          <button type="button" class="chip" data-press="up" data-msg="Homework first. The show will still be here.">📚 Homework first</button>
+          <button type="button" class="chip" data-press="up" data-msg="Come downstairs, please! (Yes, your TV is talking to you.)">👋 Come downstairs</button>
         </div>
         <form class="say" id="sayForm">
           <input id="sayInput" maxlength="120" placeholder="Type a message…" autocomplete="off" enterkeyhint="send">
@@ -365,7 +365,7 @@
     </div>
   </dialog>
 
-  <div class="note" id="note" role="status" aria-live="polite"></div>
+  <div class="note" id="note" role="status" aria-live="polite" popover="manual"><i class="note-ico" aria-hidden="true"></i><span class="note-text"></span><b class="note-time" aria-hidden="true"></b></div>
 
   <script src="vendor/aurora-field.min.js" defer></script>
   <script src="shapes.js" defer></script>

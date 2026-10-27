@@ -272,7 +272,7 @@
 [data-skin="aurora"] .sheet, [data-skin="aurora"] .setup { background: #0b0d14; }
 [data-skin="aurora"] .sheet::backdrop { background: #000b; }
 [data-skin="aurora"] .skin-card.active { border-color: var(--signal); box-shadow: 0 0 30px -10px var(--signal); }
-[data-skin="aurora"] .note { background: #161925; border: 1px solid var(--hair); }
+[data-skin="aurora"] .note { background: #161925e6; color: #eef0f6; box-shadow: 0 18px 40px -14px #000c, 0 0 0 1px var(--hair) inset; }
 
 /* Short phones: shrink the orb and the strip so it still fits one screen. */
 @media (max-height: 700px) {

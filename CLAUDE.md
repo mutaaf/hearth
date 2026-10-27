@@ -155,6 +155,13 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `screen` (screen, from, prev_s, brand/mode or tvs) comes from one MutationObserver in app.js watching `hidden`/`open`: the open overlay (#setup, #health, #energy, #sceneEditor) or dialog wins, else house/remote. New overlays: add them to `OVERLAYS`/`SHEETS`.
 - Others: `tap` (every `data-action`), `remote_tab`, `remote_mode`, `power`, `refresh`, `ui_error` (error notes), `scrolled` (house depth in 25 % steps, on leaving), `setting` (every savePrefs change), `launch_app`, `scene_run`, `setup_step`, `tour_start`/`tour_end`, `guide_open`, `support_report`.
 
+## Toasts, copy and easter eggs
+
+- `note(message, kind)` in app.js: kind `true`/'error', 'success', 'wake' or info. It's a `popover="manual"` (top layer, so it shows over open `<dialog>` sheets), never blank (`plain()` in web/quips.js turns empty/"undefined" into a friendly line), lasts by length, flick up or tap to dismiss.
+- web/quips.js: a few lines per moment (tvOff, waking, allOff, sent, launch, launchAll, scene, oops), picked at random. Keep them short and warm; no others' IP.
+- web/eggs.js: 8 eggs (konami on the D-pad → 8-bit, 7 taps on the masthead flame, off-and-on 3× in 20 s, volume 11, Say "hello there", all off after midnight, 1,000 presses, Halloween/Christmas/New Year). Found ones live in localStorage `hearth.eggs`; analytics `easter_egg`. Never sends anything to a TV by itself.
+- LG on-screen messages go through `tvText()` (src/drivers/lg.js): webOS's toast font has no emoji, so they're stripped, quotes made plain, and Hearth's flame (src/toast-icon.js, 64 px PNG) is the icon.
+
 ## Device guides, AI and the support queue
 
 - `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at
