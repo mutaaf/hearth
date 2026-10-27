@@ -1,14 +1,18 @@
 import { fromAppleTv } from '../../web/playback.js';
 import { HearthError, offline, unsupported } from '../errors.js';
-import { getBridge } from '../atv-bridge.js';
+import { atvMode, getAtvTransport } from '../atv-bridge.js';
+import { getJsTransport } from '../atv/transport.js';
 import { Driver } from './base.js';
 
-// Apple TV (tvOS 15+) through pyatv, which runs in one shared Python process
-// (src/atv-bridge.js → src/drivers/appletv-bridge.py). Two protocols, each
-// paired once with a 4-digit code the Apple TV shows on screen:
+// Apple TV (tvOS 15+). Two protocols, each paired once with a 4-digit code
+// the Apple TV shows on screen:
 //   Companion: buttons, power, the app list and launching, power push updates
 //   AirPlay:   tunnels MRP, which pushes what's playing (app, title, play state)
 // Companion alone is a full remote; AirPlay adds the live "what's on" info.
+// The transport is either pyatv in one shared Python process (src/atv-bridge.js
+// → src/drivers/appletv-bridge.py) or the pure-JS Companion client
+// (src/atv/transport.js: no Python, so it runs in the phone app; Companion
+// only, so one code). Both answer the same ops; atvMode() picks.
 const PROTOCOLS = ['companion', 'airplay'];
 const LABELS = { companion: 'remote control', airplay: 'what’s playing' };
 
@@ -46,10 +50,31 @@ export class AppleTvDriver extends Driver {
   #pending = null; // { protocol, step, steps } while a code is on screen
   #apps = null;
   #off = [];
+  #pinned; // true: never switch transports
 
   constructor(tv, opts = {}) {
     super(tv, opts);
-    this.bridge = opts.bridge ?? getBridge();
+    const mode = atvMode();
+    // An explicit transport, or HEARTH_ATV, sticks; 'auto' may fall back to JS.
+    this.#pinned = Boolean(opts.bridge) || mode !== 'auto';
+    this.#use(opts.bridge ?? getAtvTransport(mode));
+  }
+
+  #use(transport) {
+    this.bridge = transport;
+    const keyboard = transport.keyboard !== false;
+    if (keyboard !== this.capabilities.keyboard) this.capabilities = { ...this.capabilities, keyboard };
+  }
+
+  // The Python bridge couldn't start (no pyatv in the venv): carry on in JS.
+  #fallback(err) {
+    if (this.#pinned || err?.status !== 503 || this.bridge.available !== false) return false;
+    const listening = this.#off.length > 0;
+    this.#unlisten();
+    this.#use(getJsTransport());
+    this.#pinned = true;
+    if (listening) this.#listen();
+    return true;
   }
 
   get #key() {
@@ -60,6 +85,15 @@ export class AppleTvDriver extends Driver {
   start() {
     if (!this.#stopped) return;
     this.#stopped = false;
+    this.#listen();
+    this.#connect().catch(() => this.#scheduleRetry());
+  }
+
+  #unlisten() {
+    for (const off of this.#off.splice(0)) off();
+  }
+
+  #listen() {
     const on = (event, fn) => {
       this.bridge.on(event, fn);
       this.#off.push(() => this.bridge.off(event, fn));
@@ -75,13 +109,12 @@ export class AppleTvDriver extends Driver {
       this.#connected = false;
       this.#connect().catch(() => this.#scheduleRetry());
     });
-    this.#connect().catch(() => this.#scheduleRetry());
   }
 
   async stop() {
     this.#stopped = true;
     clearTimeout(this.#retry);
-    for (const off of this.#off.splice(0)) off();
+    this.#unlisten();
     if (this.#pending) await this.bridge.request('pair_cancel', { key: this.#key }).catch(() => {});
     this.#pending = null;
     if (this.#connected) await this.bridge.request('disconnect', { key: this.#key }, { timeout: 5000 }).catch(() => {});
@@ -99,17 +132,17 @@ export class AppleTvDriver extends Driver {
   #connect() {
     this.#connecting ??= (async () => {
       try {
-        const res = await this.bridge.request('connect', {
-          key: this.#key,
-          ip: this.tv.ip,
-          identifier: this.tv.atvId,
-          credentials: this.tv.credentials ?? {},
+        const args = { key: this.#key, ip: this.tv.ip, identifier: this.tv.atvId, port: this.tv.atvPort, credentials: this.tv.credentials ?? {} };
+        const res = await this.bridge.request('connect', args).catch((err) => {
+          if (this.#fallback(err)) return this.bridge.request('connect', args);
+          throw err;
         });
         this.#connected = true;
         this.#retryMs = RETRY_MIN;
         const info = {};
         if (res.identifier && res.identifier !== this.tv.atvId) info.atvId = res.identifier;
         if (res.ip && res.ip !== this.tv.ip) info.ip = res.ip; // DHCP moved it
+        if (res.port && res.port !== this.tv.atvPort) info.atvPort = res.port; // JS: Companion's port
         if (Object.keys(info).length) this.onInfo(info);
         this.#apply(res.state);
       } catch (err) {
@@ -171,7 +204,11 @@ export class AppleTvDriver extends Driver {
   }
 
   async #plan() {
-    const info = await this.bridge.request('info', { ip: this.tv.ip, identifier: this.tv.atvId });
+    const args = { ip: this.tv.ip, identifier: this.tv.atvId, port: this.tv.atvPort };
+    const info = await this.bridge.request('info', args).catch((err) => {
+      if (this.#fallback(err)) return this.bridge.request('info', args);
+      throw err;
+    });
     if (info.identifier && info.identifier !== this.tv.atvId) this.onInfo({ atvId: info.identifier });
     const needs = (p) => ['Mandatory', 'Optional'].includes(info.services?.[p]?.pairing);
     if (!info.services?.companion) {
@@ -189,7 +226,8 @@ export class AppleTvDriver extends Driver {
       return {};
     }
     const protocol = todo[0];
-    await this.bridge.request('pair_begin', { key: this.#key, ip: this.tv.ip, identifier: this.tv.atvId, protocol });
+    const begun = await this.bridge.request('pair_begin', { key: this.#key, ip: this.tv.ip, identifier: this.tv.atvId, port: this.tv.atvPort, protocol });
+    if (begun?.port && begun.port !== this.tv.atvPort) this.onInfo({ atvPort: begun.port });
     this.#pending = { protocol, step: plan.indexOf(protocol) + 1, steps: plan.length, plan };
     return { needsPin: true, step: this.#pending.step, steps: this.#pending.steps, label: LABELS[protocol], protocol };
   }

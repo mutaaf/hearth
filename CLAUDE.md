@@ -2,12 +2,12 @@
 
 Universal remote for the house's smart TVs. A Node server on the LAN discovers TVs, holds a live connection per TV, and serves a phone-first web remote. Zero build step, a handful of small runtime dependencies (lgtv2, ws, multicast-dns, aurora-field, qrcode-terminal).
 
-Brands: LG webOS, Samsung Tizen (2016+), Roku (ECP), Google TV / Android TV (Cast), Apple TV (pyatv: Companion + AirPlay/MRP, via a Python bridge).
+Brands: LG webOS, Samsung Tizen (2016+), Roku (ECP), Google TV / Android TV (Cast), Apple TV (pyatv: Companion + AirPlay/MRP, via a Python bridge; or the pure-JS Companion client in src/atv/ where there's no Python, e.g. the phone app).
 
 ## Run it
 
 - `npm run up`: idempotent bootstrap (Node check → install → Apple TV venv with pinned pyatv (optional) → start detached → health → URL + QR). `npm run down` stops it.
-- `npm test`: node:test suite with no TV, network or Python needed (fake drivers, a fake Samsung TV (websocket + REST apps + UPnP SOAP), a fake LG PIN-pairing TV, a fake Roku ECP server, a fake Cast TV over TLS, a fake pyatv bridge and bridge process).
+- `npm test`: node:test suite with no TV, network or Python needed (fake drivers, a fake Samsung TV (websocket + REST apps + UPnP SOAP), a fake LG PIN-pairing TV, a fake Roku ECP server, a fake Cast TV over TLS, a fake pyatv bridge and bridge process, and a fake Apple TV Companion server that does real SRP pair-setup, pair-verify and the encrypted session).
 - Dev loop: `npm start` in the foreground, edit `web/*`, reload the browser. Server changes need a restart.
 - To experiment without touching your real setup: `HEARTH_HOME=/tmp/h HEARTH_PORT=8771 npm start`.
 
@@ -40,10 +40,15 @@ src/drivers/samsung.js Tizen: keys/launch over samsung.remote.control (wss:8002 
 src/drivers/roku.js    Roku ECP over HTTP :8060 (no pairing; keydown/keyup for real holds)
 src/drivers/googletv.js Google TV / Android TV via Cast (TLS :8009): volume, mute, apps (GET_APP_AVAILABILITY),
                        status incl. isStandBy; drops a socket that goes quiet
-src/drivers/appletv.js Apple TV: talks to the shared pyatv bridge; two-step PIN pairing, pushed state
+src/drivers/appletv.js Apple TV: one driver over either transport (pyatv bridge or src/atv/transport.js, same ops
+                       and events; atvMode() in atv-bridge.js picks); PIN pairing, pushed state
 src/drivers/appletv-bridge.py  the Python side: ONE process for every Apple TV, JSON lines on stdio
 src/atv-bridge.js      spawns/owns that process (lazy start, restart with backoff, 'restart' → drivers
-                       reconnect); venv path + pinned PYATV_VERSION shared with scripts/up.mjs
+                       reconnect); venv path + pinned PYATV_VERSION shared with scripts/up.mjs; atvMode()
+src/atv/               pure-JS Apple TV Companion (no Python, runs in Hermes): opack.js (OPACK), tlv8.js, srp.js
+                       (SRP-6a 3072/SHA-512), hap.js (pair-setup/verify, credentials, session cipher; @noble crypto),
+                       link.js (frames + encryption + _x requests), companion.js (handshake, HID, apps, launch, power),
+                       transport.js (the bridge-shaped ops, Companion port probing)
 src/catalog.js         the cross-brand app catalog (20 streaming apps × per-brand id arrays + sources) and
                        resolveApp(): id → exact title → fuzzy (never YouTube for YouTube TV)
 src/launch.js          POST /api/launch: wake → resolve per TV → launch in parallel → per-TV results; also
@@ -96,6 +101,7 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`,
 - **Samsung:** 2018+ asks Allow and returns a token; 2016-17 connects with no prompt and no token → credentials `{ legacy: true }`.
 - **Roku:** `{ ecp: true }` after device-info answers. A 403 means "Control by mobile apps" blocks network access.
 - **Apple TV:** two codes, one protocol at a time, through the same `{ mode: 'pin' }` / `{ pin }` API as LG. `pair({ mode: 'pin' })` asks the bridge which protocols need pairing (`info`), begins the first → `{ needsPin, step: 1, steps: 2, label }` (the TV shows 4 digits). `pair({ pin })` finishes it, saves `credentials.companion` (remote works from here), and begins AirPlay → `{ needsPin, step: 2 }`. The second `pair({ pin })` saves `credentials.airplay` (MRP: now playing). `Hub.pair` passes `step/steps/label` through; the wizard shows "Step n of 2". A wrong/expired code → 401 "Show the number again" (the bridge drops the session; asking again shows a new code). If AirPlay can't start, Companion-only still works. Pairing name on the TV: "Hearth".
+- **Apple TV without Python (JS transport):** `info` reports only Companion, so it's `{ needsPin, step: 1, steps: 1 }` and done after one code. The credential is pyatv's own string (`ltpk:ltsk:atvId:clientId`, hex), so it moves between the two transports. The Companion port is saved as `tv.atvPort` (not a secret, never in `view()`).
 - **Google TV:** `{ cast: true }` after a RECEIVER_STATUS arrives. No code. The optional full remote (Google's remote protocol v2, ports 6466/6467, needs the on-screen code) is roadmap.
 - Unpaired TVs get a reachability watch (TCP connect to the brand's control port every 10 s), so the app knows on/off and offers Wake-on-LAN before pairing.
 
@@ -173,7 +179,8 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `app`/`appTitle`: MRP now-playing app (bundle id + name), so it's the app *playing*, not merely focused (pyatv exposes no focus-app). After `launch()` the driver sets it at once; the next push refines it. Needs the AirPlay credential.
 - `nowPlaying` (title, "Series: Episode"), `playing` (`playing`/`paused`/`loading`).
 - `volume` + `capabilities.volumeLevel` only when pyatv reports a level (Apple TV driving HomePods). With a TV over HDMI-CEC, volume up/down are HID presses with no level.
-- `unavailable`: set when the bridge can't start (no Python/pyatv); the app shows "Needs setup" and the reason.
+- `unavailable`: set when the bridge can't start (no Python/pyatv); the app shows "Needs setup" and the reason. In `auto` mode (the venv exists) a bridge that then fails to start hands the driver to the JS transport instead.
+- **JS transport:** `power` from FetchAttentionState + SystemStatus/TVSystemStatus pushes, volume from `_iMC`/`_mcc` GetVolume (HomePods only). No `app`/`nowPlaying`/`playing` (that's MRP over AirPlay) and no typing (`capabilities.keyboard: false`; tvOS wants keyed-archiver RTI payloads). Unverified on a real Apple TV as of 2026-10-27; tested against a fake in test/appletv-js.test.js and, once by hand, against pyatv 0.18's own server-side Companion auth (`pyatv.protocols.companion.server_auth`) on 127.0.0.1.
 
 ## Environment nuances
 
@@ -234,6 +241,9 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | An Apple TV's AirPlay `deviceid` looks like a MAC but is randomised (locally administered bit) | Stored as `tv.atvId` (pyatv's identifier, used to find it if DHCP moves it), never in `macs`. Apple TVs wake over Companion, not WOL. |
 | pyatv `connect()` with a protocol that needs pairing but has no credentials fails or prompts | The bridge disables unpaired Mandatory services plus RAOP/DMAP before connecting, so Companion-only works between the two codes. |
 | A paired Apple TV's Companion port isn't fixed (49153 here, varies) | Reachability/diagnostics use AirPlay :7000; the bridge re-resolves the device by unicast mDNS to its IP, then by identifier. |
+| The JS transport has no mDNS to find Companion's port | `findPort()`: the saved `tv.atvPort`, then 49152-49160 in parallel. A port counts only if it answers PV_Start (pair-verify step 1) with a key: harmless, no code on screen, nothing stored, since we hang up before step 3. |
+| OPACK back-references: pyatv's packer counts dicts/lists in its table but its unpacker doesn't, and 0xC3/0xC4 are 4/8-byte on pack but 3/4-byte on unpack | src/atv/opack.js uses one rule both ways (scalars whose encoding is >1 byte; 0xC1-0xC4 = 1-4 byte index, as pyatv decodes what Apple sends). Every pyatv test vector passes. |
+| pyatv doesn't check the Apple TV's pair-setup proof (M4) or its M6 signature | hap.js checks both (HAP spec); verified against pyatv's server-side auth. If a real Apple TV ever fails there with the right code, that check is the first suspect. |
 | pyatv logs to stdout by default would corrupt the JSON-lines protocol | The bridge logs to stderr only (Node prefixes and forwards it to hearth.log); stdout is protocol. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 
