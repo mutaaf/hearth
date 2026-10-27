@@ -4,6 +4,7 @@
 // the TV's remote → tap a room → done. If nothing turns up, the fixes appear
 // right there while it keeps looking.
 import { feedback, haptic } from './feel.js';
+import { track } from './analytics.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const brandName = (b) => ({ lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' })[b] ?? 'TV';
@@ -67,6 +68,7 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
     // Pairing again (doctor / Codes & pairing): the TV already has a room.
     if (step === 'name' && (extra.repair ?? state.repair)) step = 'done';
     Object.assign(state, extra, { step });
+    track('setup_step', { step, brand: state.candidate?.brand ?? state.tv?.brand ?? '', repair: Boolean(state.repair) });
     STEPS[step]();
     root.querySelector('.setup-body')?.focus?.();
   }

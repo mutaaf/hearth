@@ -8,7 +8,7 @@
   animation: fadein .25s ease-out;
 }
 .h-wrap { max-width: 640px; margin: 0 auto; display: grid; gap: 16px; }
-.h-top { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; position: sticky; top: calc(-1 * max(12px, var(--safe-t))); z-index: 2; padding: 6px 0; background: var(--bg); }
+.h-top { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; position: sticky; top: calc(-1 * max(12px, var(--safe-t))); z-index: 2; padding: 6px 0; background: var(--bg); box-shadow: 0 1px 0 var(--hair, #0000001a); }
 .h-top h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
 .h-nerd { display: flex; align-items: center; gap: 8px; font-size: 10px; text-transform: uppercase; color: var(--ink-soft); }
 .h-nerd input { appearance: none; -webkit-appearance: none; width: 44px; height: 26px; border-radius: 999px; background: var(--ink-faint); position: relative; cursor: pointer; transition: background .2s; }

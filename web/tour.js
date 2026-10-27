@@ -8,6 +8,7 @@
 // one getBoundingClientRect per step. Steps whose control isn't on screen
 // (another look, a TV that's off, no Live Activities on the web) are skipped.
 import { haptic } from './feel.js';
+import { track } from './analytics.js';
 
 const SEEN = 'hearth.tour.seen';
 const PAD = 8; // spotlight margin around the control
@@ -251,6 +252,7 @@ export function createTour() {
   }
 
   function end() {
+    if (root) track('tour_end', { tour: name, step: at + 1, steps: steps.length, finished: at >= steps.length - 1 });
     remember(name);
     removeEventListener('keydown', onKey);
     removeEventListener('resize', onResize);
@@ -272,6 +274,7 @@ export function createTour() {
     if (!steps.length) return false;
     name = which;
     at = 0;
+    track('tour_start', { tour: which, steps: steps.length });
     build();
     onKey = (e) => {
       if (e.key === 'Escape') end();

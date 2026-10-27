@@ -2,7 +2,7 @@
    it glows when you've pulled far enough, and spins while every TV re-reads. */
 html, body { overscroll-behavior-y: contain; } /* no browser reload under ours */
 html { touch-action: manipulation; } /* no double-tap zoom anywhere */
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sr-only { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .ptr {
   --p: 0; --pull: 0;

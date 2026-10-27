@@ -5,6 +5,7 @@
 // per TV, so the ✓ / ✕ chips say exactly where it opened and why not.
 import { feedback, haptic } from './feel.js';
 import { brandSvg, hydrate, tvIconImg } from './icons.js';
+import { track } from './analytics.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const REASONS = { 'not-installed': 'not installed', unsupported: 'can’t open', off: 'off', offline: 'off', unpaired: 'not connected' };
@@ -207,6 +208,7 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
     try {
       const res = await api('POST', '/launch', { app: key, tvs, wake });
       const good = res.results.filter((r) => r.ok).length;
+      track('launch_app', { app: key, where: String(where ?? ''), tvs: res.results.length, ok: good, woke: res.results.filter((r) => r.woke).length, wake: Boolean(wake) });
       feedback(good ? 'success' : 'error');
       if (res.results.length === 1) {
         const r = res.results[0];

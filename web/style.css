@@ -49,7 +49,8 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+body { background-repeat: no-repeat !important; display: flow-root; }
 body { position: relative; }
 body {
   margin: 0;
@@ -110,7 +111,18 @@ svg { width: 1em; height: 1em; }
 .hold.charging .charge { transform: scaleX(1); transition: transform var(--charge-ms, .75s) linear; }
 
 /* ── Masthead / hero ───────────────────────── */
-.masthead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px 0; }
+.masthead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  /* Sticks under the status bar; the frosted bar fades in once the page scrolls. */
+  position: sticky; top: 0; z-index: 45;
+  margin: calc(-1 * max(14px, var(--safe-t))) -16px 0; padding: max(14px, var(--safe-t)) 18px 10px;
+  transition: background-color .25s, box-shadow .25s, backdrop-filter .25s;
+}
+html.scrolled .masthead {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 1px 0 var(--hair, #0000001a);
+}
 .masthead-right { display: flex; align-items: center; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.04em; }
@@ -385,6 +397,11 @@ svg { width: 1em; height: 1em; }
 @media (min-width: 640px) { .sheet { margin: auto; border-radius: 30px; } }
 .sheet-grip { width: 42px; height: 5px; border-radius: 5px; background: var(--ink-faint); margin: 0 auto 16px; opacity: .5; }
 .sheet h3 { margin: 4px 0; font-size: 26px; letter-spacing: -.035em; font-weight: 750; text-align: center; }
+/* Long sheets keep their grip, title and buttons in reach while the middle scrolls. */
+.sheet > .sheet-grip { position: sticky; top: -10px; z-index: 3; width: auto; margin: -10px -20px 6px; padding-top: 10px; height: 15px; border-radius: 0; opacity: 1; background: var(--bg); box-sizing: content-box; background-clip: padding-box; }
+.sheet > .sheet-grip::after { content: ''; display: block; width: 42px; height: 5px; margin: 0 auto; border-radius: 5px; background: var(--ink-faint); }
+.sheet > h3 { position: sticky; top: 15px; z-index: 2; margin: 0 -20px; padding: 2px 20px 8px; background: var(--bg); }
+.sheet > .sheet-actions { position: sticky; bottom: calc(-20px - var(--safe-b)); z-index: 2; margin: 20px -20px calc(-20px - var(--safe-b)); padding: 12px 20px calc(20px + var(--safe-b)); background: linear-gradient(transparent, var(--bg) 30%); }
 .sub { margin: 0 0 14px; text-align: center; font-size: 14px; color: var(--ink-soft); line-height: 1.5; }
 .sub.left { text-align: left; font-size: 10px; text-transform: uppercase; }
 .sheet-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; }

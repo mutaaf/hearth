@@ -11,7 +11,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const SKIP_ICON = (dir) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${dir < 0 ? 'M12 5a7 7 0 1 1-6.6 9.3' : 'M12 5a7 7 0 1 0 6.6 9.3'}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="${dir < 0 ? 'M12 2 8.5 5 12 8' : 'M12 2l3.5 3L12 8'}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-export function createStream({ remote, sendKey, getTv, onBrowse }) {
+export function createStream({ remote, sendKey, getTv, appName, onBrowse }) {
   const panels = remote.querySelector('.panels');
   panels.insertAdjacentHTML(
     'beforeend',
@@ -148,7 +148,10 @@ export function createStream({ remote, sendKey, getTv, onBrowse }) {
     const s = t.state ?? {};
     const m = s.media;
     if (m && m.state !== 'stopped') belief = m.state === 'paused' ? 'paused' : 'playing';
-    const app = s.appTitle || s.inputLabel || (s.app ? String(s.app).split('.').pop() : '') || 'Now playing';
+    // The app's real name (catalog, the TV's own list), never its id.
+    const named = appName?.(t);
+    const raw = s.app ? String(s.app).split('.').pop() : '';
+    const app = s.appTitle || s.inputLabel || (named && named !== 'On' ? named : '') || (raw && raw[0].toUpperCase() + raw.slice(1)) || 'Now playing';
     $('#scMark').textContent = app.trim().charAt(0).toUpperCase();
     $('#scApp').textContent = app;
     $('#scTitle').textContent = s.nowPlaying || (m?.live ? 'Live' : app);

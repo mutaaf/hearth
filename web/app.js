@@ -3,6 +3,7 @@
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
 import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
+import { currentScreen, screen, scrollDepth, track } from './analytics.js';
 import { createTour } from './tour.js';
 import { createGuide } from './guide.js';
 import { hydrate, tvIconImg } from './icons.js';
@@ -97,6 +98,7 @@ const household = createHousehold({ api, note, isDemo: Boolean(demo) });
 
 let noteTimer;
 function note(message, error = false) {
+  if (error) track('ui_error', { message: String(message).slice(0, 80), screen: currentScreen() ?? '' });
   const el = $('#note');
   el.textContent = message;
   el.classList.toggle('error', error);
@@ -280,6 +282,7 @@ function lcdKey(key) {
 }
 
 function setTab(name) {
+  if (name !== tab) track('remote_tab', { tab: name });
   tab = name;
   const aurora = prefs.skin === 'aurora';
   for (const b of document.querySelectorAll('#tabs .tab, .sheet-bar [data-tab]')) b.classList.toggle('active', b.dataset.tab === name);
@@ -687,6 +690,34 @@ function refreshFields() {
   else mountHouseField();
 }
 
+// The masthead frosts once the house scrolls (style.css html.scrolled).
+addEventListener('scroll', () => document.documentElement.classList.toggle('scrolled', scrollY > 8), { passive: true });
+
+// What's on screen, for analytics (phone app only, web/analytics.js): the
+// open overlay or sheet wins, else the house or a TV's remote. One observer
+// instead of a call in every module that opens something.
+const houseDepth = scrollDepth(window, 'house');
+const OVERLAYS = [['setup', '#setup'], ['health', '#health'], ['energy', '#energy'], ['scene_editor', '#sceneEditor'], ['away', '#away']];
+const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings' };
+function whereNow() {
+  for (const [name, sel] of OVERLAYS) {
+    const el = document.querySelector(sel);
+    if (el && !el.hidden) return name;
+  }
+  const sheet = document.querySelector('dialog[open]');
+  if (sheet) return SHEETS[sheet.id] ?? (sheet.id ? sheet.id.replace(/Sheet$/, '').replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`) : 'sheet');
+  return $('#remote').hidden ? 'house' : 'remote';
+}
+function noteScreen() {
+  const name = whereNow();
+  if (name === currentScreen()) return;
+  if (currentScreen() === 'house') houseDepth.report({ tvs: tvs.size });
+  const t = name === 'remote' && tvs.get(current);
+  screen(name, t ? { brand: t.brand, mode: modes?.mode ?? '' } : { tvs: tvs.size });
+}
+new MutationObserver(noteScreen).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'open'] });
+document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && currentScreen() === 'house' && houseDepth.report({ tvs: tvs.size }));
+
 // ── Commands ─────────────────────────────────────────────
 // Any button on a sleeping TV wakes it first (Hub.wakeFor); say so, once,
 // so the wait reads as "on it" rather than "broken".
@@ -725,6 +756,7 @@ function sendKey(key, opts = {}) {
 
 async function power(id, on) {
   const t = tvs.get(id);
+  track('power', { on, scope: 'one', brand: t?.brand ?? '' });
   if (isUnknown(t)) on = true; // a toggle: powerOn sends WOL + POWER
   haptic('heavy');
   sound(on ? 'on' : 'off');
@@ -738,6 +770,7 @@ async function power(id, on) {
 }
 
 async function allOff() {
+  track('power', { on: false, scope: 'all', tvs: tvs.size });
   haptic('heavy');
   sound('off');
   try {
@@ -1085,6 +1118,7 @@ function onPress(el, info) {
   }
   if (el.hasAttribute('data-close')) return el.closest('dialog')?.close();
 
+  if (d.action) track('tap', { action: d.action, screen: currentScreen() ?? '' });
   switch (d.action) {
     case 'setup':
       haptic('tap');
@@ -1173,7 +1207,7 @@ let modes = null;
 function wire() {
   pressable(document, onPress);
   install.mount();
-  modes = createModes({ api, note, sendKey, getTv: () => tvs.get(current) });
+  modes = createModes({ api, note, sendKey, getTv: () => tvs.get(current), appName });
   setupSliders();
   setupSheets();
   gesturePad($('#pad'), {
@@ -1270,6 +1304,7 @@ persist();
 // Pull to refresh (and coming back after a while): every TV re-reads what
 // it's doing, then the live stream restarts with the full, fresh picture.
 async function refreshAll() {
+  track('refresh', { screen: currentScreen() ?? '' });
   await api('POST', '/refresh', {});
   if (!demo) reconnectEvents();
   const t = current && tvs.get(current);

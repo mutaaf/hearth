@@ -596,13 +596,14 @@
     androidtv: { score: 71, sub: [90, 96, 80, 82, 35, 50], year: 2023, os: 'Google TV', ver: '3.72.446070', p50: 31, p95: 120, signal: null, ports: [[8008, 'Cast HTTP'], [8009, 'Cast TLS'], [6466, 'ATV remote'], [8443, 'Cast setup']] },
     samsung: { score: 64, sub: [74, 88, 70, 44, 70, 63], year: 2020, os: 'Tizen', ver: null, p50: 140, p95: 620, signal: null, ports: [[8001, 'Remote ws'], [8002, 'Remote wss'], [9197, 'DMR']] },
     roku: { score: 79, sub: [86, 94, 74, 88, 55, 75], year: null, os: 'Roku OS', ver: '15.3.4', p50: 62, p95: 240, signal: null, ports: [[8060, 'ECP'], [7000, 'AirPlay']] },
+    appletv: { score: 91, sub: [95, 98, 90, 92, 88, 85], year: 2021, os: 'tvOS', ver: '26.1', p50: 38, p95: 140, signal: null, ports: [[7000, 'AirPlay'], [49153, 'Companion']] },
   };
   var LABELS = ['responsiveness', 'reliability', 'connection', 'software', 'wake', 'coverage'];
   function grade(s) { return s >= 90 ? 'A' : s >= 80 ? 'B' : s >= 70 ? 'C' : s >= 60 ? 'D' : 'F'; }
   function worstOf(r) { var f = r.findings.filter(function (x) { return x.severity === 'high' || x.severity === 'medium'; })[0]; return f ? f.title : null; }
   function seeded(n) { var x = Math.sin(n) * 10000; return x - Math.floor(x); }
   function fakeHealth(t, withDiag) {
-    var p = PROFILES[t.brand];
+    var p = PROFILES[t.brand] || PROFILES.roku;
     var now = Date.now();
     var lat = [];
     for (var i = 0; i < 90; i++) lat.push(Math.round(p.p50 * (0.6 + seeded(i + t.id.length) * 0.9) + (i % 17 === 0 ? p.p95 : 0)));

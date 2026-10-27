@@ -4,6 +4,7 @@
 // an agent works through to build support for that TV. Hearth checks back on
 // the ticket and says so when it's done.
 import { feedback, haptic } from './feel.js';
+import { track } from './analytics.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const BRANDS = [['lg', 'LG'], ['samsung', 'Samsung'], ['roku', 'Roku'], ['androidtv', 'Google TV'], ['appletv', 'Apple TV'], ['other', 'Something else']];
@@ -88,6 +89,7 @@ export function createGuide({ api, note }) {
   }
 
   async function open(c) {
+    track('guide_open', { brand: c?.device?.brand ?? '' });
     ctx = c;
     last = null;
     paint();
@@ -162,6 +164,7 @@ export function createGuide({ api, note }) {
       btn.textContent = 'Sending…';
       try {
         const { id } = await api('POST', '/support', body);
+        track('support_report', { brand: device.brand, when: String(body.report?.symptom?.when ?? '') });
         saveTickets([...loadTickets(), { id, label: `${brandName(device.brand)} ${device.model || ''}`.trim(), at: Date.now(), checked: 0 }]);
         feedback('success');
         sheet.innerHTML = `<div class="sheet-grip"></div><h3>Got it 🙌</h3>

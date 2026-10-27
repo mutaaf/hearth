@@ -149,6 +149,12 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `Hub.wakeFor(id)` runs before every key, volume, launch and input on one TV (src/routes.js): a paired TV that isn't `on`/`unknown` gets `power(id, true)` and the press waits (25 s, `wakeMs`) until it's on, plus `wakeSettleMs`. Presses during a wake share it (`#waking`). Skipped for Google TV (power needs Google's code), for a TV that's neither on the network nor has a MAC, and for 45 s after Hearth switched it off (a 2016-17 Samsung stays on the network ~40 s going down; its powerOn is a KEY_POWER toggle). The web app says "Waking <TV>…" once, uses the 90 s timeout for key/volume/input, and calls a TV that's still on the network but not on "Asleep" (not on the network: "Off"). The demo does the same (`wakeFor` in web/demo.js).
 - A TV that's switched off can't be found the first time (nothing answers). Setup says so after `HINT_AFTER` ("Turn it on with its own remote… after today, your phone turns it on") and keeps looking; the done screen names the one setting that makes waking work for that model (Samsung: Power On with Mobile; LG only if `state.wakeOnLan === false`, since the driver turns it on itself), from the model's guide.
 
+## Analytics (phone app only)
+
+- web/analytics.js: `track(event, props)` → `window.HearthHost.track` (hearth-app whitelists the properties again and sends them to PostHog). No HearthHost (home server, public demo) = nothing leaves the page. Brands, counts, steps and durations only: never a TV's name, IP, MAC or serial.
+- `screen` (screen, from, prev_s, brand/mode or tvs) comes from one MutationObserver in app.js watching `hidden`/`open`: the open overlay (#setup, #health, #energy, #sceneEditor) or dialog wins, else house/remote. New overlays: add them to `OVERLAYS`/`SHEETS`.
+- Others: `tap` (every `data-action`), `remote_tab`, `remote_mode`, `power`, `refresh`, `ui_error` (error notes), `scrolled` (house depth in 25 % steps, on leaving), `setting` (every savePrefs change), `launch_app`, `scene_run`, `setup_step`, `tour_start`/`tour_end`, `guide_open`, `support_report`.
+
 ## Device guides, AI and the support queue
 
 - `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at
@@ -275,6 +281,8 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | OPACK back-references: pyatv's packer counts dicts/lists in its table but its unpacker doesn't, and 0xC3/0xC4 are 4/8-byte on pack but 3/4-byte on unpack | src/atv/opack.js uses one rule both ways (scalars whose encoding is >1 byte; 0xC1-0xC4 = 1-4 byte index, as pyatv decodes what Apple sends). Every pyatv test vector passes. |
 | pyatv doesn't check the Apple TV's pair-setup proof (M4) or its M6 signature | hap.js checks both (HAP spec); verified against pyatv's server-side auth. If a real Apple TV ever fails there with the right code, that check is the first suspect. |
 | pyatv logs to stdout by default would corrupt the JSON-lines protocol | The bridge logs to stderr only (Node prefixes and forwards it to hearth.log); stdout is protocol. |
+| The house masthead is `position: sticky` and frosts when `html.scrolled` (set on scroll in app.js) | It pulls itself up over `.view`'s top padding with a negative margin, so it covers the status-bar area too. Sheets keep the grip, title and `.sheet-actions` sticky; long sheets scroll in between. |
+| An absolutely positioned `.sr-only` element at the end of `<body>` made the page 17 px taller than the body, and the html background showed as a strip under the dock | `.sr-only` is pinned `top: 0; left: 0`; `body` is `display: flow-root` and its gradient doesn't repeat. |
 | macOS Local Network privacy can silently block multicast for Terminal/Node | If a scan finds nothing on a Mac, check System Settings → Privacy & Security → Local Network. |
 
 ## Definition of done

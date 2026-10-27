@@ -1,3 +1,4 @@
+import { track } from './analytics.js';
 // How Hearth feels in the hand: haptics, sound, and one press engine for
 // every button (tap, auto-repeat, long-press, press-and-hold-to-confirm).
 
@@ -18,6 +19,7 @@ const fromUrl = new URLSearchParams(location.search).get('skin');
 if (['aurora', '8bit', 'classic'].includes(fromUrl)) prefs.skin = fromUrl;
 
 export function savePrefs(patch) {
+  for (const [k, v] of Object.entries(patch)) if (prefs[k] !== v && (typeof v === 'boolean' || typeof v === 'string')) track('setting', { key: k, value: v });
   Object.assign(prefs, patch);
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));

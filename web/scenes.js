@@ -2,6 +2,7 @@
 // on a schedule. The strip lives on the house view; the editor is a
 // full-screen sheet built from big buttons — no typing required.
 import { feedback, haptic } from './feel.js';
+import { track } from './analytics.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const EMOJI = ['🌙', '🍿', '📚', '☀️', '🎮', '🏈', '🧸', '🎉', '🛋️', '🍽️', '🎬', '✨'];
@@ -95,6 +96,7 @@ export function createScenes({ api, getTvs, note }) {
     render();
     try {
       await api('POST', `/scenes/${id}/run`);
+      track('scene_run', { steps: scene.steps.length, scheduled: Boolean(scene.schedule?.enabled) });
     } catch (err) {
       progress.delete(id);
       feedback('error');

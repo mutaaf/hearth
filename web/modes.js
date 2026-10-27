@@ -11,6 +11,7 @@ import { classify, KINDS, suggestedMode, summarize } from './activity.js';
 import { feedback, haptic } from './feel.js';
 import { keyMemory, phaseOf } from './playback.js';
 import { createStream } from './stream.js';
+import { track } from './analytics.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -99,7 +100,7 @@ const savePref = (tvId, group, value) => {
 const groupOf = (mode) => (mode === 'trackpad' ? 'browser' : mode === 'gamepad' ? 'game' : null);
 const finePointer = () => matchMedia('(pointer: fine)').matches && !matchMedia('(pointer: coarse)').matches;
 
-export function createModes({ api, getTv, sendKey, note }) {
+export function createModes({ api, getTv, sendKey, note, appName }) {
   const remote = document.querySelector('#remote');
   let mode = 'remote';
   let auto = false; // was the current mode chosen for us?
@@ -192,7 +193,7 @@ export function createModes({ api, getTv, sendKey, note }) {
   const $ = (s) => remote.querySelector(s);
   // The Stream Center ("Watch"): what you want while something plays.
   const keys = keyMemory();
-  const stream = createStream({ remote, sendKey, getTv, onBrowse: () => setMode('remote') });
+  const stream = createStream({ remote, sendKey, getTv, appName, onBrowse: () => setMode('remote') });
   // Remote, or Watch when something is playing; browsers and games win.
   function suggest(t, a) {
     const base = suggestedMode(a);
@@ -205,6 +206,7 @@ export function createModes({ api, getTv, sendKey, note }) {
       auto = auto && isAuto;
       return;
     }
+    track('remote_mode', { mode: next, from: mode, auto: isAuto, brand: getTv()?.brand ?? '' });
     const t = getTv();
     if (t && !isAuto) {
       // A choice made by hand is remembered for this TV and this kind of thing.
