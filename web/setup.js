@@ -386,6 +386,9 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         </div>`);
       mountField('hearth-tv');
       confetti();
+      // Phone app: now's the moment to ask about notifications (a TV left on
+      // late at night, scheduled scenes). iOS asks only once.
+      setTimeout(() => window.HearthHost?.askNotifications?.(), 1800);
       // So the phone can turn it on next time: the one setting that makes
       // waking work, for this exact model. (LG switches its own on: Hearth
       // sets it when it connects.)
