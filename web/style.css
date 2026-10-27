@@ -122,6 +122,8 @@ svg { width: 1em; height: 1em; }
 }
 @keyframes ember { 50% { box-shadow: 0 0 0 6px var(--signal-soft), 0 0 28px var(--signal); } }
 .clock { margin: 0; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; }
+/* Phones: the header's buttons (Select, health, ?, settings) need the room. */
+@media (max-width: 480px) { .clock { display: none; } .masthead-right { gap: 8px; } }
 
 .hero { padding: 26px 2px 18px; display: grid; gap: 10px; }
 .kicker { margin: 0; font-size: 11px; text-transform: uppercase; color: var(--signal); letter-spacing: .14em; }
