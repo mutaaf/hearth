@@ -60,6 +60,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // phone itself (window.HearthHost, same { api, events } shape); everything
 // else in the app is identical.
 const demo = window.HearthDemo ?? window.HearthHost;
+// The phone app carries the demo too (demo.html): offer it there, not at home.
+if (window.HearthHost?.native && !window.HearthDemo) {
+  for (const el of document.querySelectorAll('.demo-link, .demo-row')) el.hidden = false;
+}
 if (window.HearthHost) document.documentElement.dataset.host = 'app'; // hides web-only bits (style.css)
 
 async function api(method, path, body) {

@@ -680,8 +680,10 @@
     document.documentElement.style.setProperty('--demo-bar', '28px');
     var bar = document.createElement('a');
     bar.className = 'demo-bar mono';
-    bar.href = '../';
-    bar.innerHTML = '<span>Demo · pretend TVs</span><b>Get Hearth for your house →</b>';
+    // In the phone app the demo is a page beside the real one (demo.html).
+    var app = window.HearthHost && window.HearthHost.native;
+    bar.href = app ? 'index.html' : '../';
+    bar.innerHTML = app ? '<span>Demo · pretend TVs</span><b>Back to my house →</b>' : '<span>Demo · pretend TVs</span><b>Get Hearth for your house →</b>';
     document.body.prepend(bar);
   });
 })();

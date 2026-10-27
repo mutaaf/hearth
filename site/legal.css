@@ -1,0 +1,27 @@
+/* The privacy and support pages: one quiet column in Hearth's colours. */
+:root {
+  --bg: #f6f1ea; --ink: #161821; --soft: #5b5d6b; --hair: #14161f17; --ember: #f25a1d; --card: #fffdf9;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e0c0a; --ink: #f3eee4; --soft: #a59d90; --hair: #ffffff1a; --ember: #ff6a2b; --card: #17140f; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: radial-gradient(70% 40% at 90% -10%, #ff8a4c2e, transparent 70%), var(--bg); color: var(--ink);
+  font: 17px/1.6 'Bricolage Grotesque', 'Avenir Next', system-ui, sans-serif;
+}
+main { max-width: 680px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) 20px 64px; }
+.back { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-weight: 700; letter-spacing: -.02em; font-size: 20px; }
+.back i { width: 12px; height: 12px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 12px var(--ember); }
+.kicker { margin: 44px 0 6px; font: 500 11px/1 'Martian Mono', ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--ember); }
+h1 { margin: 0 0 8px; font-size: clamp(36px, 9vw, 52px); line-height: 1.02; letter-spacing: -.04em; }
+.lede { margin: 0 0 32px; color: var(--soft); font-size: 19px; }
+h2 { margin: 38px 0 8px; font-size: 22px; letter-spacing: -.02em; }
+p, li { color: var(--ink); }
+ul { padding-left: 1.1em; }
+li { margin: 6px 0; }
+a { color: var(--ember); }
+.card { margin: 18px 0; padding: 18px 20px; border-radius: 20px; background: var(--card); border: 1px solid var(--hair); }
+.card b { display: block; margin-bottom: 4px; }
+.fine { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--hair); color: var(--soft); font: 12px/1.6 'Martian Mono', ui-monospace, monospace; }
