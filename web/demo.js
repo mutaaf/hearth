@@ -150,9 +150,16 @@
   function needsOn(t) {
     if (!t.state.online || t.state.power !== 'on') throw new Error('TV is off or not reachable');
   }
+  // Like Hub.wakeFor: a press on a sleeping TV wakes it first.
+  function wakeFor(t) {
+    if (t.paired && t.brand !== 'androidtv' && (!t.state.online || t.state.power !== 'on')) {
+      change(t, { online: true, power: 'on', app: t.brand === 'lg' ? 'com.webos.app.home' : null });
+    }
+    needsOn(t);
+  }
 
   function key(t, name) {
-    needsOn(t);
+    wakeFor(t);
     if (t.brand === 'androidtv' && ['volup', 'voldown', 'mute', 'home', 'back'].indexOf(name) < 0) {
       throw new Error('Google TVs only allow volume, mute and apps without pairing. Arrow keys need Google’s one-time code.');
     }
@@ -493,7 +500,7 @@
     }],
     ['POST', /^\/tvs\/([\w-]+)\/launch$/, function (m, body) {
       var t = find(m[1]);
-      needsOn(t);
+      wakeFor(t);
       var list = { lg: LG_APPS, samsung: SAMSUNG_APPS, roku: ROKU_APPS, androidtv: GTV_APPS, appletv: ATV_APPS }[t.brand];
       var hit = list.filter(function (a) { return a[0] === body.id; })[0];
       if (t.brand !== 'samsung') change(t, { app: body.id, appTitle: hit ? hit[1] : null });
@@ -508,7 +515,7 @@
     }],
     ['POST', /^\/tvs\/([\w-]+)\/input$/, function (m, body) {
       var t = find(m[1]);
-      needsOn(t);
+      wakeFor(t);
       var labels = { HDMI_1: 'Apple TV', HDMI_2: 'PlayStation 5', HDMI_3: 'HDMI 3' };
       change(t, { app: 'com.webos.app.hdmi' + String(body.id).replace(/\D/g, ''), appTitle: null, inputLabel: labels[body.id] || null });
       return { ok: true };

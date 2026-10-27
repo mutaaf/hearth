@@ -404,11 +404,48 @@ export class Hub extends EventEmitter {
     return this.view(tv);
   }
 
+  #offAt = new Map(); // id → when Hearth last switched it off
   async power(id, on) {
     const driver = this.driver(id);
+    if (on) this.#offAt.delete(id);
+    else this.#offAt.set(id, Date.now());
     await (on ? driver.powerOn() : driver.powerOff());
     this.settle(id);
     return { ok: true };
+  }
+
+  // Any button on a sleeping TV wakes it first, then does the press, so
+  // nobody has to find the power button. Presses that arrive while it's
+  // waking share one wake. → true if it woke the TV.
+  #waking = new Map();
+  async wakeFor(id) {
+    const tv = this.get(id);
+    const view = this.view(tv);
+    const st = view.state;
+    if (!tv.credentials || st?.online && (st.power === 'on' || st.power === 'unknown')) return false;
+    // Google TVs need Google's code for power; anything else needs a way in:
+    // still on the network (standby), or a MAC for Wake-on-LAN.
+    if (tv.brand === 'androidtv' || !(st?.online || view.canWake)) return false;
+    // Just switched off from here: a stray press while it powers down (a
+    // Samsung takes ~40 s) must not switch it straight back on.
+    if (Date.now() - (this.#offAt.get(id) ?? 0) < 45_000) return false;
+    if (!this.#waking.has(id)) {
+      const job = (async () => {
+        await this.power(id, true);
+        const deadline = Date.now() + (this.wakeMs ?? 25_000);
+        for (;;) {
+          const s = this.view(this.get(id)).state;
+          if (s?.online && (s.power === 'on' || s.power === 'unknown')) break;
+          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
+          await new Promise((r) => setTimeout(r, this.pollMs ?? 500));
+        }
+        // Freshly awake sets need a moment before they take keys.
+        await new Promise((r) => setTimeout(r, this.wakeSettleMs ?? 1500));
+      })().finally(() => this.#waking.delete(id));
+      this.#waking.set(id, job);
+    }
+    await this.#waking.get(id);
+    return true;
   }
 
   // ── Live state that matches the TV ──

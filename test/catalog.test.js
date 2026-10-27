@@ -175,6 +175,36 @@ test('launch: wake turns off TVs on first, then opens the app; missing apps say 
   assert.deepEqual(log.map((l) => l[1]), ['on', 'launch']);
 });
 
+test('any button on a sleeping TV wakes it first, then does the press; presses while it wakes share one wake', async () => {
+  reset();
+  const id = idOf('Off');
+  const [a, b] = await Promise.all([call('POST', `/api/tvs/${id}/key`, { key: 'ok' }), call('POST', `/api/tvs/${id}/key`, { key: 'down' })]);
+  assert.deepEqual([a.status, b.status], [200, 200]);
+  assert.deepEqual(log.map((l) => l[1]), ['on', 'key', 'key'], 'one wake, then both presses');
+  log.length = 0;
+  await call('POST', `/api/tvs/${idOf('Living')}/key`, { key: 'ok' });
+  assert.deepEqual(log.map((l) => l[1]), ['key'], 'an awake TV is never woken');
+  await call('POST', `/api/tvs/${id}/power`, { on: false });
+  log.length = 0;
+  await call('POST', `/api/tvs/${id}/key`, { key: 'voldown' });
+  assert.deepEqual(log.map((l) => l[1]), ['key'], 'a press right after switching it off doesn’t switch it back on');
+});
+
+test('a TV that never wakes fails the press with a plain answer', async () => {
+  await hub.power(idOf('Off'), true); // forget the switch-off above
+  await new Promise((r) => setTimeout(r, 40));
+  reset();
+  const drv = hub.driver(idOf('Off'));
+  const real = drv.powerOn;
+  drv.powerOn = async () => {};
+  Object.assign(hub, { wakeMs: 60 });
+  const { status, body } = await call('POST', `/api/tvs/${idOf('Off')}/key`, { key: 'ok' });
+  Object.assign(hub, { wakeMs: 1000 });
+  drv.powerOn = real;
+  assert.equal(status, 503);
+  assert.match(body.error, /didn’t wake up/);
+});
+
 test('launch: Google TV explains apps Cast can’t open; junk is rejected', async () => {
   const { body } = await call('POST', '/api/launch', { app: 'max', tvs: [idOf('Upstairs')] });
   assert.deepEqual([body.results[0].ok, body.results[0].reason], [false, 'unsupported']);

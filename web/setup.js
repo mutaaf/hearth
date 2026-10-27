@@ -253,9 +253,12 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         if (waited > GIVE_UP) return go('none', { allAdded: seen > 0 });
         if (waited > HINT_AFTER) {
           root.querySelector('#searchHint').hidden = false;
+          // A TV that's off (or in standby) isn't on the network to be found.
+          // Ask for it to be switched on once; from then on the phone wakes it.
+          root.querySelector('#searchTitle').textContent = 'Turn it on with its own remote.';
           root.querySelector('#searchSub').textContent = seen
-            ? 'Your other TVs are here already. Still looking for a new one…'
-            : 'Still looking… Check these while we keep trying.';
+            ? 'Your other TVs are here already. Switch the new one on and Hearth adds it the moment it wakes. After today, your phone turns it on.'
+            : 'Switched-off TVs hide from Wi-Fi. Turn it on once and Hearth adds it the moment it wakes. After today, your phone turns it on.';
         }
         await sleep(LOOK_EVERY);
       }
@@ -374,12 +377,36 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         <div class="setup-art"><div class="field-art"></div></div>
         <h2>You did it! 🎉</h2>
         <p class="say-it"><b>${esc(tv?.name)}</b> is on your remote now.${window.HearthHost ? '' : ' Every phone on your Wi-Fi can use it.'}</p>
+        <div id="wakeTip"></div>
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="finish">Open the remote</button>
           <button type="button" class="ghost" data-press="up" data-setup="again">Add another TV</button>
         </div>`);
       mountField('hearth-tv');
       confetti();
+      // So the phone can turn it on next time: the one setting that makes
+      // waking work, for this exact model. (LG switches its own on: Hearth
+      // sets it when it connects.)
+      const mine = run;
+      const tip = (html) => {
+        const el = mine === run && root.querySelector('#wakeTip');
+        if (el) el.innerHTML = `<p class="say-it wake-tip">⚡ ${html}</p>`;
+      };
+      const WAKE_SETTING = {
+        samsung: [/power on|mobile/i, 'Settings → General → Network → Expert Settings → Power On with Mobile'],
+        lg: [/wi-?fi|mobile|quick start/i, 'Settings → General → Devices → TV Management → Turn on via Wi-Fi'],
+      };
+      const ws = WAKE_SETTING[tv?.brand];
+      if (ws && (tv.brand === 'samsung' || tv.state?.wakeOnLan === false)) {
+        const say = (path) => tip(`One more thing so your phone can turn it on: <b>${esc(path)}</b> → On.`);
+        if (guide && tv.model) {
+          guide.lookup({ brand: tv.brand, model: tv.model }).then((res) => {
+            say(res?.guide?.keepReachable?.find((x) => ws[0].test(`${x.title} ${x.path}`))?.path ?? ws[1]);
+          });
+        } else say(ws[1]);
+      } else if (tv && tv.brand !== 'androidtv') {
+        tip('Your phone can turn it on from now on: press any button.');
+      }
     },
 
     none() {

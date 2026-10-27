@@ -144,6 +144,11 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - One vocabulary everywhere: `POST /api/launch { app: 'youtubetv' | 'YouTube TV', tvs: 'all' | [ids], wake }`, bulk/scene action `launch` with `{ app }`, `{ title }` or `{ id }` (+ `wake`). Results: `{ id, name, ok, appId?, title?, via?, woke?, reason?, error? }`, reasons `not-installed`, `unsupported`, `off`, `offline`, `unpaired`, `failed`.
 - `wake: true` powers on TVs that are off/asleep first and waits (25 s) for them; it never toggles a TV whose power is `unknown`. Rokus and Google TVs open apps from standby by themselves.
 
+## Any button wakes a sleeping TV
+
+- `Hub.wakeFor(id)` runs before every key, volume, launch and input on one TV (src/routes.js): a paired TV that isn't `on`/`unknown` gets `power(id, true)` and the press waits (25 s, `wakeMs`) until it's on, plus `wakeSettleMs`. Presses during a wake share it (`#waking`). Skipped for Google TV (power needs Google's code), for a TV that's neither on the network nor has a MAC, and for 45 s after Hearth switched it off (a 2016-17 Samsung stays on the network ~40 s going down; its powerOn is a KEY_POWER toggle). The web app says "Waking <TV>…" once, uses the 90 s timeout for key/volume/input, and calls a TV that's still on the network but not on "Asleep" (not on the network: "Off"). The demo does the same (`wakeFor` in web/demo.js).
+- A TV that's switched off can't be found the first time (nothing answers). Setup says so after `HINT_AFTER` ("Turn it on with its own remote… after today, your phone turns it on") and keeps looking; the done screen names the one setting that makes waking work for that model (Samsung: Power On with Mobile; LG only if `state.wakeOnLan === false`, since the driver turns it on itself), from the model's guide.
+
 ## Device guides, AI and the support queue
 
 - `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at

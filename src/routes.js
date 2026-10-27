@@ -76,17 +76,17 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
     r('POST', `/tvs/${id}/key`, ([tv], body) => {
       if (typeof body.key !== 'string') throw badRequest('key is required');
       const hold = Number.isFinite(body.hold) && body.hold > 0 ? body.hold : 0;
-      return hub.driver(tv).key(body.key, { hold }).then(() => settled(tv));
+      return hub.wakeFor(tv).then(() => hub.driver(tv).key(body.key, { hold })).then(() => settled(tv));
     }),
     r('POST', `/tvs/${id}/power`, ([tv], body) => hub.power(tv, Boolean(body.on))),
     r('POST', `/tvs/${id}/volume`, ([tv], body) => {
       if (!Number.isFinite(body.level)) throw badRequest('level must be a number 0–100');
-      return hub.driver(tv).setVolume(body.level).then(() => settled(tv));
+      return hub.wakeFor(tv).then(() => hub.driver(tv).setVolume(body.level)).then(() => settled(tv));
     }),
     r('GET', `/tvs/${id}/apps`, ([tv], _, url) => hub.apps(tv, { fresh: url.searchParams.has('fresh') })),
-    r('POST', `/tvs/${id}/launch`, ([tv], body) => hub.driver(tv).launch(String(body.id ?? '')).then(() => settled(tv))),
+    r('POST', `/tvs/${id}/launch`, ([tv], body) => hub.wakeFor(tv).then(() => hub.driver(tv).launch(String(body.id ?? ''))).then(() => settled(tv))),
     r('GET', `/tvs/${id}/inputs`, ([tv]) => hub.driver(tv).inputs()),
-    r('POST', `/tvs/${id}/input`, ([tv], body) => hub.driver(tv).setInput(String(body.id ?? '')).then(() => settled(tv))),
+    r('POST', `/tvs/${id}/input`, ([tv], body) => hub.wakeFor(tv).then(() => hub.driver(tv).setInput(String(body.id ?? ''))).then(() => settled(tv))),
     r('POST', `/tvs/${id}/toast`, ([tv], body) => {
       const message = String(body.message ?? '').trim();
       if (!message) throw badRequest('message is required');

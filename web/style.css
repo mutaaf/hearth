@@ -439,6 +439,7 @@ svg { width: 1em; height: 1em; }
 .setup-art { position: relative; width: min(74vw, 290px, 38dvh); aspect-ratio: 1; margin: 0 auto; display: grid; place-items: center; }
 .setup h2 { margin: 0; font-size: clamp(34px, 9.5vw, 52px); line-height: .98; letter-spacing: -.045em; font-weight: 750; text-align: center; }
 .setup p.say-it { margin: 0; text-align: center; font-size: 18px; line-height: 1.5; color: var(--ink-soft); }
+.setup p.wake-tip { margin-top: 14px; font-size: 15px; }
 .setup-actions { display: grid; gap: 10px; margin-top: 6px; }
 .setup-actions .cta { width: 100%; min-height: 66px; font-size: 20px; }
 .setup-actions .ghost { width: 100%; min-height: 54px; }

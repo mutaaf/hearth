@@ -78,7 +78,7 @@ async function api(method, path, body) {
   }
   // Never hang: pairing, launches that wake TVs, the doctor and AI notes can
   // legitimately take a while; everything else answers in seconds.
-  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power)$|^\/ai\/|^\/tvs$|\/run$/.test(path);
+  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power|key|volume|input)$|^\/ai\/|^\/tvs$|\/run$/.test(path); // keys may wake the TV first
   init.signal = AbortSignal.timeout?.(slow ? 90_000 : 15_000);
   let res;
   try {
@@ -111,7 +111,7 @@ const isUnknown = (t) => t.state?.online && t.state.power === 'unknown';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
 const statusWord = (t) =>
-  t.state?.unavailable ? 'Needs setup' : !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : isStandby(t) ? 'Standby' : 'Off';
+  t.state?.unavailable ? 'Needs setup' : !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : t.state?.online ? 'Asleep' : 'Off';
 const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' };
 const brandName = (b) => BRANDS[b] ?? 'TV';
 
@@ -214,7 +214,7 @@ function renderFixBanner(t) {
   } else {
     const off = wentOff(t);
     $('#fixBannerTitle').textContent = off ? 'Switched off' : 'Not responding';
-    $('#fixBannerText').textContent = off ? (t.canWake ? 'Tap power to wake it, or use its own remote. Still connected.' : 'Turn it on with its own remote. Still connected.') : 'Asleep, unplugged, or moved?';
+    $('#fixBannerText').textContent = off ? (canWakeNow(t) ? 'Press any button and it wakes up. Still connected.' : 'Turn it on with its own remote. Still connected.') : 'Asleep, unplugged, or moved?';
     btn.textContent = off ? 'Check it' : 'Fix it';
     btn.dataset.doctor = 'fix';
     delete btn.dataset.action;
@@ -362,7 +362,7 @@ function insights(t) {
   if (t.state?.unavailable) out.push(t.state.unavailable);
   if (!t.paired) out.push('Not connected yet — tap Connect above');
   if (isOn(t) && t.state.nowPlaying) out.push(`Now playing: ${t.state.nowPlaying}`);
-  else if (!t.state?.online) out.push(t.canWake ? 'Off · tap ⏻ to wake it' : 'Off · turn it on with its own remote once');
+  else if (t.paired && !isOn(t) && !isUnknown(t)) out.push(canWakeNow(t) ? `${t.state?.online ? 'Asleep' : 'Off'} · press any button to wake it` : 'Off · turn it on with its own remote once');
   if (t.state?.muted) out.push('Muted · tap the ring to unmute');
   if ((t.state?.volume ?? 0) >= 60) out.push(`Loud · volume ${t.state.volume}`);
   if (isOn(t) && t.since && Date.now() - t.since > 2 * 3600e3) out.push(`On for ${ago(Date.now() - t.since)} · time for a break?`);
@@ -379,7 +379,7 @@ function renderAurora(t) {
   if (prefs.skin !== 'aurora') return;
   const on = isOn(t);
   $('#hudKicker span').textContent = `${t.name} · ${brandName(t.brand)}${t.model ? ` ${t.model}` : ''}`;
-  $('#hudTitle').textContent = !t.paired ? 'Not connected' : on ? (t.state.app || t.state.appTitle ? appName(t) : 'Home screen') : isStandby(t) ? 'Standby' : 'Off';
+  $('#hudTitle').textContent = !t.paired ? 'Not connected' : on ? (t.state.app || t.state.appTitle ? appName(t) : 'Home screen') : t.state?.online ? 'Asleep' : 'Off';
   const chips = [];
   if (t.paired && t.since) chips.push(`<span class="${on ? 'hot' : ''}">${on ? 'On' : 'Off'} ${ago(Date.now() - t.since)}</span>`);
   const ms = avgLatency();
@@ -688,6 +688,16 @@ function refreshFields() {
 }
 
 // ── Commands ─────────────────────────────────────────────
+// Any button on a sleeping TV wakes it first (Hub.wakeFor); say so, once,
+// so the wait reads as "on it" rather than "broken".
+const canWakeNow = (t) => t?.paired && t.brand !== 'androidtv' && (t.state?.online || t.canWake);
+let wakeNoted = 0;
+function noteWaking(id) {
+  const t = tvs.get(id);
+  if (!t || isOn(t) || isUnknown(t) || !canWakeNow(t) || Date.now() - wakeNoted < 20_000) return;
+  wakeNoted = Date.now();
+  note(`Waking ${t.name}… your press goes through once it’s on.`);
+}
 // Keys go through one queue so a fast swipe-swipe-tap arrives in order.
 let keyQueue = Promise.resolve();
 function sendKey(key, opts = {}) {
@@ -701,6 +711,7 @@ function sendKey(key, opts = {}) {
     void m.offsetWidth;
     m.classList.add('bump');
   }
+  noteWaking(id);
   const body = { key, ...(opts.hold ? { hold: Math.round(opts.hold) } : {}) };
   modes?.noteKey(key); // playing or browsing? (Stream Center)
   keyQueue = keyQueue.then(() => {
@@ -1049,10 +1060,12 @@ function onPress(el, info) {
   if (d.app) {
     countUse(current, d.app);
     feedback('key', 'ok');
+    noteWaking(current);
     return api('POST', `/tvs/${current}/launch`, { id: d.app }).catch((err) => note(err.message, true));
   }
   if (d.input) {
     feedback('key', 'ok');
+    noteWaking(current);
     return api('POST', `/tvs/${current}/input`, { id: d.input }).catch((err) => note(err.message, true));
   }
   if (d.msg) return say(d.msg);
