@@ -438,6 +438,16 @@ export class Hub extends EventEmitter {
     return { refreshed: jobs.length };
   }
 
+  // Every connection, fresh: for a phone that just woke up, whose sockets
+  // may look open but be dead. Then each TV re-reads what it's doing.
+  // → { reconnected: n }
+  async reconnectAll(timeoutMs = 4000) {
+    const drivers = [...this.#drivers.values()];
+    await Promise.all(drivers.map((d) =>
+      Promise.race([Promise.resolve().then(() => d.reconnect?.()), new Promise((r) => setTimeout(r, timeoutMs).unref?.())]).catch(() => {})));
+    return { reconnected: drivers.length };
+  }
+
   // How many app screens are open (SSE clients). Drivers that poll go faster
   // while someone's looking and slow down when nobody is.
   viewers = 0;

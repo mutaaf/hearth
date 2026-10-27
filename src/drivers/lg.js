@@ -77,12 +77,16 @@ export class LgDriver extends Driver {
       reconnect: 0,
       timeout: 8000,
     });
+    this.#watch(client); // the constructor connects
     client.on('connect', () => {
+      this.#dialing = false;
+      clearTimeout(this.#dialTimer);
       this.#backoff.up();
       this.#onConnect();
     });
     client.on('prompt', () => this.emit('prompt'));
     client.on('close', () => {
+      this.#dialing = false;
       this.#pointer = null;
       this.setState({ online: false, power: 'off', app: null });
       this.#reconnectSoon(client);
@@ -92,6 +96,7 @@ export class LgDriver extends Driver {
     // A TV that was already off when Hearth started never connects, so 'close' never fires: say so
     // instead of leaving the first-boot 'unknown' up (webOS drops Wi-Fi when fully off).
     client.on('error', (err) => {
+      this.#dialing = false;
       if (!client.connected) {
         this.setState({ online: false, power: 'off', app: null, inputLabel: null });
         this.#reconnectSoon(client);
@@ -101,15 +106,89 @@ export class LgDriver extends Driver {
     this.#client = client;
   }
 
-  #backoff = new Backoff();
+  // 20 s at most between tries while the TV is off: a TV switched on by its
+  // own remote is back in Hearth within that, and a button press or an open
+  // app doesn't wait for it at all (#connectNow).
+  #backoff = new Backoff({ max: 20_000 });
   #reconnectTimer = null;
+  #dialing = false;
+  #dialedAt = 0;
+  #dialTimer = null;
   #reconnectSoon(client) {
     if (this.#client !== client || this.#reconnectTimer) return;
     this.#reconnectTimer = setTimeout(() => {
       this.#reconnectTimer = null;
-      if (this.#client === client && !client.connected) client.connect();
+      this.#dial(client);
     }, this.#backoff.next());
     this.#reconnectTimer.unref?.();
+  }
+
+  // `soon`: someone is waiting, so a try still hanging on a TV that was off
+  // (a dead address can take 8 s to fail) doesn't hold up a fresh one.
+  #dial(client, soon = false) {
+    if (this.#client !== client || client.connected) return;
+    if (this.#dialing && Date.now() - this.#dialedAt < (soon ? 300 : 9000)) return;
+    client.connect();
+    this.#watch(client);
+  }
+
+  // lgtv2 reports an error only when it differs from the last one, so a TV
+  // that stays off fails silently from the second try on. Before this
+  // watchdog, that ended the reconnect loop: an LG that was off for a while
+  // never came back until Hearth restarted.
+  #watch(client) {
+    this.#dialing = true;
+    this.#dialedAt = Date.now();
+    clearTimeout(this.#dialTimer);
+    this.#dialTimer = setTimeout(() => {
+      if (this.#client !== client || client.connected) return;
+      this.#dialing = false;
+      this.#reconnectSoon(client);
+    }, 9000);
+    this.#dialTimer.unref?.();
+  }
+
+  // Someone is waiting (a button, a refresh, the app just opened): try now
+  // rather than at the next backoff tick.
+  #connectNow() {
+    const client = this.#client;
+    if (!client || client.connected) return;
+    clearTimeout(this.#reconnectTimer);
+    this.#reconnectTimer = null;
+    this.#backoff.reset();
+    this.#dial(client, true);
+  }
+
+  // Connected, or connect and wait a moment for it. A TV that's really off
+  // still fails fast (offline).
+  async #ready(ms = 4000) {
+    if (!this.#client) this.start();
+    if (this.#client.connected) return this.#client;
+    this.#connectNow();
+    await new Promise((resolve, reject) => {
+      const done = (err) => {
+        clearTimeout(t);
+        this.off('connect', ok);
+        err ? reject(err) : resolve();
+      };
+      const ok = () => done();
+      const t = setTimeout(() => done(offline()), ms);
+      this.on('connect', ok);
+    });
+    return this.#client;
+  }
+
+  // The phone slept: iOS may have dropped the socket without either side
+  // noticing, so it looks connected and commands go nowhere. Start over.
+  async reconnect() {
+    if (!this.#client) return;
+    await this.stop();
+    this.#backoff.reset();
+    this.start();
+  }
+
+  setActive(active) {
+    if (active) this.#connectNow();
   }
 
   async stop() {
@@ -118,6 +197,8 @@ export class LgDriver extends Driver {
     this.#pointer = null;
     clearTimeout(this.#reconnectTimer);
     this.#reconnectTimer = null;
+    clearTimeout(this.#dialTimer);
+    this.#dialing = false;
     if (client) await client.disconnect().catch(() => {});
   }
 
@@ -313,7 +394,7 @@ export class LgDriver extends Driver {
   // these, but a command or a power transition is worth double-checking.
   async refresh() {
     const client = this.#client;
-    if (!client?.connected) return;
+    if (!client?.connected) return this.#connectNow();
     const [fg, vol, pw] = await Promise.all([
       client.request(SSAP.foreground).catch(() => null),
       client.request(SSAP.volume).catch(() => null),
@@ -336,8 +417,7 @@ export class LgDriver extends Driver {
   }
 
   async #request(uri, payload) {
-    if (!this.#client?.connected) throw offline();
-    return this.#client.request(uri, payload);
+    return (await this.#ready()).request(uri, payload);
   }
 
   async #button(name) {
@@ -346,7 +426,7 @@ export class LgDriver extends Driver {
 
   // Everything on the pointer-input socket: buttons, moves, clicks, scrolls.
   async #input(type, payload) {
-    if (!this.#client?.connected) throw offline();
+    await this.#ready();
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         this.#pointer ??= await this.#client.getSocket(SSAP.pointer);

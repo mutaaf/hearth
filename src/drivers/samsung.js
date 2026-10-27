@@ -85,6 +85,13 @@ export class SamsungDriver extends Driver {
     this.#close();
   }
 
+  // The phone slept: its socket may look open but be dead, so commands would
+  // vanish. Drop it (the next command opens a fresh one) and re-read the TV.
+  reconnect() {
+    this.#close();
+    return this.refresh();
+  }
+
   // The hub says whether anyone has the app open: poll faster when they do.
   setActive(active) {
     const was = this.#active;

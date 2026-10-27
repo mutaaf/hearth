@@ -155,6 +155,21 @@ export class GoogleTvDriver extends Driver {
     this.#close();
   }
 
+  // The phone slept: both sockets may look open but be dead. Start over now.
+  reconnect() {
+    if (this.#stopped) return;
+    clearTimeout(this.#retry);
+    clearTimeout(this.#remoteRetry);
+    const r = this.#remote;
+    this.#remote = null; // so its 'close' doesn't schedule a retry
+    r?.close();
+    this.#close();
+    this.#backoff.reset();
+    this.#remoteBackoff.reset();
+    this.#open().catch(() => this.#scheduleRetry());
+    this.#remoteStart();
+  }
+
   #scheduleRetry() {
     if (this.#stopped) return;
     clearTimeout(this.#retry);

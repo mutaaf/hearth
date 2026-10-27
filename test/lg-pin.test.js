@@ -67,3 +67,49 @@ test('a TV that is already off when Hearth starts shows off, not unknown', async
   assert.equal(s.app, null);
   await driver.stop();
 });
+
+test('a TV switched back on is reached by the next command, not the next backoff tick', async () => {
+  const spare = new WebSocketServer({ port: 0 });
+  await new Promise((r) => spare.once('listening', r));
+  const port = spare.address().port;
+  await new Promise((r) => spare.close(r));
+  const tv = { id: 'lg-back', brand: 'lg', name: 'Den', ip: '127.0.0.1', macs: [], credentials: { clientKey: 'k' } };
+  const driver = new LgDriver(tv, { url: `ws://127.0.0.1:${port}` });
+  const off = new Promise((r) => driver.on('state', (s) => s.power === 'off' && r()));
+  driver.start();
+  await off;
+  // Two failed tries: the backoff is now ~4 s.
+  await new Promise((r) => setTimeout(r, 2600));
+  // The TV comes on (someone used its own remote).
+  const tvServer = new WebSocketServer({ port });
+  await new Promise((r) => tvServer.once('listening', r));
+  const got = [];
+  tvServer.on('connection', (ws) => {
+    ws.on('message', (raw) => {
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === 'register') ws.send(JSON.stringify({ type: 'registered', id: msg.id, payload: { 'client-key': 'k' } }));
+      else if (msg.type === 'request') {
+        got.push(msg.uri);
+        ws.send(JSON.stringify({ type: 'response', id: msg.id, payload: { returnValue: true } }));
+      }
+    });
+  });
+  const t = Date.now();
+  await driver.setVolume(20);
+  assert.ok(Date.now() - t < 1500, `took ${Date.now() - t} ms`);
+  assert.ok(got.includes('ssap://audio/setVolume'));
+  await driver.stop();
+  await new Promise((r) => tvServer.close(r));
+});
+
+test('a TV that stays off fails a command quickly as offline', async () => {
+  const spare = new WebSocketServer({ port: 0 });
+  await new Promise((r) => spare.once('listening', r));
+  const port = spare.address().port;
+  await new Promise((r) => spare.close(r));
+  const tv = { id: 'lg-gone', brand: 'lg', name: 'Den', ip: '127.0.0.1', macs: [], credentials: { clientKey: 'k' } };
+  const driver = new LgDriver(tv, { url: `ws://127.0.0.1:${port}` });
+  driver.start();
+  await assert.rejects(driver.setVolume(20), (err) => err.status === 503);
+  await driver.stop();
+});
