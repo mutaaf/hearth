@@ -49,7 +49,8 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 - **Hold to repeat:** volume, channel and the D-pad speed up the longer you hold.
 - **Swipe the pad** like a trackpad to fly through rows of tiles.
 - **Long-press:** OK (a real press-and-hold on Samsung, Roku and Apple TV; holding Home on an Apple TV opens Control Center), a TV card for its settings, and power to turn off **every** TV.
-- **Three looks:** *Aurora*, *Classic* (70s hi-fi) and *8-bit*, a pocket game console with a dot-matrix screen that tells you what the TV is doing. Change it under ⚙.
+- **Three looks, light or dark:** *Aurora*, *Classic* (70s hi-fi) and *8-bit*, a pocket game console with a dot-matrix screen that tells you what the TV is doing. Aurora and Classic come in Light (the default), Dark, or Auto (follows the phone). Change it under ⚙.
+- **Switches on like an old TV:** every launch opens with a CRT power-on (a dot, a scan line, an ember flash). Reduced Motion skips it.
 - **Set up a TV in a minute:** a step-by-step wizard (turn it on, connect, pick the room) that wakes an off TV for you, and Hearth notices new TVs on the network by itself.
 - **Stays awake** while the remote is open, and works sideways too.
 - **Watch on every TV:** the house screen has a row of the popular apps (YouTube, YouTube TV, Netflix, Prime Video, Disney+, Max, Hulu, Apple TV, Peacock, Paramount+, ESPN and more). **Hold** one to open it on every TV, waking the ones that are off; each TV answers ✓ or ✕ with why (not installed, can't open on that TV). In select mode it opens on just the TVs you picked. On a TV's **Apps** tab, tap one to open it there. Each TV opens its own version of the app, so you never have to know that YouTube TV is a different id on a Samsung and a Roku.

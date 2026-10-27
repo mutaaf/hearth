@@ -30,23 +30,22 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root[data-skin="classic"] {
-    --bg: #121110;
-    --bg-deep: #0b0a09;
-    --body: #1d1b19;
-    --body-edge: #2c2926;
-    --ink: #efe9de;
-    --ink-soft: #a59d90;
-    --ink-faint: #6d665b;
-    --key: #2d2a27;
-    --key-ink: #efe9de;
-    --key-edge: #000;
-    --led-off: #4a453e;
-    --glass: #0a0908;
-    --shadow: 0 1px 0 #ffffff0d inset, 0 24px 50px -20px #000c, 0 2px 4px #0006;
-    color-scheme: dark;
-  }
+/* Dark classic: the appearance setting (data-mode, from feel.js), not the phone. */
+:root[data-skin="classic"][data-mode="dark"] {
+  --bg: #121110;
+  --bg-deep: #0b0a09;
+  --body: #1d1b19;
+  --body-edge: #2c2926;
+  --ink: #efe9de;
+  --ink-soft: #a59d90;
+  --ink-faint: #6d665b;
+  --key: #2d2a27;
+  --key-ink: #efe9de;
+  --key-edge: #000;
+  --led-off: #4a453e;
+  --glass: #0a0908;
+  --shadow: 0 1px 0 #ffffff0d inset, 0 24px 50px -20px #000c, 0 2px 4px #0006;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -81,7 +80,7 @@ svg { width: 1em; height: 1em; }
   position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .35; mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .25 0 0 0 0 .2 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-@media (prefers-color-scheme: dark) { [data-skin="classic"] .grain { mix-blend-mode: screen; opacity: .12; } }
+[data-skin="classic"][data-mode="dark"] .grain { mix-blend-mode: screen; opacity: .12; }
 
 .view { width: 100%; max-width: 1080px; margin: 0 auto; padding: max(14px, var(--safe-t)) 16px 0; }
 
@@ -530,3 +529,28 @@ svg { width: 1em; height: 1em; }
 /* The App Store app (window.HearthHost): no install nudges, no household
    (the hub is on this phone), no share-the-link rows. */
 [data-host="app"] :is([data-install], [data-house="phones"]) { display: none !important; }
+
+/* ── Power-on (every launch) ───────────────── */
+/* An old CRT switching on: a dot, a scan line stretched wide, the picture
+   bursting open in ember, then the room. Pure CSS; ~1 s; gone after. */
+.power-on {
+  position: fixed; inset: 0; z-index: 200; pointer-events: none; display: grid; place-items: center;
+  background: #07080c; animation: po-fade .45s .8s ease-in forwards;
+}
+.power-on i {
+  width: 6px; height: 6px; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 18px 6px #ffb08a, 0 0 60px 20px #ff6a2b;
+  animation: po-line .8s cubic-bezier(.7, 0, .2, 1) forwards;
+}
+@keyframes po-line {
+  0% { transform: scale(0); opacity: 0; }
+  12% { transform: scale(1); opacity: 1; }
+  38% { width: 6px; height: 6px; }
+  58% { width: 100vw; height: 2px; border-radius: 0; }
+  80% { width: 100vw; height: 100dvh; border-radius: 0; opacity: 1; background: radial-gradient(60% 50% at 50% 50%, #fff, #ffb08a 35%, #ff6a2b 70%, #07080c); }
+  100% { width: 100vw; height: 100dvh; border-radius: 0; opacity: 0; }
+}
+@keyframes po-fade { to { opacity: 0; visibility: hidden; } }
+[data-mode="light"] .power-on { background: #f6f1ea; }
+[data-mode="light"] .power-on i { background: #161821; box-shadow: 0 0 18px 6px #ff8a4c, 0 0 60px 20px #f25a1d88; }
+@media (prefers-reduced-motion: reduce) { .power-on { display: none; } }

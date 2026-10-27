@@ -103,7 +103,7 @@ The UI adapts from `capabilities` (`volumeLevel`, `inputs`, `toast`, `appIcons`,
 - A long OK is sent as `{ key: 'ok', hold: ms }`. Samsung (Press/Release) and Roku (keydown/keyup) do a real hold; LG has no network hold, so it's a click. Google TV over Cast has no keys except volume/mute (other keys → 409 with an explanation). Apple TV holds use pyatv `InputAction.Hold` (~1 s) for arrows/OK/back/home; a held Home is Control Center. Apple TV play/pause sends the toggle unless the pushed `state.playing` says it's already in the asked state; mute/source → 501.
 - The D-pad is a gesture surface: tap a zone, hold to repeat, or drag to step every 34 px.
 - Power: tap toggles this TV, hold turns every TV off. A long-press on a TV card opens its settings.
-- Skins are pure CSS. The 8-bit LCD text comes from `renderLcd()`. `?skin=8bit|classic` overrides the saved preference, and `?embed=1` hides the demo banner.
+- Skins are pure CSS. Light/dark is `prefs.mode` ('light' default | 'dark' | 'auto') → `<html data-mode>` (feel.js `applySkin()`, which also fires `hearth:mode` for the native app). Aurora's daylight look is `skin-aurora-light.css` (`[data-skin="aurora"][data-mode="light"]`); Classic's dark is `[data-mode="dark"]`, not the phone's media query. The 8-bit LCD text comes from `renderLcd()`. `?skin=8bit|classic` overrides the saved preference, and `?embed=1` hides the demo banner.
 
 ## Live state must match the TV
 

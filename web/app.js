@@ -768,6 +768,10 @@ function openEdit(id = current) {
 
 function openSettings() {
   for (const card of document.querySelectorAll('[data-skin-pick]')) card.classList.toggle('active', card.dataset.skinPick === prefs.skin);
+  for (const b of document.querySelectorAll('[data-mode-pick]')) {
+    b.classList.toggle('active', b.dataset.modePick === prefs.mode);
+    b.setAttribute('aria-checked', String(b.dataset.modePick === prefs.mode));
+  }
   $('#prefHaptics').checked = prefs.haptics;
   $('#prefHapticsHint').textContent = HAPTIC_HINT[hapticSupport()];
   $('#prefSound').checked = soundOn();
@@ -1017,6 +1021,12 @@ function onPress(el, info) {
     return api('POST', `/tvs/${current}/input`, { id: d.input }).catch((err) => note(err.message, true));
   }
   if (d.msg) return say(d.msg);
+  if (d.modePick) {
+    savePrefs({ mode: d.modePick });
+    refreshFields();
+    feedback('success');
+    return openSettings();
+  }
   if (d.skinPick) {
     savePrefs({ skin: d.skinPick });
     refreshFields();

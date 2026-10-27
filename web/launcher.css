@@ -61,10 +61,8 @@
 .seg button.pressed { transform: scale(.95); }
 
 /* ── Classic dark ──────────────────────── */
-@media (prefers-color-scheme: dark) {
-  [data-skin="classic"] .launch-results .chip-result.ok { background: #3fd36f26; color: #8ff0b0; }
-  [data-skin="classic"] .launch-results .chip-result.bad { background: #ff5a4a26; color: #ffb0a6; }
-}
+[data-skin="classic"][data-mode="dark"] .launch-results .chip-result.ok { background: #3fd36f26; color: #8ff0b0; }
+[data-skin="classic"][data-mode="dark"] .launch-results .chip-result.bad { background: #ff5a4a26; color: #ffb0a6; }
 
 /* ── Aurora ────────────────────────────── */
 [data-skin="aurora"] .wake-toggle, [data-skin="aurora"] .seg { background: var(--glass-1); border-color: var(--hair); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
@@ -94,3 +92,4 @@
 [data-skin="8bit"] .launch-results .chip-result { border-radius: 0; font-size: 8px; font-family: 'Press Start 2P', monospace; line-height: 1.6; }
 [data-skin="8bit"] .launch-results .chip-result.ok { background: var(--lcd-3); color: var(--lcd-0); }
 [data-skin="8bit"] .launch-results .chip-result.bad { background: #a3245b; color: #fff; }
+.mode-pick { margin: 2px 0 14px; }

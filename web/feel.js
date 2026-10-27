@@ -3,7 +3,8 @@
 
 // ── Preferences ─────────────────────────────────────────
 const PREFS_KEY = 'hearth.prefs';
-const defaults = { skin: 'aurora', haptics: true, sound: null }; // sound null = on for 8-bit only
+// mode: 'light' | 'dark' | 'auto' (follows the phone). Light by default.
+const defaults = { skin: 'aurora', mode: 'light', haptics: true, sound: null }; // sound null = on for 8-bit only
 
 function loadPrefs() {
   try {
@@ -25,11 +26,22 @@ export function savePrefs(patch) {
 }
 export const soundOn = () => (prefs.sound ?? prefs.skin === '8bit');
 
+const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+// Light or dark, after 'auto' asks the phone. The 8-bit skin is its own thing.
+export const themeMode = () => (prefs.mode === 'auto' ? (darkQuery?.matches ? 'dark' : 'light') : prefs.mode === 'dark' ? 'dark' : 'light');
+
 export function applySkin() {
-  document.documentElement.dataset.skin = prefs.skin;
+  const root = document.documentElement;
+  const mode = themeMode();
+  root.dataset.skin = prefs.skin;
+  root.dataset.mode = mode;
+  root.style.colorScheme = prefs.skin === '8bit' ? 'dark' : mode;
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.content = { '8bit': '#1b1a24', aurora: '#07080c' }[prefs.skin] ?? '#e9e3d7';
+  const tint = { '8bit': '#1b1a24', aurora: mode === 'dark' ? '#07080c' : '#f6f1ea' }[prefs.skin] ?? (mode === 'dark' ? '#121110' : '#e9e3d7');
+  if (meta) meta.content = tint;
+  dispatchEvent(new CustomEvent('hearth:mode', { detail: mode }));
 }
+darkQuery?.addEventListener?.('change', () => prefs.mode === 'auto' && applySkin());
 
 // ── Haptics ─────────────────────────────────────────────
 // Android: the Vibration API. iOS has no API, but Safari 17.4+ plays the

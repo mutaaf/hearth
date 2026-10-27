@@ -1,0 +1,120 @@
+/* Hearth — Aurora, daylight (the default look). The same living-light remote
+   as Aurora's night glass, on warm paper: frosted white glass, ink type, the
+   ember and the cyan doing the glowing. TV screens stay dark, like real ones.
+   Only applies under <html data-skin="aurora" data-mode="light"> (feel.js). */
+
+[data-skin="aurora"][data-mode="light"] {
+  --bg: #f6f1ea;
+  --bg-deep: #ece4d8;
+  --body: #fffaf3;
+  --body-edge: #14161f14;
+  --ink: #161821;
+  --ink-soft: #5b5d6b;
+  --ink-faint: #9b98a2;
+  --key: #14161f0a;
+  --key-ink: #161821;
+  --key-edge: #14161f1f;
+  --signal: #f25a1d;
+  --signal-deep: #b8360b;
+  --signal-soft: #f25a1d24;
+  --cyan: #0aa9cc;
+  --glass: #ffffff;
+  --glass-1: #ffffffb0;
+  --glass-2: #ffffffeb;
+  --hair: #14161f17;
+  --led-off: #cfc7ba;
+  --shadow: 0 1px 0 #fff inset, 0 24px 50px -26px #6b4a2a55, 0 2px 6px #6b4a2a14;
+  color-scheme: light;
+}
+
+[data-skin="aurora"][data-mode="light"] body {
+  background:
+    radial-gradient(70% 45% at 88% -6%, #5ee7ff3a, transparent 70%),
+    radial-gradient(80% 55% at 8% 104%, #ff8a4c40, transparent 70%),
+    radial-gradient(60% 40% at 50% 45%, #fff8, transparent 70%),
+    var(--bg);
+}
+[data-skin="aurora"][data-mode="light"] .grain { mix-blend-mode: multiply; opacity: .05; }
+
+/* The particle fields draw with additive light, which vanishes on paper:
+   multiply them and push the colour so the aurora still reads. */
+[data-skin="aurora"][data-mode="light"] :is(.orb-field, .house-field) canvas,
+[data-skin="aurora"][data-mode="light"] canvas:is(.orb-field, .house-field) {
+  filter: invert(1) hue-rotate(180deg) saturate(1.6) brightness(.95);
+  mix-blend-mode: multiply; opacity: .75;
+}
+
+/* Glass */
+[data-skin="aurora"][data-mode="light"] :is(.icon-btn, .unit, .chip, .pick button, .rooms button, .checklist li, .toggle, .skin-card, .say input, .fields input, .switch, .orb-key, .slider, .rocker-ch, .dock-item) {
+  box-shadow: 0 1px 0 #fff inset, 0 10px 24px -16px #6b4a2a40;
+}
+[data-skin="aurora"][data-mode="light"] .cta { box-shadow: 0 0 0 1px #ffffff55 inset, 0 12px 30px -10px #f25a1daa; color: #fff; }
+
+/* House */
+[data-skin="aurora"][data-mode="light"] .hero h2 { text-shadow: 0 2px 30px #f6f1ea; }
+[data-skin="aurora"][data-mode="light"] .unit { background: #fffdf9f2; }
+[data-skin="aurora"][data-mode="light"] .unit.on { border-color: #f25a1d55; box-shadow: 0 0 0 1px #f25a1d22, 0 18px 40px -22px #f25a1d; }
+[data-skin="aurora"][data-mode="light"] .screen { background: #12141c; box-shadow: inset 0 0 0 1px #00000022, 0 6px 14px -8px #0006; }
+[data-skin="aurora"][data-mode="light"] .unit .quick { background: #14161f0d; }
+[data-skin="aurora"][data-mode="light"] .nearby { background: #ffffffc0; box-shadow: 0 0 40px -16px var(--signal); }
+[data-skin="aurora"][data-mode="light"] :is(.dock, .tabs, .smart-dock, .bulkbar, .ptr) {
+  background: #fffdf9d9; box-shadow: 0 18px 50px -18px #6b4a2a55, 0 1px 0 #fff inset;
+}
+[data-skin="aurora"][data-mode="light"] .empty-screen { background: #12141c; }
+
+/* The "now" strip */
+[data-skin="aurora"][data-mode="light"] .hud { background: linear-gradient(135deg, #ffffffd9, #ffffff90); box-shadow: 0 16px 40px -24px #6b4a2a66, 0 1px 0 #fff inset; }
+[data-skin="aurora"][data-mode="light"] .hud-title { background: linear-gradient(90deg, #161821, #6a2a10 65%, #f25a1d); -webkit-background-clip: text; background-clip: text; }
+[data-skin="aurora"][data-mode="light"] .hud-chips span.hot { color: #b8360b; border-color: #f25a1d55; background: #f25a1d12; }
+[data-skin="aurora"][data-mode="light"] .hud-vol .trk { stroke: #14161f14; }
+[data-skin="aurora"][data-mode="light"] .hud-vol .lvl { filter: drop-shadow(0 0 4px #f25a1d88); }
+
+/* The orb: a frosted lens with an ember core */
+[data-skin="aurora"][data-mode="light"] .pad {
+  background: radial-gradient(circle, #ffffff40 50%, #ffffffa0 72%, #ffffffd0);
+  border-color: #14161f1a; box-shadow: 0 30px 70px -30px #f25a1d88, 0 0 0 1px #fff inset, inset 0 -18px 40px -20px #f25a1d22;
+}
+[data-skin="aurora"][data-mode="light"] .pad.swiping { box-shadow: 0 30px 80px -20px #f25a1dbb, 0 0 0 1px #fff inset; }
+[data-skin="aurora"][data-mode="light"] .arc { color: #161821a8; }
+[data-skin="aurora"][data-mode="light"] .arc.pressed { color: var(--signal); filter: drop-shadow(0 0 6px #f25a1d88); }
+[data-skin="aurora"][data-mode="light"] .ok {
+  background: radial-gradient(circle at 50% 35%, #ffb18a, var(--signal) 70%); border-color: #ffffff88; color: #fff;
+  box-shadow: 0 12px 28px -8px #f25a1dcc, inset 0 1px 0 #ffffff99;
+}
+[data-skin="aurora"][data-mode="light"] .pad .ripple { border-color: var(--signal); }
+[data-skin="aurora"][data-mode="light"] .slider .fill { background: linear-gradient(0deg, #f25a1d, #ff8a4c 60%, #ffc4a5); }
+[data-skin="aurora"][data-mode="light"] .slider .val { color: #fff; text-shadow: 0 1px 4px #b8360b99; }
+[data-skin="aurora"][data-mode="light"] .slider:not(.absolute) .val { color: var(--ink-soft); text-shadow: none; }
+[data-skin="aurora"][data-mode="light"] .slider .cap.hit { color: var(--signal); }
+[data-skin="aurora"][data-mode="light"] .rocker-ch .cap.pressed { color: var(--signal); background: #f25a1d14; }
+[data-skin="aurora"][data-mode="light"] .orb-key.pressed { background: #fff; }
+
+/* Sheets */
+[data-skin="aurora"][data-mode="light"] .panel:not(.device) { background: #fffcf8f5; box-shadow: 0 -30px 80px -20px #6b4a2a55; }
+[data-skin="aurora"][data-mode="light"] .sheet-bar { background: #fffcf8f5; }
+[data-skin="aurora"][data-mode="light"] .sheet-bar button.active { background: #14161f0f; color: var(--ink); }
+[data-skin="aurora"][data-mode="light"] .sheet-bar button.close { color: var(--ink); }
+[data-skin="aurora"][data-mode="light"] .scrim { background: #2a1d1266; }
+[data-skin="aurora"][data-mode="light"] :is(.sheet, .setup) { background: #fbf7f1; color: var(--ink); }
+[data-skin="aurora"][data-mode="light"] .sheet::backdrop { background: #2a1d1266; }
+[data-skin="aurora"][data-mode="light"] .note { background: #fffdf9; box-shadow: 0 14px 34px -16px #6b4a2a66; }
+[data-skin="aurora"][data-mode="light"] .app-icon { box-shadow: 0 0 0 1px #14161f12, 0 12px 24px -12px #6b4a2a88; }
+[data-skin="aurora"][data-mode="light"] .switch.active { background: linear-gradient(135deg, #fff, #fff8f2); border-color: var(--signal); color: var(--ink); }
+
+/* Elsewhere (modes, scenes, health, launcher, stream, door, keyboard) */
+[data-skin="aurora"][data-mode="light"] .mode-seg button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 4px 12px -6px #6b4a2a66; }
+[data-skin="aurora"][data-mode="light"] .trackpad { background-color: #fffdf9; }
+[data-skin="aurora"][data-mode="light"] .kb-card { background: #fffdf9; }
+[data-skin="aurora"][data-mode="light"] .scene-card { background: linear-gradient(160deg, #ffffffe6, #ffffff99); box-shadow: 0 14px 30px -20px #6b4a2a66; }
+[data-skin="aurora"][data-mode="light"] .ed-builder { background: #ffffffb0; }
+[data-skin="aurora"][data-mode="light"] .ed-builder input:not([type="range"]) { background: #fff; }
+[data-skin="aurora"][data-mode="light"] .ed-steps li button { background: #14161f0a; }
+[data-skin="aurora"][data-mode="light"] .h-hero { background: radial-gradient(70% 120% at 0% 0%, #f25a1d1f, transparent 60%), #ffffffb0; }
+[data-skin="aurora"][data-mode="light"] #aiSettings .chip.active { background: #fff; color: var(--ink); }
+[data-skin="aurora"][data-mode="light"] .launch-results .chip-result.ok { background: #1f9d4c1c; color: #17703a; }
+[data-skin="aurora"][data-mode="light"] .launch-results .chip-result.bad { background: #d9361f1c; color: #a82612; }
+[data-skin="aurora"][data-mode="light"] .app.cat .cat-icon { box-shadow: 0 0 0 1px #14161f12, 0 14px 30px -14px var(--tint); }
+[data-skin="aurora"][data-mode="light"] .door { background: radial-gradient(90% 55% at 50% 0%, #ff8a4c33, transparent 70%), var(--bg); }
+[data-skin="aurora"][data-mode="light"] .door-cells span.filled { background: #f25a1d14; }
+[data-skin="aurora"][data-mode="light"] .gp-face button { box-shadow: 0 10px 22px -10px currentColor, inset 0 1px 0 #ffffff99; }
+[data-skin="aurora"][data-mode="light"] .sc-surface { background: radial-gradient(90% 80% at 50% 50%, #ff8a4c26, transparent 70%), #ffffffb0; }
