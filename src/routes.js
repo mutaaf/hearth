@@ -34,7 +34,7 @@ export function mergeGuide(local, ai) {
       before: uniq([...(known ? local.connect.before : ai.connect.before), ...(known ? ai.connect.before : local.connect.before)], (s) => s.toLowerCase()).slice(0, 6),
       onTv: local.connect.onTv ?? ai.connect.onTv,
     },
-    keepReachable: uniq([...local.keepReachable, ...ai.keepReachable], (k) => k.title.toLowerCase()).slice(0, 6),
+    keepReachable: uniq([...local.keepReachable, ...ai.keepReachable], (k) => k.title.toLowerCase().replace(/^(enable|turn on|turn off|disable|switch on|switch off|set)\s+/, '')).slice(0, 6),
     troubleshoot: [...ai.troubleshoot, ...local.troubleshoot].slice(0, 12),
     quirks: uniq([...local.quirks, ...ai.quirks], (q) => q.toLowerCase()).slice(0, 8),
     source: known ? 'built-in + AI' : 'AI',
