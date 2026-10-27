@@ -8,6 +8,7 @@ import { runDoctor, runDoctorAll } from './doctor.js';
 import { badRequest, HearthError } from './errors.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { deviceGuide } from './devices.js';
+import { iconData } from './icons.js';
 import { log } from './log.js';
 
 const scenesOf = (hub) => {
@@ -159,6 +160,8 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
         return { guide: local, ai: null, aiError: err.message };
       }
     }),
+    // An app's icon as data, for clients that can't load the TV's URL (the phone app).
+    r('GET', `/tvs/${id}/icon-data`, ([tv], _b, url) => iconData(hub, tv, url.searchParams.get('u') ?? '')),
     r('POST', '/support', (_, body) => {
       const tv = body.tvId ? hub.get(String(body.tvId)) : null;
       const report = { ...body.report, ...(tv ? { device: { brand: tv.brand, model: tv.model, firmware: body.report?.device?.firmware } } : {}) };

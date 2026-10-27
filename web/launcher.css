@@ -93,3 +93,11 @@
 [data-skin="8bit"] .launch-results .chip-result.ok { background: var(--lcd-3); color: var(--lcd-0); }
 [data-skin="8bit"] .launch-results .chip-result.bad { background: #a3245b; color: #fff; }
 .mode-pick { margin: 2px 0 14px; }
+
+/* Real icons (web/icons.js): a TV's own icon covers the tile; a vector logo
+   sits where the letters were. The fallback stays underneath until the icon loads. */
+.app-icon, .dock-item.app i { position: relative; }
+.app-icon img.tv-icon, .dock-item.app i img.tv-icon { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.cat-icon .brand-logo { width: 54%; height: 54%; fill: var(--fg, #fff); }
+.watch-row .cat-icon .brand-logo { width: 50%; height: 50%; }
+[data-skin="8bit"] .cat-icon .brand-logo { fill: var(--lcd-0); }

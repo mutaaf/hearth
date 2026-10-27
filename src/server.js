@@ -1,3 +1,4 @@
+import { checkIconUrl } from './icons.js';
 import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import https from 'node:https';
@@ -100,22 +101,9 @@ async function serveStatic(res, pathname) {
 }
 
 // App icons live on the TV, sometimes behind its self-signed HTTPS cert, which
-// phones refuse to load. Proxy them — but only from that TV's own address.
-// And only URLs that TV itself listed for its apps: never "any path on any
-// port of that address", which would let a page read other services there.
+// phones refuse to load. Proxy them, with src/icons.js's checks.
 async function proxyIcon(hub, tvIdParam, url, res) {
-  const tv = hub.get(tvIdParam);
-  let target;
-  try {
-    target = new URL(url);
-  } catch {
-    throw badRequest('Bad icon URL');
-  }
-  if (target.hostname !== tv.ip || !/^https?:$/.test(target.protocol) || hub.forbiddenIp(tv.ip)) throw badRequest('Icon must come from the TV');
-  const listed = (list) => Array.isArray(list) && list.some((a) => a?.icon === url);
-  if (!listed(hub.cachedApps(tv.id)) && !listed(await hub.apps(tv.id).catch(() => null))) {
-    throw new HearthError(403, 'That icon isn’t one this TV listed');
-  }
+  const target = await checkIconUrl(hub, tvIdParam, url);
   const client = target.protocol === 'https:' ? https : http;
   const upstream = client.get(target, { rejectUnauthorized: false, timeout: 4000 }, (up) => {
     if (up.statusCode !== 200) {

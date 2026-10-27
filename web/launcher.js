@@ -4,6 +4,7 @@
 // there. The server resolves each TV's own app id (src/catalog.js) and answers
 // per TV, so the ✓ / ✕ chips say exactly where it opened and why not.
 import { feedback, haptic } from './feel.js';
+import { brandSvg, hydrate, tvIconImg } from './icons.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const REASONS = { 'not-installed': 'not installed', unsupported: 'can’t open', off: 'off', offline: 'off', unpaired: 'not connected' };
@@ -67,10 +68,19 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
 
   const has = (tvId, key) => status[tvId]?.[key] ?? { installed: null };
 
+  // The real icon for this app from a TV in the house that has it, if any.
+  function tvIcon(app) {
+    for (const t of paired()) {
+      const s = status[t.id]?.[app.key];
+      if (s?.installed && s.icon && t.capabilities?.appIcons) return tvIconImg(t.id, s.icon);
+    }
+    return '';
+  }
+
   function tile(app, { press, data, badge, missing, current, hold, label }) {
     return `<button type="button" class="app cat${missing ? ' missing' : ''}${current ? ' current' : ''}${hold ? ' hold' : ''}${busy === app.key ? ' busy' : ''}" data-press="${press}" ${data}="${esc(app.key)}" aria-label="${esc(label)}">
       ${hold ? '<span class="charge" aria-hidden="true"></span>' : ''}
-      <span class="app-icon cat-icon" style="--tint:${esc(app.color)};--fg:${ink(app.color)}"><b data-len="${[...app.mark].length}">${esc(app.mark)}</b></span>
+      <span class="app-icon cat-icon" style="--tint:${esc(app.color)};--fg:${ink(app.color)}">${brandSvg(app.key) || `<b data-len="${[...app.mark].length}">${esc(app.mark)}</b>`}${tvIcon(app)}</span>
       <span>${esc(app.title)}</span>
       ${badge ? `<small class="cat-badge mono">${esc(badge)}</small>` : ''}
     </button>`;
@@ -120,7 +130,10 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
       </div>
       <p class="watch-hint mono">Hold an app to open it · 2/3 = TVs that have it</p>
       ${results?.where === 'house' ? resultsHtml() : ''}`;
-    if (el.innerHTML !== html) el.innerHTML = html;
+    if (el.innerHTML !== html) {
+      el.innerHTML = html;
+      hydrate(el, api);
+    }
   }
 
   const count = (app, tvs) => tvs.filter((t) => has(t.id, app.key).installed === true).length;
@@ -163,7 +176,10 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
           });
         })
         .join('') + (results?.where === 'panel' ? resultsHtml() : '');
-    if (el.innerHTML !== html) el.innerHTML = html;
+    if (el.innerHTML !== html) {
+      el.innerHTML = html;
+      hydrate(el, api);
+    }
   }
 
   function renderAll() {

@@ -69,6 +69,10 @@ web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio soun
 web/setup.js           the caveman setup wizard (looks at once and keeps looking → [wake] → connect per brand → room → done)
 web/tour.js|.css       the tour: spotlight + bubble + an animated finger per feature; first visit to the house and
                        the remote, "?" in both headers, Settings → Show me around (localStorage hearth.tour.seen)
+web/icons.js           app icons, best first: the TV's own icon for that app (Roku/LG list them; home server proxies
+                       api/tvs/:id/icon, the phone app gets GET /api/tvs/:id/icon-data), then web/brand-icons.js
+                       (Simple Icons, CC0, `node scripts/brand-icons.mjs`; Prime Video, Disney+, Hulu, Peacock, ESPN,
+                       Pluto TV and Sling aren't there at their owners' request), then a letter tile
 web/guide.js|.css      "we know your TV": the model's guide in setup (pairing screen), after a failed pair or doctor
                        run, and from TV settings; "Ask the AI"; "Still stuck? Send it to us" → POST /api/support;
                        checks its tickets every 6 h and says when one is `supported`
@@ -232,6 +236,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
 | `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
 | The house redraws its cards on every TV update, so an element found a moment ago is detached | Anything that points at a card later (web/tour.js) re-finds it by selector when `!el.isConnected`. |
+| Simple Icons' `max` is the Cycling '74 music app, not the streaming service | The catalog's Max uses `hbomax` (scripts/brand-icons.mjs). Check every new logo by eye. |
 | Never use `ok`/`bad` as a state class | `.ok` is the D-pad's OK button (`position:absolute; inset:31%`), so `.dr-step.ok` or `.chip-result.ok` turn into floating circles. Prefix state classes (`st-ok`, `res-ok`). |
 | Fields named `cert`/`key` on a class with a `key()` method | `Object.assign(this, { key })` shadows the method. AtvRemote stores `certPem`/`keyPem`. |
 | A Google TV paired with a cert it later forgets drops the TLS handshake on :6466 | Surfaced as 401 "unlock again", with retries backed off to 60 s. The doctor reports `googletv-code`. |

@@ -5,6 +5,7 @@ import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pr
 import { createSetup } from './setup.js';
 import { createTour } from './tour.js';
 import { createGuide } from './guide.js';
+import { hydrate, tvIconImg } from './icons.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
 import { createHousehold } from './household.js'; // who's in the house
@@ -321,19 +322,12 @@ function renderApps(t, apps) {
   }
   shelf.innerHTML = apps
     .map((a) => `<button type="button" class="app" data-press="up" data-app="${esc(a.id)}">
-        <span class="app-icon" style="--tint:${tint(a.title)}">${
-          t.capabilities?.appIcons && a.icon
-            ? `<img alt="" loading="lazy" src="api/tvs/${encodeURIComponent(t.id)}/icon?u=${encodeURIComponent(a.icon)}">`
-            : ''
+        <span class="app-icon" style="--tint:${tint(a.title)}"><span>${esc(monogram(a.title).textContent)}</span>${
+          t.capabilities?.appIcons && a.icon ? tvIconImg(t.id, a.icon) : ''
         }</span>
         <span>${esc(a.title)}</span></button>`)
     .join('');
-  shelf.querySelectorAll('.app').forEach((btn, i) => {
-    const icon = btn.querySelector('.app-icon');
-    const img = icon.querySelector('img');
-    if (img) img.addEventListener('error', () => img.replaceWith(monogram(apps[i].title)));
-    else icon.append(monogram(apps[i].title));
-  });
+  hydrate(shelf, api);
   renderRemote();
 }
 
@@ -449,13 +443,16 @@ function renderDock(t) {
     // Only the TV's own word on play/pause (Apple TV pushes it); otherwise neutral.
     caps.remote === false ? '' : `<button type="button" class="dock-item" data-press="down" data-dock="playpause" aria-label="Play or pause"><svg><use href="#i-${t.state?.playing === 'playing' ? 'pause' : 'play'}"/></svg><small>${t.state?.playing === 'playing' ? 'Pause' : t.state?.playing === 'paused' ? 'Play' : 'Play/Pause'}</small></button>`,
     ...top.map((a) => `<button type="button" class="dock-item app ${a.id === t.state?.app ? 'current' : ''}" data-press="up" data-app="${esc(a.id)}"><i style="--tint:${tint(a.title)}">${
-      t.capabilities?.appIcons && a.icon ? `<img alt="" src="api/tvs/${encodeURIComponent(t.id)}/icon?u=${encodeURIComponent(a.icon)}">` : esc((a.title.match(/[A-Za-z0-9+]/) ?? ['•'])[0].toUpperCase())
+      esc((a.title.match(/[A-Za-z0-9+]/) ?? ['•'])[0].toUpperCase()) + (t.capabilities?.appIcons && a.icon ? tvIconImg(t.id, a.icon) : '')
     }</i><small>${esc(a.title)}</small></button>`),
     `<button type="button" class="dock-item" data-press="up" data-tab="apps" aria-label="All apps"><svg><use href="#i-grid"/></svg><small>Apps</small></button>`,
     caps.inputs || t.brand === 'samsung' || caps.toast ? `<button type="button" class="dock-item" data-press="up" data-tab="${caps.inputs || t.brand === 'samsung' ? 'inputs' : 'say'}" aria-label="More"><svg><use href="#i-dots"/></svg><small>More</small></button>` : '',
   ].join('');
   const dock = $('#smartDock');
-  if (dock.innerHTML !== html) dock.innerHTML = html;
+  if (dock.innerHTML !== html) {
+    dock.innerHTML = html;
+    hydrate(dock, api);
+  }
 }
 
 // The volume slider (aurora): a real slider when the TV can set a level —

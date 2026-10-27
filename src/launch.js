@@ -122,7 +122,7 @@ export async function catalogStatus(hub, { fresh = false } = {}) {
           continue;
         }
         const hit = resolveApp(e, tv.brand, apps);
-        row[e.key] = hit ? { installed: true, appId: hit.id } : { installed: false, reason: 'not-installed' };
+        row[e.key] = hit ? { installed: true, appId: hit.id, ...(hit.icon ? { icon: hit.icon } : {}) } : { installed: false, reason: 'not-installed' };
       }
       tvs[tv.id] = row;
     }),
