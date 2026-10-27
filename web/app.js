@@ -62,7 +62,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const demo = window.HearthDemo ?? window.HearthHost;
 // The phone app carries the demo too (demo.html): offer it there, not at home.
 if (window.HearthHost?.native && !window.HearthDemo) {
-  for (const el of document.querySelectorAll('.demo-link, .demo-row')) el.hidden = false;
+  for (const el of document.querySelectorAll('.demo-link, .demo-row, .pro-row')) el.hidden = false;
 }
 if (window.HearthHost) document.documentElement.dataset.host = 'app'; // hides web-only bits (style.css)
 
@@ -1087,6 +1087,9 @@ function onPress(el, info) {
       return allOff();
     case 'forget':
       return forget();
+    case 'pro': // the phone app's Pro screen (purchase and restore), any time
+      $('#settingsSheet').close();
+      return window.HearthHost?.openPro?.();
     case 'racer':
       $('#settingsSheet').close();
       return away.play();
