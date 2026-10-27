@@ -615,7 +615,12 @@ function makeField(canvas, stage, opts) {
   if (!AF || !window.HearthShapes || !canvas) return null;
   window.HearthShapes.register(AF);
   try {
-    return AF.create(canvas, { palette: 'ember', cycle: 0, interactive: false, stage, ...opts });
+    // container: the canvas's own CSS box. By default aurora-field sizes the
+    // drawing from the parent, which squashed it (the house field is 72dvh of
+    // a full-height page) and blurred it. maxDpr 3: sharp on 3× iPhones.
+    // fpsFloor 30: the governor's first step down is resolution, so only give
+    // it up when frames really suffer.
+    return AF.create(canvas, { palette: 'ember', cycle: 0, interactive: false, stage, container: canvas, maxDpr: 3, fpsFloor: 30, ...opts });
   } catch {
     return null;
   }

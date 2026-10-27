@@ -58,6 +58,7 @@ function mountField() {
     field = AF.create($('#field'), {
       palette: 'aurora', shapes: ['racer-cycle', 'hearth-house'], initial: AWAY ? 'hearth-house' : 'racer-cycle',
       cycle: 0, interactive: false, stars: small ? 120 : 220, count: small ? 1800 : 3600, depth: 2.6,
+      container: $('#field'), maxDpr: 3, fpsFloor: 30, // sharp on 3× phones (see app.js makeField)
       radius: (w, h) => Math.min(w * 0.42, h * 0.3, 300),
     });
     if (AWAY) setTimeout(() => field?.setShape('racer-cycle', { pin: true }), 4200);
