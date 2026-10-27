@@ -1,14 +1,22 @@
 // The setup wizard: so easy a caveman can do it. One sentence and one giant
-// button per screen. Turn the TV on → we find it → press Allow on the TV's
-// remote → tap a room → done. Every dead end has a plain-words way out.
+// button per screen. Open it and it's already looking; it keeps looking until
+// a TV turns up (no "it's on" tap, no "try again" dead end) → press Allow on
+// the TV's remote → tap a room → done. If nothing turns up, the fixes appear
+// right there while it keeps looking.
 import { feedback, haptic } from './feel.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const brandName = (b) => ({ lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' })[b] ?? 'TV';
-const DOTS = ['on', 'search', 'pair', 'name', 'done'];
+const DOTS = ['search', 'pair', 'name', 'done'];
 // Steps that sit under another step's progress dot.
-const DOT_OF = { pick: 'search', none: 'search', manual: 'search', pairfail: 'pair', wake: 'on', lgchoose: 'pair', pin: 'pair' };
+const DOT_OF = { pick: 'search', none: 'search', manual: 'search', pairfail: 'pair', wake: 'search', lgchoose: 'pair', pin: 'pair' };
 const PAIR_SECONDS = 60;
+// Searching: a scan every few seconds; the fixes show up after HINT_AFTER,
+// and after GIVE_UP it stops (battery) and says so.
+const LOOK_EVERY = 2500;
+const HINT_AFTER = 12_000;
+const GIVE_UP = 180_000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ROOMS = [
   ['🛋️', 'Living Room'], ['🛏️', 'Bedroom'], ['🧸', 'Kids’ Room'], ['🍳', 'Kitchen'],
   ['💻', 'Office'], ['🎮', 'Basement'], ['🏋️', 'Gym'], ['🏡', 'Den'],
@@ -199,46 +207,57 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       });
     },
 
-    on() {
-      frame('on', `
-        <div class="setup-art"><div class="art-tv"><div class="set"><span></span></div><div class="foot"></div><span class="finger"><i></i></span></div></div>
-        <h2>Turn on your TV.</h2>
-        <p class="say-it">Make sure the picture is showing. Then tap the big button.</p>
-        <div class="setup-actions">
-          <button type="button" class="cta" data-press="up" data-setup="search">It’s on 👍</button>
-          <button type="button" class="ghost" data-press="up" data-setup="close">I’ll do it later</button>
-        </div>`);
-    },
-
     async search() {
+      const app = Boolean(window.HearthHost?.native);
       frame('search', `
         <div class="setup-art"><div class="field-art"></div></div>
-        <h2 id="searchTitle">Looking for your TV…</h2>
-        <p class="say-it" id="searchSub">Hold tight. This takes a few seconds.</p>`);
+        <h2 id="searchTitle">Turn on your TV.</h2>
+        <p class="say-it" id="searchSub">Hearth is looking for it. Nothing to tap.</p>
+        <ul class="checklist" id="searchHint" hidden>
+          <li><i>📺</i><span>Is the TV <b>on</b>, with a picture? (Standby doesn’t count.)</span></li>
+          <li><i>📶</i><span>Is this ${app ? 'phone' : 'device'} on the <b>same Wi-Fi</b> as the TV? Not the guest network.</span></li>
+          ${app
+            ? `<li><i>🔓</i><span>Hearth needs <b>Local Network</b> to see your TVs. Missed the question?
+                 <button type="button" class="inline-btn" data-press="up" data-setup="settings">Open Settings</button> and turn it on.</span></li>`
+            : '<li><i>💻</i><span>Is the computer running Hearth on that Wi-Fi too?</span></li>'}
+        </ul>
+        <div class="setup-actions">
+          <button type="button" class="ghost" data-press="up" data-setup="manual">Type the TV’s number instead</button>
+        </div>`);
       mountField('mind');
       const mine = run;
-      let found;
-      try {
-        found = await api('POST', '/scan');
-      } catch (err) {
-        if (mine === run) go('none', { reason: err.message });
-        return;
-      }
-      if (mine !== run) return;
-      const fresh = found.filter((t) => !t.added);
-      if (fresh.length === 1) {
-        const tv = fresh[0];
-        field?.setShape('hearth-tv', { pin: true });
-        feedback('success');
-        root.querySelector('#searchTitle').textContent = `Found it!`;
-        root.querySelector('#searchSub').innerHTML = `<b>${esc(tv.name)}</b> · ${brandName(tv.brand)} ${esc(tv.model)}`;
-        setTimeout(() => mine === run && startPair({ candidate: tv, tvId: null }), 1400);
-      } else if (fresh.length > 1) {
-        field?.setShape('hearth-house', { pin: true });
-        feedback('success');
-        setTimeout(() => mine === run && go('pick', { found: fresh }), 900);
-      } else {
-        go('none', { allAdded: found.length > 0 });
+      const t0 = Date.now();
+      let seen = 0; // TVs that answered but are already added
+      while (mine === run) {
+        const found = await api('POST', '/scan').catch(() => []);
+        if (mine !== run) return;
+        const fresh = found.filter((t) => !t.added);
+        seen = found.length - fresh.length;
+        if (fresh.length === 1) {
+          const tv = fresh[0];
+          field?.setShape('hearth-tv', { pin: true });
+          feedback('success');
+          root.querySelector('#searchTitle').textContent = `Found it!`;
+          root.querySelector('#searchSub').innerHTML = `<b>${esc(tv.name)}</b> · ${brandName(tv.brand)} ${esc(tv.model)}`;
+          root.querySelector('#searchHint').hidden = true;
+          await sleep(1400);
+          return mine === run && startPair({ candidate: tv, tvId: null });
+        }
+        if (fresh.length > 1) {
+          field?.setShape('hearth-house', { pin: true });
+          feedback('success');
+          await sleep(900);
+          return mine === run && go('pick', { found: fresh });
+        }
+        const waited = Date.now() - t0;
+        if (waited > GIVE_UP) return go('none', { allAdded: seen > 0 });
+        if (waited > HINT_AFTER) {
+          root.querySelector('#searchHint').hidden = false;
+          root.querySelector('#searchSub').textContent = seen
+            ? 'Your other TVs are here already. Still looking for a new one…'
+            : 'Still looking… Check these while we keep trying.';
+        }
+        await sleep(LOOK_EVERY);
       }
     },
 
@@ -357,7 +376,9 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         <ul class="checklist">
           <li><i>📺</i><span>Is the TV <b>on</b>, with a picture? (Standby doesn’t count.)</span></li>
           <li><i>📶</i><span>Is this phone on the <b>same Wi-Fi</b> as the TV? Not the guest network.</span></li>
-          <li><i>💻</i><span>Is the computer running Hearth on that Wi-Fi too?</span></li>
+          ${window.HearthHost?.native
+            ? '<li><i>🔓</i><span>Is <b>Local Network</b> on for Hearth? <button type="button" class="inline-btn" data-press="up" data-setup="settings">Open Settings</button></span></li>'
+            : '<li><i>💻</i><span>Is the computer running Hearth on that Wi-Fi too?</span></li>'}
         </ul>
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="search">Look again</button>
@@ -426,14 +447,14 @@ export function createSetup({ root, api, onTv, onClose, note }) {
     get isOpen() {
       return !root.hidden;
     },
-    // open() → start at "turn it on"; open({ candidate }) → a TV we already
+    // open() → start looking; open({ candidate }) → a TV we already
     // found (nearby banner); open({ tvId, candidate }) → an added, unpaired TV.
     open({ candidate = null, tvId = null, step = null, repair = false } = {}) {
       state = { candidate, tvId, repair };
       root.hidden = false;
       document.body.style.overflow = 'hidden';
       if (step) return go(step, { tv: candidate }); // doctor: straight to the right pairing step
-      if (!candidate && !tvId) return go('on');
+      if (!candidate && !tvId) return go('search');
       // An added TV that's off: wake it first (no pairing needed for that).
       if (tvId && candidate && !candidate.state?.online && candidate.canWake) return go('wake');
       startPair();
@@ -444,7 +465,8 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       if (action === 'close') return close();
       if (action === 'search') return go('search');
       if (action === 'manual') return go('manual');
-      if (action === 'again') return go('on', { candidate: null, tvId: null, tv: null });
+      if (action === 'settings') return window.HearthHost?.openSettings?.();
+      if (action === 'again') return go('search', { candidate: null, tvId: null, tv: null });
       if (action === 'pair') return startPair();
       if (action === 'choose') return startPair({ candidate: state.found[Number(el.dataset.i)], tvId: null });
       if (action === 'pin') return go('pin');

@@ -490,6 +490,11 @@ svg { width: 1em; height: 1em; }
 .checklist { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .checklist li { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 18px; background: var(--body); border: 1px solid var(--body-edge); font-size: 16px; line-height: 1.4; }
 .checklist li i { font-style: normal; font-size: 22px; line-height: 1; }
+/* "Open Settings" inside a checklist line: a real button, easy to hit. */
+.inline-btn { display: inline-block; margin: 6px 0 2px; padding: 8px 14px; border: 0; border-radius: 999px; background: var(--signal); color: #fff; font: inherit; font-weight: 700; font-size: 15px; box-shadow: 0 2px 0 var(--signal-deep); }
+#searchHint { animation: hint-in .35s ease-out; }
+@keyframes hint-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { #searchHint { animation: none; } }
 .ip-input { font-family: var(--mono) !important; font-size: 26px !important; text-align: center; letter-spacing: .06em; min-height: 66px !important; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 90; overflow: hidden; }
 .confetti i { position: absolute; top: -20px; width: 10px; height: 14px; border-radius: 2px; animation: fall 1.6s cubic-bezier(.2, .6, .4, 1) forwards; }
