@@ -40,7 +40,7 @@ export function createAway({ isDemo = false } = {}) {
     overlay = document.createElement('div');
     overlay.className = 'away-overlay';
     frame = document.createElement('iframe');
-    frame.src = isAway ? 'racer/?away=1' : 'racer/';
+    frame.src = isAway ? 'racer/index.html?away=1' : 'racer/index.html'; // index.html by name: the app serves these from file://
     frame.title = 'Light Racer';
     frame.allow = 'gamepad; fullscreen';
     overlay.append(frame);
