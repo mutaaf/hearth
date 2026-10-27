@@ -2,6 +2,8 @@
 // with the evidence behind it, and works with no AI at all. The AI layer
 // (src/llm.js) only adds a narrative and a small, bounded grade adjustment.
 
+import { deviceGuide } from './devices.js';
+
 const clamp = (x, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, x));
 const round = (x) => (x == null ? null : Math.round(x));
 
@@ -13,6 +15,12 @@ const LG_OLED = { 6: 2016, 7: 2017, 8: 2018, 9: 2019, X: 2020, 1: 2021, 2: 2022,
 export function modelYear(brand, model) {
   const m = String(model ?? '').toUpperCase().replace(/\s+/g, '');
   if (!m) return null;
+  // The device knowledge base knows more model families (and tells a 2013
+  // Samsung F from a 2025 one, a 2016 LG C6 from a 2026 one); this is the fallback.
+  try {
+    const g = deviceGuide({ brand, model });
+    if (g.known && g.year) return { year: g.year, source: 'model code' };
+  } catch {}
   if (brand === 'samsung') {
     // QLED/Neo: QN55Q60AAF → year letter after the series number.
     let x = m.match(/^QN\d{2}(?:Q|QN|LS)\d{2,3}([A-Z])/);

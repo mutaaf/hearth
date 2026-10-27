@@ -25,7 +25,7 @@ const PAIR_LABEL = {
   'roku-network-access': 'Show me where',
 };
 
-export function createDoctor({ api, note, getTv, onPair }) {
+export function createDoctor({ api, note, getTv, onPair, onGuide = null }) {
   const sheet = document.createElement('dialog');
   sheet.className = 'sheet doctor-sheet';
   sheet.id = 'doctorSheet';
@@ -51,6 +51,7 @@ export function createDoctor({ api, note, getTv, onPair }) {
       <h3>${report ? (report.ok ? 'Fixed ✓' : report.needsPairing ? 'One more step' : 'Not fixed yet') : `Fixing ${esc(tv?.name ?? 'the TV')}…`}</h3>
       <p class="sub">${report ? esc(report.summary) : 'Checking each thing in turn. This can take up to half a minute.'}</p>
       <ol class="dr-steps">${ORDER.map(row).join('')}</ol>
+      ${report && !report.ok && onGuide ? `<button type="button" class="chip big dr-guide" data-press="up" data-doctor="guide" data-tv="${esc(tv.id)}">How to fix my ${esc(tv.model || 'TV')} · or send it to us</button>` : ''}
       <div class="sheet-actions">
         ${report && !report.ok && !report.needsPairing ? '<button type="button" class="ghost" data-press="up" data-doctor="again">Try again</button>' : '<span></span>'}
         ${report?.needsPairing
@@ -219,6 +220,18 @@ export function createDoctor({ api, note, getTv, onPair }) {
       if (a === 'all') return fixAll();
       if (a === 'again') return fix(watching);
       if (a === 'gtv-unlock') return unlock(id ?? watching);
+      if (a === 'guide') {
+        // What failed, in the guide's words, for a model-specific fix.
+        const failed = (s) => s?.status === 'fail' || s?.status === 'warn';
+        const when = failed(steps.network) ? 'not-found' : failed(steps.wake) ? 'wont-wake' : failed(steps.pair) || failed(steps.verify) ? 'refused' : 'drops';
+        const tv = getTv(id);
+        sheet.close();
+        return onGuide?.(tv, {
+          when,
+          steps: Object.values(steps).map((s) => ({ step: s.step, status: s.status, detail: s.detail })),
+          error: steps.verify?.detail ?? '',
+        });
+      }
       if (a === 'pair') {
         const how = el.dataset.how;
         if (how === 'googletv-code') return unlock(id);

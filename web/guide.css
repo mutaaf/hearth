@@ -1,0 +1,30 @@
+/* The connection guide (web/guide.js): in the setup wizard and its own sheet. */
+.guide-card { margin: 12px 0; padding: 14px 16px; border-radius: 18px; background: var(--body); border: 1px solid var(--body-edge); text-align: left; }
+.guide-card.compact { margin: 10px auto 0; max-width: 420px; }
+.guide-kicker { margin: 0 0 4px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--signal); }
+.guide-summary { margin: 0; font-size: 16px; line-height: 1.4; }
+.guide-steps { margin: 10px 0 0; padding-left: 1.3em; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+.guide-steps li + li { margin-top: 4px; }
+.guide-ontv { display: flex; gap: 8px; margin: 10px 0 0; font-size: 14px; color: var(--ink-soft); }
+.guide-ontv i { font-style: normal; }
+.guide-h { margin: 18px 0 8px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.guide-fixes, .guide-keep { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.guide-fixes li, .guide-keep li { padding: 12px 14px; border-radius: 16px; background: var(--body); border: 1px solid var(--body-edge); font-size: 14px; line-height: 1.45; }
+.guide-fixes b, .guide-keep b { display: block; font-size: 13px; margin-bottom: 2px; }
+.guide-keep small { display: block; color: var(--ink-soft); }
+.guide-quirks { margin-top: 14px; font-size: 14px; color: var(--ink-soft); }
+.guide-quirks summary { cursor: pointer; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.guide-quirks ul { margin: 8px 0 0; padding-left: 1.2em; line-height: 1.45; }
+.guide-src { margin: 16px 0 4px; font-size: 10px; letter-spacing: .06em; color: var(--ink-faint); text-align: center; }
+.guide-actions { display: grid; gap: 10px; margin-top: 10px; }
+.guide-actions .ghost, .guide-actions .cta { width: 100%; }
+.guide-brands { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-brands .chip.active { background: var(--signal); color: #fff; border-color: transparent; }
+.guide-form textarea { width: 100%; resize: vertical; font: inherit; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--body-edge); background: var(--body); color: var(--ink); }
+.guide-sent { font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.guide-sent summary { cursor: pointer; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.guide-sent ul { margin: 8px 0; padding-left: 1.2em; }
+.guide-sent p { margin: 0; }
+/* setup: the guide sits under the pairing art */
+.setup .guide-card { max-width: 440px; margin-left: auto; margin-right: auto; }
+.setup-help { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }

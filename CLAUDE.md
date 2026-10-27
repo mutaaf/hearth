@@ -53,6 +53,10 @@ src/bill-schema.js     the power bill: chargeLines() privacy filter, prompt/sche
                        web (vendor/bill-schema.js), hub and Worker (POST /hearth/api/bill)
 src/energy.js          watts estimate from the model code, ~/.hearth/energy.json (price, bill numbers, watts),
                        report() = telemetry hours on × watts × price; web/energy.js|.css draws it
+src/devices.js         the device knowledge base: deviceGuide({brand, model, firmware}) → family/year, how it connects,
+                       settings to switch on first, keep-it-reachable menu paths, fixes per symptom (by model year)
+src/device-schema.js   AI connection guides + the support queue: what may leave the house (sanitizeDevice/Symptom/
+                       Support, scrub), the guide schema/prompt/validateGuide; shared by the Worker and the hub
 src/keys.js            unified key names → brand key codes
 src/wol.js             Wake-on-LAN magic packet
 src/jsonfile.js        crash-safe JSON files (fsync, .bak, corrupt → aside) + a save queue
@@ -65,6 +69,9 @@ web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio soun
 web/setup.js           the caveman setup wizard (looks at once and keeps looking → [wake] → connect per brand → room → done)
 web/tour.js|.css       the tour: spotlight + bubble + an animated finger per feature; first visit to the house and
                        the remote, "?" in both headers, Settings → Show me around (localStorage hearth.tour.seen)
+web/guide.js|.css      "we know your TV": the model's guide in setup (pairing screen), after a failed pair or doctor
+                       run, and from TV settings; "Ask the AI"; "Still stuck? Send it to us" → POST /api/support;
+                       checks its tickets every 6 h and says when one is `supported`
 web/skin-8bit.css      8-bit pocket-console skin (only under <html data-skin="8bit">)
 web/launcher.js|.css   the app launcher: "Watch" strip on the house (hold = every / selected TVs) and the
                        "Streaming" grid on a TV's Apps panel (tap = this TV), ✓/✕ chips per TV
@@ -126,6 +133,19 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - Google TV opens only apps with a Cast receiver; entries with `androidtv: []` carry a `note` and resolve to reason `unsupported`.
 - One vocabulary everywhere: `POST /api/launch { app: 'youtubetv' | 'YouTube TV', tvs: 'all' | [ids], wake }`, bulk/scene action `launch` with `{ app }`, `{ title }` or `{ id }` (+ `wake`). Results: `{ id, name, ok, appId?, title?, via?, woke?, reason?, error? }`, reasons `not-installed`, `unsupported`, `off`, `offline`, `unpaired`, `failed`.
 - `wake: true` powers on TVs that are off/asleep first and waits (25 s) for them; it never toggles a TV whose power is `unknown`. Rokus and Google TVs open apps from standby by themselves.
+
+## Device guides, AI and the support queue
+
+- `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at
+  once; the AI (Worker `POST /hearth/api/device`, Gemma on Workers AI) is asked when the model isn't in the table, when
+  something went wrong (`symptom`), or on "Ask the AI". `mergeGuide()` (src/routes.js): the built-in `connect.how` always
+  wins (it's how the drivers really connect); the AI adds family/year/menus/fixes for that exact model.
+- The Worker keeps one AI guide per brand + model + symptom for 30 days in D1 `device_guides`, shared by every house.
+- `POST /api/support { tvId?, report }` → Worker `POST /hearth/api/support` → D1 `support` (id, status new → triaged →
+  in-progress → supported | wont-fix | duplicate, resolution). The app polls `GET /api/support/:id`.
+- Only `sanitizeSupport()` output leaves: brand, model, firmware, symptom (when, steps, ports, scrubbed error), platform,
+  scrubbed note. Rate limits: guides 20/h per IP (and the shared daily AI cap), support 5/h per IP.
+- Working the queue: `npm run support` (needs `SUPPORT_TOKEN` in `.env`, also a Worker secret) and docs/SUPPORT-TRIAGE.md.
 
 ## Connection doctor & codes (src/doctor.js, web/doctor.js)
 

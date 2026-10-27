@@ -7,12 +7,38 @@ import { catalogView } from './catalog.js';
 import { runDoctor, runDoctorAll } from './doctor.js';
 import { badRequest, HearthError } from './errors.js';
 import { catalogStatus, launchOn } from './launch.js';
+import { deviceGuide } from './devices.js';
 import { log } from './log.js';
 
 const scenesOf = (hub) => {
   if (!hub.scenes) throw new HearthError(503, 'Scenes aren’t available');
   return hub.scenes;
 };
+
+// The built-in guide is the truth about how Hearth's drivers connect (how,
+// ports); the AI adds what it knows about this exact model: its family and
+// year when the table doesn't know them, its menus, and fixes for what went wrong.
+export function mergeGuide(local, ai) {
+  if (!ai) return local;
+  const uniq = (xs, key) => [...new Map(xs.map((x) => [key(x), x])).values()];
+  const known = local.known;
+  return {
+    ...local,
+    family: known ? local.family : ai.family || local.family,
+    year: local.year ?? ai.year,
+    os: local.os ?? ai.os,
+    connect: {
+      how: local.connect.how,
+      summary: known ? local.connect.summary : ai.connect.summary || local.connect.summary,
+      before: uniq([...(known ? local.connect.before : ai.connect.before), ...(known ? ai.connect.before : local.connect.before)], (s) => s.toLowerCase()).slice(0, 6),
+      onTv: local.connect.onTv ?? ai.connect.onTv,
+    },
+    keepReachable: uniq([...local.keepReachable, ...ai.keepReachable], (k) => k.title.toLowerCase()).slice(0, 6),
+    troubleshoot: [...ai.troubleshoot, ...local.troubleshoot].slice(0, 12),
+    quirks: uniq([...local.quirks, ...ai.quirks], (q) => q.toLowerCase()).slice(0, 8),
+    source: known ? 'built-in + AI' : 'AI',
+  };
+}
 
 // [method, path pattern, handler(params, body, url)] — handlers return JSON.
 export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
@@ -115,6 +141,30 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
       await hub.energy.setWatts(tv, { onW: body.onW, standbyW: body.standbyW });
       return hub.energyReport();
     }),
+    // ── device guides + support: "we know your TV, here's how", and "it won't connect" ──
+    // POST /guide { tvId? | device?, symptom?, ai? }: the built-in guide for the
+    // model at once; with ai (or when the model isn't in the built-in table, or
+    // something went wrong) the AI's take for this exact model, merged in.
+    r('POST', '/guide', async (_, body) => {
+      const tv = body.tvId ? hub.get(String(body.tvId)) : null;
+      const device = tv ? { brand: tv.brand, model: tv.model, firmware: body.device?.firmware } : body.device;
+      if (!device?.brand) throw badRequest('Which TV?');
+      const local = deviceGuide(device);
+      const wantAi = body.ai === true || (body.ai !== false && (!local.known || body.symptom)) ;
+      if (!wantAi || !device.model) return { guide: local, ai: null };
+      try {
+        const ai = await hub.insights.guide(device, body.symptom ?? null, local, { refresh: body.refresh === true });
+        return { guide: mergeGuide(local, ai.guide), ai: { model: ai.model, cached: ai.cached, confidence: ai.guide.confidence } };
+      } catch (err) {
+        return { guide: local, ai: null, aiError: err.message };
+      }
+    }),
+    r('POST', '/support', (_, body) => {
+      const tv = body.tvId ? hub.get(String(body.tvId)) : null;
+      const report = { ...body.report, ...(tv ? { device: { brand: tv.brand, model: tv.model, firmware: body.report?.device?.firmware } } : {}) };
+      return hub.insights.support(report);
+    }),
+    r('GET', '/support/([a-z0-9]{6,16})', ([ticket]) => hub.insights.supportStatus(ticket)),
     r('POST', '/ai/models', (_, body, _url, req) => hub.insights.models(String(body.provider ?? 'auto'), req.headers['x-hearth-key'] ?? '')),
     // ── trackpad + keyboard (browser / search) ──
     r('POST', `/tvs/${id}/pointer`, ([tv], body) => {

@@ -16,6 +16,7 @@
     "start": "node bin/hearth.js",
     "scan": "node bin/hearth.js scan",
     "code": "node bin/hearth.js code",
+    "support": "node scripts/support.mjs",
     "test": "node --test \"test/*.test.js\"",
     "build:site": "node scripts/build-site.mjs",
     "deploy:site": "node scripts/build-site.mjs && npx --yes wrangler deploy"

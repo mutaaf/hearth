@@ -74,7 +74,8 @@ test('model years: only where the code is certain', () => {
   assert.equal(modelYear('lg', 'OLED55CXPUA').year, 2020);
   assert.equal(modelYear('lg', '55NANO75UPA').year, 2021);
   assert.equal(modelYear('androidtv', 'TCL 65A300W'), null);
-  assert.equal(modelYear('roku', 'Streaming Stick 3840R'), null);
+  assert.equal(modelYear('roku', 'Streaming Stick 3840R').year, 2025, 'src/devices.js knows Roku players');
+  assert.equal(modelYear('samsung', 'UN55F6300AF').year, 2013, 'an F before the series is 2013, not 2025');
 });
 
 const view = (over = {}) => ({

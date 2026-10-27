@@ -22,7 +22,7 @@ const ROOMS = [
   ['💻', 'Office'], ['🎮', 'Basement'], ['🏋️', 'Gym'], ['🏡', 'Den'],
 ];
 
-export function createSetup({ root, api, onTv, onClose, note }) {
+export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
   let state = {};
   let field = null;
   let run = 0; // bumps on every step change so late network replies are ignored
@@ -292,7 +292,15 @@ export function createSetup({ root, api, onTv, onClose, note }) {
             : tv?.brand === 'samsung'
               ? `Most Samsungs connect by themselves. If ${esc(tv?.name ?? 'the TV')} asks, press <b>Allow</b>.`
               : `No buttons needed. ${esc(tv?.name ?? 'Your TV')} lets Hearth in on its own.`
-        }</p>`);
+        }</p>
+        <div id="pairGuide"></div>`);
+      // We know this model? Say exactly what to expect on its screen.
+      if (guide && tv?.brand && tv?.model) {
+        guide.lookup({ brand: tv.brand, model: tv.model }).then((res) => {
+          const host = mine === run && root.querySelector('#pairGuide');
+          if (host && res?.guide) host.innerHTML = guide.card(res.guide, { compact: true });
+        });
+      }
       if (!asks) mountField('hearth-tv');
       const mine = run;
       let left = PAIR_SECONDS;
@@ -340,7 +348,11 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="pair">Try again</button>
           <button type="button" class="ghost" data-press="up" data-setup="close">Later</button>
-        </div>`);
+        </div>
+        ${guide ? `<div class="setup-help">
+          <button type="button" class="chip" data-press="up" data-setup="guide">How to fix my ${esc(brandName(brand))}</button>
+          <button type="button" class="chip" data-press="up" data-setup="report">Still stuck? Send it to us</button>
+        </div>` : ''}`);
     },
 
     name() {
@@ -383,7 +395,8 @@ export function createSetup({ root, api, onTv, onClose, note }) {
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="search">Look again</button>
           <button type="button" class="ghost" data-press="up" data-setup="manual">Type the TV’s number instead</button>
-        </div>`);
+        </div>
+        ${guide ? '<div class="setup-help"><button type="button" class="chip" data-press="up" data-setup="report">Still can’t find it? Send it to us</button></div>' : ''}`);
     },
 
     manual() {
@@ -466,6 +479,18 @@ export function createSetup({ root, api, onTv, onClose, note }) {
       if (action === 'search') return go('search');
       if (action === 'manual') return go('manual');
       if (action === 'settings') return window.HearthHost?.openSettings?.();
+      if (action === 'guide' || action === 'report') {
+        const tv = state.tv ?? state.candidate;
+        const err = String(state.error ?? '');
+        const when = state.step === 'none' ? 'not-found' : /refus|denied|reject|403|401/i.test(err) ? 'refused' : /time|prompt|408|allow/i.test(err) ? 'no-prompt' : 'other';
+        const ctx = {
+          tvId: state.tvId ?? undefined,
+          device: tv?.brand ? { brand: tv.brand, model: tv.model ?? '' } : undefined,
+          name: tv?.name,
+          symptom: { when, steps: [{ step: state.step === 'none' ? 'search' : 'pair', status: 'fail', detail: err }], error: err },
+        };
+        return action === 'guide' ? guide?.open(ctx) : guide?.report(ctx);
+      }
       if (action === 'again') return go('search', { candidate: null, tvId: null, tv: null });
       if (action === 'pair') return startPair();
       if (action === 'choose') return startPair({ candidate: state.found[Number(el.dataset.i)], tvId: null });

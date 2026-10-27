@@ -4,6 +4,7 @@
 import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { createTour } from './tour.js';
+import { createGuide } from './guide.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
 import { createHousehold } from './household.js'; // who's in the house
@@ -794,11 +795,15 @@ const health = createHealth({ root: $('#health'), note, haptic, feedback, demo }
 // ── energy: what each TV costs (power bill → price per kWh) ──
 const energy = createEnergy({ root: $('#energy'), api, note, haptic, feedback, demo, getTvs: () => tvs });
 
+// ── Connection guide + support queue (web/guide.js) ─────
+const guide = createGuide({ api, note });
+
 // ── Setup wizard ─────────────────────────────────────────
 const setup = createSetup({
   root: $('#setup'),
   api,
   note,
+  guide,
   onTv: (tv) => {
     tvs.set(tv.id, tv);
     render();
@@ -829,7 +834,13 @@ const bulk = createBulk({
 });
 
 // ── doctor: fix connections + codes & pairing ─────────────
-const doctor = createDoctor({ api, note, getTv: (id) => tvs.get(id), onPair: pairAgain });
+const doctor = createDoctor({
+  api,
+  note,
+  getTv: (id) => tvs.get(id),
+  onPair: pairAgain,
+  onGuide: (t, symptom) => guide.open({ tvId: t.id, device: { brand: t.brand, model: t.model }, name: t.name, symptom }),
+});
 
 // Forget the old key, then jump straight into the right pairing step.
 async function pairAgain(tv, how) {
@@ -957,6 +968,7 @@ function connectEvents() {
     if (!greeted && !tvs.size && !setup.isOpen) setup.open();
     if (!greeted) scenes.load();
     if (!greeted) followLaunch();
+    if (!greeted && !window.HearthDemo) setTimeout(() => guide.checkTickets(), 5000); // answers to "send it to us"
     launcher.load();
     greeted = true;
     bulk.prune();
@@ -1001,6 +1013,7 @@ function onPress(el, info) {
   if (d.house) return household.handle(el);
   if (d.en) return energy.handle(el);
   if (d.doctor) return doctor.handle(el); // doctor
+  if (d.guide) return guide.handle(el);
   if (d.setup) return setup.handle(el, info);
   // ── bulk select + scenes ──
   if (d.bulk) return bulk.handle(el, info);
@@ -1082,6 +1095,11 @@ function onPress(el, info) {
     case 'health':
       haptic('tap');
       return health.openHouse();
+    case 'tv-guide': {
+      const t = tvs.get(editing);
+      $('#editSheet').close();
+      return t && guide.open({ tvId: t.id, device: { brand: t.brand, model: t.model }, name: t.name });
+    }
     case 'tv-health':
       $('#editSheet').close();
       return health.openTv(editing);

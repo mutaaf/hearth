@@ -129,6 +129,23 @@
     emit('tv', t);
   }
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  // A stand-in for src/devices.js so the demo's guide sheet has something real-looking.
+  function demoGuide(brand, model) {
+    var G = {
+      lg: ['LG OLED (webOS)', 'allow-or-pin', 'Pick “Show a number” and type it in, or press Allow with the TV’s remote.', [['Turn on via Wi-Fi', 'Settings → General → Devices → TV Management → Turn on via Wi-Fi']]],
+      samsung: ['Samsung smart TV (Tizen)', 'allow', 'Press Allow on the TV when it asks. Once.', [['Power On with Mobile', 'Settings → General → Network → Expert Settings → Power On with Mobile']]],
+      roku: ['Roku', 'none', 'Nothing to press: Rokus let Hearth in by themselves.', [['Fast TV start', 'Settings → System → Power → Fast TV start']]],
+      androidtv: ['Google TV', 'code', 'The TV shows a code once; type it into Hearth.', [['Stay connected', 'Settings → System → Power & energy → Network standby: On']]],
+      appletv: ['Apple TV 4K', 'pin', 'Type the 4 numbers on the TV, twice.', [['Allow Access', 'Settings → AirPlay and HomeKit → Allow Access → Anyone on the Same Network']]],
+    }[brand] || ['Smart TV', 'allow', 'Press Allow on the TV when it asks.', []];
+    return {
+      brand: brand, model: model, known: true, family: G[0], year: null, os: null,
+      connect: { how: G[1], summary: G[2], before: [], onTv: null },
+      keepReachable: G[3].map(function (k) { return { title: k[0], path: k[1] }; }),
+      troubleshoot: [{ when: 'refused', fix: 'Pressed Deny by mistake? Remove Hearth from the TV’s list of connected devices, then connect again.' }, { when: 'not-found', fix: 'Make sure the TV and the phone are on the same Wi-Fi, not a guest network.' }],
+      quirks: [],
+    };
+  }
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function needsOn(t) {
     if (!t.state.online || t.state.power !== 'on') throw new Error('TV is off or not reachable');
@@ -371,6 +388,14 @@
     }],
     ['POST', /^\/scenes\/([\w-]+)\/run$/, function (m) { runScene(findScene(m[1])); return { ok: true, started: true }; }],
     ['GET', /^\/tvs$/, function () { return tvs; }],
+    // ── connection guide + support queue: canned, nothing is sent from the demo ──
+    ['POST', /^\/guide$/, function (_, body) {
+      var t = body && body.tvId ? find(body.tvId) : null;
+      var brand = (t && t.brand) || (body && body.device && body.device.brand) || 'lg';
+      return wait(500).then(function () { return { guide: demoGuide(brand, (t && t.model) || (body && body.device && body.device.model) || ''), ai: null }; });
+    }],
+    ['POST', /^\/support$/, function () { return wait(700).then(function () { return { id: 'demo' + Math.random().toString(36).slice(2, 8) }; }); }],
+    ['GET', /^\/support\/([a-z0-9]+)$/, function (m) { return { id: m[1], status: 'new', resolution: null }; }],
     ['GET', /^\/info$/, function () { return { name: 'hearth', friendlyUrl: null }; }],
     ['POST', /^\/scan$/, function () {
       return wait(2400).then(function () {

@@ -1,4 +1,5 @@
 import { HearthError } from './errors.js';
+import { guideKey, sanitizeDevice, sanitizeSupport, sanitizeSymptom, validateGuide } from './device-schema.js';
 import { sanitizePayload, validateInsight } from './insight-schema.js';
 
 // AI insights relay. The browser asks the hub; the hub sends the anonymised
@@ -64,6 +65,43 @@ export class Insights {
   async bill(request, { provider = 'edge', model = null, key = '' } = {}) {
     if (!PROVIDER_RE.test(provider) || provider === 'auto') provider = 'edge';
     return this.#post('/bill', { ...request, provider, ...(model ? { model } : {}) }, provider === 'edge' ? '' : key, 70_000);
+  }
+
+  // A model-specific connection guide from the AI (src/device-schema.js).
+  // The Worker shares one answer per model + symptom between houses; this
+  // keeps it for the session too.
+  async guide(device, symptom = null, builtIn = null, { refresh = false } = {}) {
+    const dev = sanitizeDevice(device);
+    if (!dev?.model) throw new HearthError(400, 'Which TV? Hearth needs its model to ask.');
+    const sym = symptom ? sanitizeSymptom(symptom) : null;
+    const key = guideKey(dev, sym);
+    const hit = this.cache.get(`guide:${key}`);
+    if (!refresh && hit && this.now() - hit.at < CACHE_MS) return hit.result;
+    const data = await this.#post('/device', { device: dev, ...(sym ? { symptom: sym } : {}), builtIn, refresh }, '', 45_000);
+    const guide = validateGuide(data.guide);
+    if (!guide) throw new HearthError(502, 'The AI answer wasn’t usable. Try again.');
+    const result = { guide, model: data.model ?? null, cached: Boolean(data.cached) };
+    this.cache.set(`guide:${key}`, { at: this.now(), result });
+    return result;
+  }
+
+  // "It won't connect" → the support queue. → { id }
+  async support(report) {
+    const clean = sanitizeSupport(report);
+    if (!clean) throw new HearthError(400, 'Which TV? Pick its brand first.');
+    return this.#post('/support', { report: clean }, '', 20_000);
+  }
+
+  async supportStatus(id) {
+    if (!/^[a-z0-9]{6,16}$/.test(String(id))) throw new HearthError(400, 'Bad ticket');
+    let res;
+    try {
+      res = await this.fetch(`${this.cloud}/support/status/${id}`, { signal: AbortSignal.timeout(10_000) });
+    } catch {
+      throw new HearthError(502, 'Couldn’t reach Hearth Cloud.');
+    }
+    if (!res.ok) throw new HearthError(res.status === 404 ? 404 : 502, 'No such ticket');
+    return res.json();
   }
 
   models(provider, key) {
