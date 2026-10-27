@@ -1,0 +1,104 @@
+/* The tour (web/tour.js): a spotlight on the real control, a bubble, and a
+   finger acting out the move. Transform/opacity animations only. */
+.tour {
+  --tour-dim: rgba(10, 8, 6, .64);
+  --tour-paper: #fffaf3;
+  --tour-ink: #161821;
+  --tour-soft: #5b5d6b;
+  --tour-ember: #f25a1d;
+  position: fixed; inset: 0; z-index: 90; opacity: 0; transition: opacity .22s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-mode="dark"] .tour { --tour-paper: #1b1712; --tour-ink: #f3eee4; --tour-soft: #a59d90; --tour-dim: rgba(0, 0, 0, .7); }
+.tour.in { opacity: 1; }
+.tour.carded { background: var(--tour-dim); }
+
+/* The hole: everything outside it is dimmed by one huge shadow. */
+.tour-spot {
+  position: fixed; left: 0; top: 0; width: 0; height: 0; border-radius: 22px;
+  box-shadow: 0 0 0 200vmax var(--tour-dim), 0 0 0 3px rgba(255, 138, 76, .9), 0 0 28px 6px rgba(255, 106, 43, .45);
+  transition: transform .38s cubic-bezier(.2, .8, .2, 1), width .38s cubic-bezier(.2, .8, .2, 1), height .38s cubic-bezier(.2, .8, .2, 1), border-radius .38s;
+  pointer-events: none; will-change: transform;
+}
+.tour.carded .tour-spot { box-shadow: none; }
+
+/* The finger: a soft dot that acts out the gesture in the middle of the hole. */
+.tour-finger {
+  position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff, #ffe3d2 55%, rgba(255, 180, 140, .9));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .35); opacity: 0;
+}
+.tour-finger::after { /* the ring: a tap's ripple, a hold's fill */
+  content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 3px solid #fff; opacity: 0;
+}
+.tour-finger.tap { animation: t-tap 1.6s ease-out infinite; }
+.tour-finger.tap::after { animation: t-ripple 1.6s ease-out infinite; }
+.tour-finger.hold { animation: t-hold 2.2s ease-in-out infinite; }
+.tour-finger.hold::after { border-color: var(--tour-ember); animation: t-fill 2.2s ease-in-out infinite; }
+.tour-finger.drag { animation: t-drag 2.6s ease-in-out infinite; }
+.tour-finger.swipe { animation: t-swipe 1.8s ease-in-out infinite; }
+.tour-finger.pull { top: 12%; animation: t-pull 2s ease-in-out infinite; }
+@keyframes t-tap { 0%, 100% { opacity: 0; transform: scale(1.2); } 15% { opacity: 1; transform: scale(1); } 25% { transform: scale(.82); } 40%, 70% { opacity: 1; transform: scale(1); } }
+@keyframes t-ripple { 0%, 22% { opacity: 0; transform: scale(.6); } 26% { opacity: .9; } 60%, 100% { opacity: 0; transform: scale(1.7); } }
+@keyframes t-hold { 0%, 100% { opacity: 0; transform: scale(1.15); } 12% { opacity: 1; transform: scale(.85); } 80% { opacity: 1; transform: scale(.85); } 92% { transform: scale(1); } }
+@keyframes t-fill { 0%, 12% { opacity: 0; transform: scale(.7); } 20% { opacity: 1; } 78% { opacity: 1; transform: scale(1.35); } 90%, 100% { opacity: 0; transform: scale(1.5); } }
+@keyframes t-drag { 0%, 100% { opacity: 0; transform: translate(0, 0) scale(.85); } 10% { opacity: 1; } 30% { transform: translate(26px, -10px) scale(.85); } 55% { transform: translate(-22px, 18px) scale(.85); } 80% { opacity: 1; transform: translate(0, -26px) scale(.85); } 92% { opacity: 0; } }
+@keyframes t-swipe { 0%, 100% { opacity: 0; transform: translateY(26px) scale(.85); } 15% { opacity: 1; } 65% { opacity: 1; transform: translateY(-30px) scale(.85); } 80% { opacity: 0; transform: translateY(-34px) scale(.85); } }
+@keyframes t-pull { 0%, 100% { opacity: 0; transform: translateY(0) scale(.85); } 15% { opacity: 1; } 70% { opacity: 1; transform: translateY(90px) scale(.85); } 85% { opacity: 0; } }
+
+/* The bubble. */
+.tour-tip {
+  position: fixed; left: 0; top: 0; width: min(330px, calc(100vw - 32px)); padding: 18px 18px 14px; border-radius: 22px;
+  background: var(--tour-paper); color: var(--tour-ink); box-shadow: 0 18px 50px -12px rgba(0, 0, 0, .55);
+  transition: transform .38s cubic-bezier(.2, .8, .2, 1); will-change: transform;
+}
+.tour-tip::before { /* the arrow toward the hole */
+  content: ''; position: absolute; left: var(--arrow-x, 50%); top: -7px; width: 14px; height: 14px; margin-left: -7px;
+  background: var(--tour-paper); transform: rotate(45deg); border-radius: 3px;
+}
+.tour-tip.above::before { top: auto; bottom: -7px; }
+.tour.carded .tour-tip::before { display: none; }
+.tour-tip.pop > * { animation: t-in .34s cubic-bezier(.2, .8, .2, 1) both; }
+.tour-tip.pop > :nth-child(2) { animation-delay: .03s; }
+.tour-tip.pop > :nth-child(3) { animation-delay: .06s; }
+.tour-tip.pop > :nth-child(4) { animation-delay: .09s; }
+@keyframes t-in { from { opacity: 0; transform: translateY(6px); } }
+.tour-count { margin: 0; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--tour-ember); }
+.tour-title { margin: 4px 0 4px; font-size: 20px; line-height: 1.15; letter-spacing: -.02em; }
+.tour-body { margin: 0; font-size: 15px; line-height: 1.45; color: var(--tour-soft); }
+.tour-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+.tour-skip, .tour-next { border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+.tour-skip { padding: 10px 6px; background: none; color: var(--tour-soft); font-size: 15px; }
+.tour-next { min-width: 92px; padding: 11px 20px; border-radius: 999px; background: var(--tour-ember); color: #fff; font-size: 16px; box-shadow: 0 3px 0 #b8360b; }
+.tour-next:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8360b; }
+
+/* A card with no control to point at: the Lock Screen remote, drawn. */
+.tour-art { display: none; }
+.tour-art.live {
+  display: block; position: relative; width: 120px; height: 150px; margin: 0 auto 12px; border-radius: 26px;
+  background: linear-gradient(160deg, #2b2340, #120f1c); box-shadow: inset 0 0 0 3px #3b3550;
+}
+.tour-art.live::before { /* the Dynamic Island, growing into the remote */
+  content: ''; position: absolute; left: 50%; top: 8px; width: 38px; height: 11px; margin-left: -19px; border-radius: 8px; background: #000;
+  animation: t-island 3.2s ease-in-out infinite;
+}
+.tour-art.live::after { /* the Lock Screen card, with keys that press */
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: 12px; height: 54px; border-radius: 14px;
+  background:
+    radial-gradient(circle at 22% 50%, #ff8a4c 0 9px, transparent 10px),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .85) 0 9px, transparent 10px),
+    radial-gradient(circle at 78% 50%, rgba(255, 255, 255, .85) 0 9px, transparent 10px),
+    rgba(255, 255, 255, .14);
+  animation: t-card 3.2s ease-in-out infinite;
+}
+@keyframes t-island { 0%, 100% { transform: scaleX(1); } 35%, 60% { transform: scaleX(2.3); } }
+@keyframes t-card { 0%, 100% { opacity: .75; transform: translateY(0); } 45% { opacity: 1; transform: translateY(-3px); } 50% { transform: translateY(-1px) scale(.98); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour, .tour-spot, .tour-tip { transition: none; }
+  .tour-finger, .tour-finger::after, .tour-art.live::before, .tour-art.live::after, .tour-tip.pop > * { animation: none !important; }
+  .tour-finger:not(.none) { opacity: 1; }
+}
+
+/* The "?" in the house and remote headers. */
+.help-btn b { font-weight: 800; font-size: 17px; line-height: 1; }

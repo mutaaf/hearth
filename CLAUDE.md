@@ -62,7 +62,9 @@ src/log.js             timestamped log lines + copy-truncate rotation of ~/.hear
 web/                   vanilla JS app (index.html, style.css, app.js, shapes.js), no framework
 web/feel.js            haptics (Vibration API / iOS switch trick), WebAudio sounds, the press engine
                        (data-press="down|up|repeat|long|confirm"), the gesture D-pad, wake lock
-web/setup.js           the caveman setup wizard (turn on → find → [wake] → connect per brand → room → done)
+web/setup.js           the caveman setup wizard (looks at once and keeps looking → [wake] → connect per brand → room → done)
+web/tour.js|.css       the tour: spotlight + bubble + an animated finger per feature; first visit to the house and
+                       the remote, "?" in both headers, Settings → Show me around (localStorage hearth.tour.seen)
 web/skin-8bit.css      8-bit pocket-console skin (only under <html data-skin="8bit">)
 web/launcher.js|.css   the app launcher: "Watch" strip on the house (hold = every / selected TVs) and the
                        "Streaming" grid on a TV's Apps panel (tap = this TV), ✓/✕ chips per TV
@@ -209,6 +211,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | The D-pad's OK button is `class="ok"` | Global `.ok` (absolute, round) also hit `.chip-result.ok` result chips; launcher.css resets them for `.launch-results` and `.bulk-results`. Don't give new elements a bare `.ok` class. |
 | Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
 | `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
+| The house redraws its cards on every TV update, so an element found a moment ago is detached | Anything that points at a card later (web/tour.js) re-finds it by selector when `!el.isConnected`. |
 | Never use `ok`/`bad` as a state class | `.ok` is the D-pad's OK button (`position:absolute; inset:31%`), so `.dr-step.ok` or `.chip-result.ok` turn into floating circles. Prefix state classes (`st-ok`, `res-ok`). |
 | Fields named `cert`/`key` on a class with a `key()` method | `Object.assign(this, { key })` shadows the method. AtvRemote stores `certPem`/`keyPem`. |
 | A Google TV paired with a cert it later forgets drops the TLS handshake on :6466 | Surfaced as 401 "unlock again", with retries backed off to 60 s. The doctor reports `googletv-code`. |

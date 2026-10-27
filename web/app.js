@@ -3,6 +3,7 @@
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
 import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
+import { createTour } from './tour.js';
 import { createInstall } from './install.js';
 import { createAway, keepOffline } from './away.js'; // away: Light Racer
 import { createHousehold } from './household.js'; // who's in the house
@@ -848,6 +849,19 @@ const install = createInstall({ api, note, isDemo: Boolean(demo), invite: househ
 const away = createAway({ isDemo: Boolean(demo) });
 
 // ── Routing ──────────────────────────────────────────────
+// The tour of each screen, the first time it's seen (web/tour.js). Waits
+// for the screen to settle; skipped while setup or a sheet is up.
+const tour = createTour();
+let tourTimer = 0;
+function tourSoon() {
+  clearTimeout(tourTimer);
+  tourTimer = setTimeout(() => {
+    if (tour.open || setup.isOpen) return;
+    if (!$('#remote').hidden) tour.firstTime('remote');
+    else if (tvs.size) tour.firstTime('house');
+  }, 900);
+}
+
 function route() {
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
   const t = m && tvs.get(m[1]);
@@ -889,6 +903,7 @@ function route() {
     mountHouseField();
     renderHouse();
   }
+  tourSoon();
 }
 
 function render() {
@@ -1056,6 +1071,10 @@ function onPress(el, info) {
     case 'settings':
       haptic('tap');
       return openSettings();
+    case 'tour': // "?" in a header, or Settings → Show me around
+      haptic('tap');
+      $('#settingsSheet').close();
+      return tour.start($('#remote').hidden ? 'house' : 'remote');
     case 'select':
       return bulk.selecting ? bulk.exit() : bulk.enter();
     // ── health

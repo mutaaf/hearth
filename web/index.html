@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="stream.css">
   <link rel="stylesheet" href="household.css">
   <link rel="stylesheet" href="pull.css">
+  <link rel="stylesheet" href="tour.css">
 </head>
 <body>
   <!-- Every launch switches on like an old CRT: a scan line, a flash, the ember. -->
@@ -74,6 +75,7 @@
         <button type="button" class="select-btn mono" data-press="up" data-action="select">Select</button>
         <!-- health -->
         <button type="button" class="icon-btn" data-press="up" data-action="health" aria-label="Health and diagnostics"><svg><use href="#i-pulse"/></svg></button>
+        <button type="button" class="icon-btn help-btn" data-press="up" data-action="tour" aria-label="Show me around"><b aria-hidden="true">?</b></button>
         <button type="button" class="icon-btn" data-press="up" data-action="settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
       </div>
     </header>
@@ -126,6 +128,7 @@
     <header class="remote-top">
       <a class="icon-btn" href="#/" aria-label="All TVs"><svg><use href="#i-left"/></svg></a>
       <div class="switcher" id="switcher" role="tablist" aria-label="Choose a TV"></div>
+      <button class="icon-btn help-btn" type="button" data-press="up" data-action="tour" aria-label="Show me around"><b aria-hidden="true">?</b></button>
       <button class="icon-btn" type="button" data-press="up" data-action="edit" aria-label="TV settings"><svg><use href="#i-dots"/></svg></button>
     </header>
 
@@ -350,7 +353,8 @@
       <button type="button" class="toggle" data-press="up" data-install="share"><span><b>Get Hearth on another phone or iPad</b><small class="mono">Link · QR code · Send with Messages</small></span><span aria-hidden="true">📲</span></button>
       <button type="button" class="toggle" data-press="up" data-install="open"><span><b>Put Hearth on this home screen</b><small class="mono">Opens like a real app</small></span><span aria-hidden="true">➕</span></button>
       <button type="button" class="toggle" data-press="up" data-action="racer"><span><b>Play Light Racer</b><small class="mono">It also shows up when you're away from home</small></span><span aria-hidden="true">🏍️</span></button>
-      <button type="button" class="toggle pro-row" data-press="up" data-action="pro" hidden><span><b>Hearth Pro</b><small class="mono">Every TV in the house · once · Family Sharing</small></span><span aria-hidden="true">✨</span></button>
+      <button type="button" class="toggle" data-press="up" data-action="tour"><span><b>Show me around</b><small class="mono">A quick tour of every button and gesture</small></span><span aria-hidden="true">👆</span></button>
+      <button type="button" class="toggle pro-row" data-press="up" data-action="pro" hidden><span><b>Hearth Pro</b><small class="mono">Room for more TVs · from $1.99 · once</small></span><span aria-hidden="true">✨</span></button>
       <a class="toggle demo-row" href="demo.html" hidden><span><b>Try the demo</b><small class="mono">A pretend house of TVs to play with</small></span><span aria-hidden="true">📺</span></a>
     </div>
     <div class="sheet-actions">
