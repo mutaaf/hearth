@@ -96,7 +96,7 @@
     tv('demo-kids', 'samsung', 'Kids’ Room', 'Upstairs', 'UN43TU7000', '192.168.1.41', true,
       { online: true, power: 'on', app: null }),
     tv('demo-media', 'appletv', 'Media Room', 'Downstairs', '4K (2nd gen)', '192.168.1.71', true,
-      { online: true, power: 'on', app: 'com.netflix.Netflix', appTitle: 'Netflix', nowPlaying: 'Stranger Things: Chapter One', playing: 'playing',
+      { online: true, power: 'on', app: 'com.netflix.Netflix', appTitle: 'Netflix', nowPlaying: 'The Long Weekend: Episode One', playing: 'playing',
         media: { state: 'playing', position: 1234000, duration: 2940000, live: false, at: Date.now(), source: 'appletv' } }),
     tv('demo-basement', 'roku', 'Basement', 'Downstairs', 'Streaming Stick 3840R', '192.168.1.53', true,
       { online: true, power: 'standby', app: null }),
@@ -109,6 +109,11 @@
     { id: 'demo-office', brand: 'samsung', name: 'Office TV', model: 'QN50Q60A', ip: '192.168.1.43', macs: [] },
     { id: 'demo-game', brand: 'appletv', name: 'Game Room', model: '4K', ip: '192.168.1.63', macs: [] },
   ];
+  // The phone app can't drive Apple TVs yet: its demo leaves them out.
+  if (window.HearthHost && window.HearthHost.native) {
+    tvs = tvs.filter(function (t) { return t.brand !== 'appletv'; });
+    discoverable = discoverable.filter(function (t) { return t.brand !== 'appletv'; });
+  }
 
   var listeners = {};
   function emit(event, data) {

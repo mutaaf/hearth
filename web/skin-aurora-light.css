@@ -83,7 +83,7 @@
 }
 [data-skin="aurora"][data-mode="light"] .pad .ripple { border-color: var(--signal); }
 [data-skin="aurora"][data-mode="light"] .slider .fill { background: linear-gradient(0deg, #f25a1d, #ff8a4c 60%, #ffc4a5); }
-[data-skin="aurora"][data-mode="light"] .slider .val { color: #fff; text-shadow: 0 1px 4px #b8360b99; }
+[data-skin="aurora"][data-mode="light"] .slider .val { color: var(--ink); text-shadow: 0 1px 0 #ffffff99; }
 [data-skin="aurora"][data-mode="light"] .slider:not(.absolute) .val { color: var(--ink-soft); text-shadow: none; }
 [data-skin="aurora"][data-mode="light"] .slider .cap.hit { color: var(--signal); }
 [data-skin="aurora"][data-mode="light"] .rocker-ch .cap.pressed { color: var(--signal); background: #f25a1d14; }

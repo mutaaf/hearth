@@ -434,7 +434,7 @@ function derez(r, by, now, at) {
   sfx.kill();
   if (by === 0) {
     stats.kills++;
-    addScore(100 * wave, hx, hy, 'DEREZZED');
+    addScore(100 * wave, hx, hy, 'WIPED OUT');
     haptic('press');
     shake = 6;
   }
@@ -711,7 +711,7 @@ function gameOver() {
   }
   $('#overScore').textContent = score.toLocaleString();
   $('#newBest').hidden = !isBest || score === 0;
-  $('#overStats').innerHTML = [['Wave', wave], ['Sparks', stats.sparks], ['Derezzed', stats.kills], ['Time', `${secs}s`], ['Best', best.toLocaleString()], ['Length', riders[0]?.len ?? 0]]
+  $('#overStats').innerHTML = [['Wave', wave], ['Sparks', stats.sparks], ['Wiped out', stats.kills], ['Time', `${secs}s`], ['Best', best.toLocaleString()], ['Length', riders[0]?.len ?? 0]]
     .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
     .join('');
   show('over');

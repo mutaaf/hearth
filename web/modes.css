@@ -182,3 +182,12 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 6px; margin: 0 2px; b
 [data-skin="8bit"] .tp-hint { color: var(--lcd-0); font-size: 7px; }
 [data-skin="8bit"] kbd { border-radius: 0; font-size: 7px; background: #3a3946; color: #e9e6f2; border-color: #0c0b10; }
 [data-skin="8bit"] .gp-face button { border-radius: 50%; font-family: var(--display); font-size: 12px; background: var(--signal); }
+
+/* Phones: the four mode tabs leave the "what's on" chip ~70px, which cut its
+   title to a sliver. There it shows the icon and the time; the title is in the
+   now strip right below. */
+.mode-bar { container-type: inline-size; }
+@container (max-width: 440px) {
+  .act-chip { flex: none; padding: 0 12px; }
+  .act-chip b { display: none; }
+}

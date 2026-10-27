@@ -39,7 +39,8 @@ export function applySkin() {
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
   const tint = { '8bit': '#1b1a24', aurora: mode === 'dark' ? '#07080c' : '#f6f1ea' }[prefs.skin] ?? (mode === 'dark' ? '#121110' : '#e9e3d7');
   if (meta) meta.content = tint;
-  dispatchEvent(new CustomEvent('hearth:mode', { detail: mode }));
+  // The phone app's chrome (status bar etc.): 8-bit is always a dark screen.
+  dispatchEvent(new CustomEvent('hearth:mode', { detail: prefs.skin === '8bit' ? 'dark' : mode }));
 }
 darkQuery?.addEventListener?.('change', () => prefs.mode === 'auto' && applySkin());
 

@@ -181,7 +181,7 @@
 
 /* Corner keys around the orb */
 .orb-key {
-  position: absolute; width: 54px; height: 54px; border-radius: 50%; display: grid !important; place-items: center; font-size: 20px; color: var(--ink);
+  position: absolute; width: 54px; height: 54px; border-radius: 50%; display: none; place-items: center; font-size: 20px; color: var(--ink);
   background: var(--glass-1); border: 1px solid var(--hair); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   transition: transform .1s, background .15s, box-shadow .15s; z-index: 2;
 }
@@ -286,4 +286,26 @@
 }
 @media (max-width: 380px) {
   [data-skin="aurora"] .orb-zone { --rail: 50px; --gap: 10px; }
+}
+
+/* The TV's own apps under the catalog: a heading (Aurora hides panel titles,
+   which made them read as duplicates) and white monogram letters (.app span
+   is the label colour, which also hit the letter inside the tile). */
+[data-skin="aurora"] .all-apps-title { display: block; margin: 26px 0 12px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+[data-skin="aurora"] .app .app-icon span { color: #fff; font-size: 28px; font-weight: 750; letter-spacing: -.04em; }
+
+/* Tablets: a bigger orb, and the orb zone only as tall as it needs, centred,
+   so the corner keys sit around the orb instead of at the ends of a tall,
+   empty column. */
+@media (min-width: 700px) and (min-height: 820px) {
+  [data-skin="aurora"] #remote { max-width: 640px; }
+  [data-skin="aurora"] .orb-zone {
+    --rail: 72px; --gap: 22px;
+    --pad: min(calc(100cqw - 2 * var(--rail) - 2 * var(--gap)), 44dvh, 430px);
+    flex: none; height: calc(var(--pad) + 150px); margin-block: auto;
+  }
+  [data-skin="aurora"] .slider, [data-skin="aurora"] .rocker-ch { height: min(calc(var(--pad) + 16px), 440px); }
+  [data-skin="aurora"] .orb-key { width: 66px; height: 66px; font-size: 24px; }
+  [data-skin="aurora"] .ok { font-size: 18px; }
+  [data-skin="aurora"] .arc { font-size: 30px; }
 }
