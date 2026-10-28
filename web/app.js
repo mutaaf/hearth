@@ -83,7 +83,7 @@ async function api(method, path, body) {
   }
   // Never hang: pairing, launches that wake TVs, the doctor and AI notes can
   // legitimately take a while; everything else answers in seconds.
-  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power|key|volume|input)$|^\/ai\/|^\/tvs$|\/run$/.test(path); // keys may wake the TV first
+  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power|key|volume|input|wake-test|guide)$|^\/ai\/|^\/tvs$|\/run$/.test(path); // keys may wake the TV first
   init.signal = AbortSignal.timeout?.(slow ? 90_000 : 15_000);
   let res;
   try {
