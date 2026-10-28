@@ -86,6 +86,7 @@ function samsungMenus(year) {
     powerOnMobile: `${top} → Network → Expert Settings → Power On with Mobile: On`,
     ipRemote: `${top} → Network → Expert Settings → IP Remote: Enable`,
     dcm: `${top} → External Device Manager → Device Connection Manager`,
+    anynet: `${top} → External Device Manager → Anynet+ (HDMI-CEC): On`,
     status: `${top} → Network → Network Status`,
     autoOff:
       y >= 2023 ? 'Settings → All Settings → General & Privacy → Power and Energy Saving → Auto Power Off: Off'
@@ -138,9 +139,15 @@ function samsungGuide({ known, year }) {
   }
   if (!preTizen) quirks.push('Samsung over the network can’t say what’s playing, only which app is open.');
 
-  const keepReachable = [{ title: 'Power On with Mobile', path: menu.powerOnMobile + (legacy ? ' (if your TV has it)' : '') }];
+  // 2016 sets have no Power On with Mobile and leave the network ~45 s after
+  // switching off (probed on the UN55KU6290, 2026-10-21): nothing on the
+  // network can wake them. A box on HDMI with CEC can.
+  const noWake = year === 2016;
+  const keepReachable = noWake
+    ? [{ title: 'Anynet+ (HDMI-CEC)', wake: false, path: `2016 Samsungs don’t have Power On with Mobile, and they leave the Wi-Fi about a minute after switching off, so no phone can turn them on. Plug a Roku or Apple TV into it and turn on ${menu.anynet}: the TV comes on with the box.` }]
+    : [{ title: 'Power On with Mobile', path: menu.powerOnMobile + (legacy ? ' (if your TV has it)' : '') }];
   if (year == null || year >= 2020) keepReachable.push({ title: 'IP Remote', path: `${menu.ipRemote} (if your TV has it)` });
-  if (legacy) keepReachable.push({ title: 'Network cable', path: 'Plug in a network cable if you can: 2016-17 sets wake from the phone far more reliably on a cable than on Wi-Fi.' });
+  if (legacy && !noWake) keepReachable.push({ title: 'Network cable', path: 'Plug in a network cable if you can: 2016-17 sets wake from the phone far more reliably on a cable than on Wi-Fi.' });
 
   const troubleshoot = [
     legacy
@@ -151,7 +158,9 @@ function samsungGuide({ known, year }) {
       : { when: 'no-prompt', fix: `Turn the TV on and leave it on a normal screen, then try again. If still nothing, open ${menu.dcm} → Access Notification and set it to First Time Only.` },
     { when: 'not-found', fix: `Turn the TV on with its own remote and check it’s on the same Wi-Fi as your phone: ${menu.status}.` },
     { when: 'drops', fix: 'Give the TV a fixed address in your router (a DHCP reservation), or plug in a network cable.' },
-    legacy
+    noWake
+      ? { when: 'wont-wake', fix: `2016 Samsungs can’t be woken over the network: they leave it about a minute after switching off. Use the TV remote, or a streaming box on HDMI with ${menu.anynet}.` }
+      : legacy
       ? { when: 'wont-wake', fix: `This set leaves the network about a minute after it’s switched off, so the phone often can’t reach it. Try ${menu.powerOnMobile} if it’s listed, and a network cable; otherwise use the TV remote to switch it on.` }
       : { when: 'wont-wake', fix: `Switch on ${menu.powerOnMobile}. A network cable makes waking more reliable than Wi-Fi.` },
     { when: 'auto-off', fix: `${menu.autoOff}. Also check the Sleep Timer is off.` },

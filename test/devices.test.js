@@ -54,7 +54,11 @@ test('Samsung 2016 (UN55KU6290): connects with nothing to press', () => {
   assert.equal(g.connect.onTv, null);
   assert.deepEqual(g.connect.before, []);
   assert.ok(g.quirks.some((q) => /power-state/.test(q)));
-  assert.ok(g.keepReachable.some((k) => /Settings → General → Network → Expert Settings → Power On with Mobile/.test(k.path)));
+  // No Power On with Mobile on 2016 sets: it says so, and offers HDMI-CEC.
+  assert.ok(!g.keepReachable.some((k) => /Power On with Mobile: On/.test(k.path)));
+  assert.deepEqual(g.keepReachable.map((k) => [k.title, k.wake]), [['Anynet+ (HDMI-CEC)', false]]);
+  assert.match(g.keepReachable[0].path, /Settings → General → External Device Manager → Anynet\+ \(HDMI-CEC\): On/);
+  assert.match(g.troubleshoot.find((t) => t.when === 'wont-wake').fix, /can’t be woken/);
   assert.match(g.troubleshoot.find((t) => t.when === 'auto-off').fix, /Settings → System → Eco Solution/);
   // The internal REST model name decodes too.
   assert.equal(deviceGuide({ brand: 'samsung', model: '16_JAZZM_UHD' }).connect.how, 'none');

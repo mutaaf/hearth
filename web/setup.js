@@ -117,7 +117,7 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         <h2>It didn’t wake up.</h2>
         <ul class="checklist">
           <li><i>🔌</i><span>Turn it on any way you can (its remote, a button on the TV, or the TV’s own app). Then tap below.</span></li>
-          <li><i>⚙️</i><span>To make waking work next time, turn on <b>Turn on via Wi-Fi</b> (LG) or <b>Power On with Mobile</b> (Samsung) in the TV’s settings.</span></li>
+          <li><i>⚙️</i><span>To make waking work next time, turn on <b>Turn on via Wi-Fi</b> (LG) or <b>Power On with Mobile</b> (Samsung 2017 and newer) in the TV’s settings.</span></li>
         </ul>
         <div class="setup-actions">
           <button type="button" class="cta" data-press="up" data-setup="pair">It’s on now</button>
@@ -406,7 +406,11 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         const say = (path) => tip(`One more thing so your phone can turn it on: <b>${esc(path)}</b> → On.`);
         if (guide && tv.model) {
           guide.lookup({ brand: tv.brand, model: tv.model }).then((res) => {
-            say(res?.guide?.keepReachable?.find((x) => ws[0].test(`${x.title} ${x.path}`))?.path ?? ws[1]);
+            const kept = res?.guide?.keepReachable ?? [];
+            // Some sets (2016 Samsungs) can't be woken at all: say so plainly.
+            const none = kept.find((x) => x.wake === false);
+            if (none) return tip(esc(none.path));
+            say(kept.find((x) => ws[0].test(`${x.title} ${x.path}`))?.path ?? ws[1]);
           });
         } else say(ws[1]);
       } else if (tv && tv.brand !== 'androidtv') {
