@@ -876,7 +876,19 @@ function openEdit(id = current) {
   $('#editRoom').value = t.room;
   $('#editMeta').textContent = [brandName(t.brand), t.model, t.ip].filter(Boolean).join(' · ');
   doctor.renderCodes($('#codesBox'), t); // doctor
+  renderWakeVia(t);
   openSheet('#editSheet');
+}
+
+// "Turns on with": the box on this TV's HDMI that wakes it (HDMI-CEC).
+const WAKE_BOXES = new Set(['roku', 'appletv']);
+let wakeViaPicked;
+function renderWakeVia(t) {
+  const boxes = [...tvs.values()].filter((b) => b.id !== t.id && b.paired && WAKE_BOXES.has(b.brand));
+  wakeViaPicked = t.wakeVia ?? null;
+  $('#wakeVia').hidden = WAKE_BOXES.has(t.brand) || !boxes.length;
+  const chip = (id, label) => `<button type="button" class="chip${(id ?? null) === wakeViaPicked ? ' active' : ''}" data-press="up" data-wake-via="${esc(id ?? '')}">${esc(label)}</button>`;
+  $('#wakeViaPick').innerHTML = chip(null, 'Itself') + boxes.map((b) => chip(b.id, b.name)).join('');
 }
 
 function openSettings() {
@@ -950,6 +962,16 @@ link = createLink({
   feedback,
   track,
   onFix: (id) => doctor.handle({ dataset: { doctor: 'fix', tv: id } }),
+  onWakeVia: async (id, via) => {
+    try {
+      const tv = await api('PATCH', `/tvs/${id}`, { wakeVia: via });
+      tvs.set(tv.id, tv);
+      track('wake_via_set', { how: 'offer', on: true });
+      feedback('success');
+    } catch (err) {
+      note(err.message, true);
+    }
+  },
   onChange: () => (current ? renderRemote() : render()),
 });
 
@@ -1107,6 +1129,7 @@ function connectEvents() {
   // A healed TV is told by the link (web/link.js), not a toast.
   es.addEventListener('healed', (e) => link.healed(JSON.parse(e.data)));
   es.addEventListener('looking', (e) => link.looking(JSON.parse(e.data)));
+  es.addEventListener('wake-via', (e) => link.wakeVia(JSON.parse(e.data)));
   es.addEventListener('scenes', (e) => scenes.onEvent('scenes', JSON.parse(e.data)));
   es.addEventListener('nearby', (e) => {
     const was = nearby.length;
@@ -1340,10 +1363,20 @@ function wire() {
     if (msg) say(msg).then(() => ($('#sayInput').value = ''));
   });
 
+  $('#wakeViaPick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-wake-via]');
+    if (!b) return;
+    wakeViaPicked = b.dataset.wakeVia || null;
+    for (const c of $('#wakeViaPick').children) c.classList.toggle('active', c === b);
+    feedback('tick');
+  });
+
   $('#editForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const tv = await api('PATCH', `/tvs/${editing}`, { name: $('#editName').value, room: $('#editRoom').value });
+      const was = tvs.get(editing)?.wakeVia ?? null;
+      const tv = await api('PATCH', `/tvs/${editing}`, { name: $('#editName').value, room: $('#editRoom').value, ...(wakeViaPicked !== was ? { wakeVia: wakeViaPicked } : {}) });
+      if (wakeViaPicked !== was) track('wake_via_set', { how: 'settings', on: Boolean(wakeViaPicked) });
       tvs.set(tv.id, tv);
       feedback('success');
       $('#editSheet').close();

@@ -229,7 +229,7 @@
 [data-skin="8bit"] .app span { font-size: 7px; line-height: 1.6; color: var(--ink-soft); }
 [data-skin="8bit"] .chip { font-size: 10px; line-height: 1.6; margin: 4px; }
 [data-skin="8bit"] .chips.big .chip, [data-skin="8bit"] .chip.big { font-size: 11px; width: calc(100% - 8px); }
-[data-skin="8bit"] .chip.active { background: var(--lcd-3); color: var(--lcd-0); }
+[data-skin="8bit"] .chip.active, [data-skin="8bit"] #wakeViaPick .chip.active { background: var(--lcd-3); color: var(--lcd-0); }
 [data-skin="8bit"] .say input, [data-skin="8bit"] .fields input { font-size: 12px; margin: 4px; }
 [data-skin="8bit"] .say button { background: var(--signal); box-shadow: 0 0 0 4px #0c0b10; margin: 4px; }
 [data-skin="8bit"] .hint { font-size: 8px; line-height: 1.8; }
@@ -238,8 +238,8 @@
 [data-skin="8bit"] .sheet { background: var(--bg); box-shadow: 0 -4px 0 0 var(--lcd-3), 0 -20px 60px #000; }
 [data-skin="8bit"] .sheet h3, [data-skin="8bit"] .setup h2 { font-size: clamp(16px, 5vw, 24px); line-height: 1.5; letter-spacing: 0; }
 [data-skin="8bit"] .sub, [data-skin="8bit"] .setup p.say-it { font-size: 10px; line-height: 2; }
-[data-skin="8bit"] .sub.left, [data-skin="8bit"] .fields label span, [data-skin="8bit"] .toggle small, [data-skin="8bit"] .skin-card small { font-size: 7px; line-height: 1.8; color: #55525f; }
-[data-skin="8bit"] .fields label span { color: var(--ink-soft); }
+[data-skin="8bit"] .sub.left, [data-skin="8bit"] .fields label span, [data-skin="8bit"] .wake-via > span, [data-skin="8bit"] .toggle small, [data-skin="8bit"] .skin-card small { font-size: 7px; line-height: 1.8; color: #55525f; }
+[data-skin="8bit"] .fields label span, [data-skin="8bit"] .wake-via > span { color: var(--ink-soft); }
 [data-skin="8bit"] .toggle b, [data-skin="8bit"] .skin-card strong { font-size: 10px; }
 [data-skin="8bit"] .toggle input, [data-skin="8bit"] .toggle input::after { border-radius: 0; }
 [data-skin="8bit"] .skin-card.active { box-shadow: 0 -4px 0 0 var(--lcd-3), 0 4px 0 0 var(--lcd-3), -4px 0 0 0 var(--lcd-3), 4px 0 0 0 var(--lcd-3); }

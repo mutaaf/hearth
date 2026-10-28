@@ -158,6 +158,7 @@ export function createServer(hub, { hostCheck = createHostCheck(), limiter = cre
   hub.on('nearby', (list) => broadcast('nearby', list));
   hub.on('healed', (info) => broadcast('healed', info)); // ── doctor
   hub.on('looking', (info) => broadcast('looking', info));
+  hub.on('wake-via', (info) => broadcast('wake-via', info));
   hub.on('doctor', (step) => broadcast('doctor', step));
   hub.scenes?.on('progress', (p) => broadcast('scene', p));
   hub.scenes?.on('changed', (list) => broadcast('scenes', list));

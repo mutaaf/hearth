@@ -309,6 +309,11 @@
       <label><span class="mono">Name</span><input id="editName" maxlength="60" required></label>
       <label><span class="mono">Room</span><input id="editRoom" maxlength="60" placeholder="Living room, Kids’ room…"></label>
       <p class="mono sub left" id="editMeta"></p>
+      <div class="wake-via" id="wakeVia" hidden>
+        <span class="mono">Turns on with</span>
+        <div class="chips" id="wakeViaPick"></div>
+        <p class="mono sub left">A Roku or Apple TV plugged into this TV can turn it on over HDMI. Pick it if this TV won’t wake from your phone on its own.</p>
+      </div>
       <!-- health -->
       <button type="button" class="chip big" data-press="up" data-action="tv-health"><svg><use href="#i-pulse"/></svg> Health &amp; diagnostics</button>
       <button type="button" class="chip big" data-press="up" data-action="tv-guide">📖 How to connect &amp; keep it reachable</button>

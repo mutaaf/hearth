@@ -22,6 +22,9 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 // that only runs on a computer. src/hub.js adds every brand and the Apple TV
 // bridge for the home server. The HTTP server is
 // a thin layer over it; tests drive it directly with fake drivers.
+// Boxes that turn their TV on over HDMI-CEC when they wake.
+const WAKE_BOXES = new Set(['roku', 'appletv']);
+
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
@@ -87,6 +90,9 @@ export class Hub extends EventEmitter {
         this.#wasOn.set(tv.id, on);
         this.#since.set(tv.id, Date.now());
       }
+      const online = Boolean(state.online);
+      if (online && this.#wasOnline.get(tv.id) === false) this.#cameWith(tv);
+      this.#wasOnline.set(tv.id, online);
       this.emit('change', this.view(tv));
     });
     driver.on('connection-error', () => {});
@@ -136,7 +142,8 @@ export class Hub extends EventEmitter {
       model: tv.model ?? '',
       ip: tv.ip,
       paired: Boolean(tv.credentials),
-      canWake: Boolean(tv.macs?.length),
+      canWake: Boolean(tv.macs?.length || this.#viaBox(tv)),
+      wakeVia: this.#viaBox(tv)?.id ?? null,
       powerToggles: Boolean(driver?.powerToggles),
       capabilities: driver?.capabilities ?? {},
       state: driver?.state ?? { online: false, power: 'unknown' },
@@ -405,6 +412,14 @@ export class Hub extends EventEmitter {
     return this.#withLock(`tv:${id}`, async () => {
       if (patch.name !== undefined) tv.name = clean(patch.name) || tv.name;
       if (patch.room !== undefined) tv.room = clean(patch.room);
+      if (patch.wakeVia !== undefined) {
+        if (patch.wakeVia === null || patch.wakeVia === '') delete tv.wakeVia;
+        else {
+          const box = this.tvs.find((t) => t.id === patch.wakeVia);
+          if (!box || box === tv || !WAKE_BOXES.has(box.brand)) throw badRequest('Pick a Roku or Apple TV that’s plugged into this TV');
+          tv.wakeVia = box.id;
+        }
+      }
       if (patch.ip !== undefined && patch.ip !== tv.ip) {
         // Drivers bake the address into their connection (and unpaired TVs
         // have a reachability watcher on it); rebuild both.
@@ -465,9 +480,50 @@ export class Hub extends EventEmitter {
     const driver = this.driver(id);
     if (on) this.#offAt.delete(id);
     else this.#offAt.set(id, Date.now());
-    await (on ? driver.powerOn() : driver.powerOff());
+    const box = on && this.#viaBox(this.get(id));
+    if (box) {
+      // The TV's own wake (often nothing, for sets that leave the network)
+      // and the box's, together: a box on HDMI with CEC turns the TV on.
+      this.#boxWokeAt = { id: box.id, at: Date.now() };
+      const [own, via] = await Promise.allSettled([driver.powerOn(), this.#wakeBox(box)]);
+      if (own.status === 'rejected' && via.status === 'rejected') throw via.reason;
+    } else {
+      if (on && WAKE_BOXES.has(this.get(id).brand)) this.#boxWokeAt = { id, at: Date.now() };
+      await (on ? driver.powerOn() : driver.powerOff());
+    }
     this.settle(id);
     return { ok: true };
+  }
+
+  // ── Waking a TV through the box plugged into it (HDMI-CEC) ──
+  // Some TVs can't be woken over the network at all (2016 Samsungs leave it
+  // a minute after switching off), but a Roku or Apple TV on one of their
+  // HDMI ports can: waking the box turns the TV on with it.
+  #viaBox(tv) {
+    if (!tv?.wakeVia) return null;
+    const box = this.tvs.find((t) => t.id === tv.wakeVia);
+    return box && WAKE_BOXES.has(box.brand) ? box : null;
+  }
+  async #wakeBox(box) {
+    const d = this.#drivers.get(box.id);
+    await d.powerOn();
+    // A Roku stick has no power state; a press is what makes it claim the
+    // TV (CEC "one touch play").
+    if (box.brand === 'roku') await d.key('home').catch(() => {});
+  }
+  #wasOnline = new Map();
+  #boxWokeAt = null; // { id, at }: the box Hearth just woke
+  #offered = new Set(); // "tv|box" already suggested
+  // A quiet TV that comes on within moments of Hearth waking a box is
+  // probably plugged into it: offer to wake it that way from now on.
+  #cameWith(tv) {
+    const w = this.#boxWokeAt;
+    if (!w || w.id === tv.id || Date.now() - w.at > (this.cameWithMs ?? 20_000)) return;
+    if (!tv.credentials || WAKE_BOXES.has(tv.brand) || tv.wakeVia) return;
+    const key = `${tv.id}|${w.id}`;
+    if (this.#offered.has(key) || !this.tvs.some((t) => t.id === w.id)) return;
+    this.#offered.add(key);
+    this.emit('wake-via', { id: tv.id, via: w.id });
   }
 
   // Any button on a sleeping TV wakes it first, then does the press, so
@@ -476,6 +532,8 @@ export class Hub extends EventEmitter {
   #waking = new Map();
   async wakeFor(id) {
     const tv = this.get(id);
+    // Any press on a box can bring its TV on with it (CEC): watch for that.
+    if (WAKE_BOXES.has(tv.brand)) this.#boxWokeAt = { id, at: Date.now() };
     const view = this.view(tv);
     const st = view.state;
     if (!tv.credentials || st?.online && (st.power === 'on' || st.power === 'unknown')) return false;
@@ -516,7 +574,7 @@ export class Hub extends EventEmitter {
             reseek.shift();
             this.seek({ force: true });
           }
-          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
+          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote${this.#viaBox(tv) || !this.tvs.some((t) => WAKE_BOXES.has(t.brand)) ? '' : ', or pick the Roku or Apple TV plugged into it in TV settings → Turns on with'}.`);
           // A TV coming up gets a fresh connection attempt every few seconds,
           // not the driver's next backoff tick.
           if (Date.now() - kicked > (this.kickEveryMs ?? 5000) && !this.view(this.get(id)).state?.online) {

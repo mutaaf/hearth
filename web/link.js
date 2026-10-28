@@ -22,7 +22,7 @@ function names(ids, getTv) {
   return `${list.length} TVs`;
 }
 
-export function createLink({ getTv, current = () => null, onFix = () => {}, onChange = () => {}, feedback = () => {}, track = () => {} }) {
+export function createLink({ getTv, current = () => null, onFix = () => {}, onWakeVia = () => {}, onChange = () => {}, feedback = () => {}, track = () => {} }) {
   const seeking = new Set();
   const moved = new Map(); // id → when
   let el = null;
@@ -52,6 +52,7 @@ export function createLink({ getTv, current = () => null, onFix = () => {}, onCh
       const b = e.target.closest('[data-link]');
       if (!b) return;
       if (b.dataset.link === 'fix') onFix(b.dataset.tv);
+      if (b.dataset.link === 'wake-via') onWakeVia(b.dataset.tv, b.dataset.via);
       hide(0);
     });
     return el;
@@ -167,6 +168,23 @@ export function createLink({ getTv, current = () => null, onFix = () => {}, onCh
           sky: ['hearth-flame', 'ember', 0.35],
           for: here ? 7000 : 3600,
         });
+      });
+    },
+
+    // hub 'wake-via': a quiet TV came on right after Hearth woke a box, so the
+    // box is probably on its HDMI. Offer to wake the TV through it.
+    wakeVia(info) {
+      const tv = getTv(info?.id);
+      const box = getTv(info?.via);
+      if (!tv || !box || tv.wakeVia) return;
+      track('wake_via_offer', { brand: tv.brand, box: box.brand });
+      show({
+        kind: 'found',
+        title: `${tv.name} came on with ${box.name}`,
+        sub: `Wake it through ${box.name} from now on? Handy when it won’t wake on its own.`,
+        actions: `<button type="button" class="netlink-btn" data-link="wake-via" data-tv="${esc(tv.id)}" data-via="${esc(box.id)}">Yes</button>`,
+        sky: ['hearth-tv', 'ember', 0.6],
+        for: 12000,
       });
     },
 

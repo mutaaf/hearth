@@ -466,6 +466,7 @@
       var t = find(m[1]);
       if (body.name && body.name.trim()) t.name = body.name.trim();
       if (body.room != null) t.room = String(body.room).trim();
+      if (body.wakeVia !== undefined) t.wakeVia = body.wakeVia || null;
       emit('tv', t);
       return t;
     }],
@@ -690,6 +691,7 @@
   }
 
   window.HearthDemo = {
+    emit: emit, // for checking event-driven UI by hand (console)
     api: function (method, path, body) {
       for (var i = 0; i < routes.length; i++) {
         var m = path.match(routes[i][1]);
