@@ -207,6 +207,24 @@ test('a TV that never wakes fails the press with a plain answer', async () => {
   assert.match(body.error, /didn’t wake up/);
 });
 
+test('a TV that wakes somewhere else: the hub looks for it again while it comes up', async () => {
+  await hub.power(idOf('Off'), true);
+  await new Promise((r) => setTimeout(r, 40));
+  reset();
+  const drv = hub.driver(idOf('Off'));
+  const real = drv.powerOn;
+  drv.powerOn = async () => {};
+  const seeks = [];
+  const real2 = hub.seek.bind(hub);
+  hub.seek = (o) => (seeks.push(o?.force ?? false), false);
+  Object.assign(hub, { wakeMs: 120, reseekMs: [30, 60] });
+  await call('POST', `/api/tvs/${idOf('Off')}/key`, { key: 'ok' });
+  Object.assign(hub, { wakeMs: 1000, reseekMs: undefined });
+  drv.powerOn = real;
+  hub.seek = real2;
+  assert.deepEqual(seeks, [false, true, true], 'once before the wake, then twice (unthrottled) after');
+});
+
 test('a TV switched on by hand while its driver waits out a backoff: a press reconnects, nothing toggles power', async () => {
   reset();
   await hub.power(idOf('Off'), true); // forget earlier switch-offs

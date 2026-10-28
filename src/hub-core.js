@@ -268,8 +268,8 @@ export class Hub extends EventEmitter {
   // when that look is done (found: followed to a new address).
   #soughtAt = 0;
   #seekWanted = null;
-  seek() {
-    if (Date.now() - this.#soughtAt < (this.seekGapMs ?? 20_000)) return false;
+  seek({ force = false } = {}) {
+    if (!force && Date.now() - this.#soughtAt < (this.seekGapMs ?? 20_000)) return false;
     const quiet = this.tvs.filter((t) => t.credentials && !this.#drivers.get(t.id)?.state?.online).map((t) => t.id);
     if (!quiet.length) return false;
     this.#soughtAt = Date.now();
@@ -504,10 +504,18 @@ export class Hub extends EventEmitter {
           this.seek();
         }
         await this.power(id, true);
-        const deadline = Date.now() + (this.wakeMs ?? 25_000);
+        const woke = Date.now();
+        const deadline = woke + (this.wakeMs ?? 25_000);
+        // A TV that wakes at a new address never answers at the old one:
+        // look again once its network is up (a few seconds after the wake).
+        const reseek = [...(this.reseekMs ?? [8000, 16_000])];
         let kicked = Date.now();
         for (;;) {
           if (awake()) break;
+          if (reseek.length && Date.now() - woke >= reseek[0]) {
+            reseek.shift();
+            this.seek({ force: true });
+          }
           if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
           // A TV coming up gets a fresh connection attempt every few seconds,
           // not the driver's next backoff tick.
