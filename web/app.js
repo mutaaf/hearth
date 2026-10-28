@@ -21,6 +21,7 @@ import { createHealth } from './health.js'; // health
 import { createEnergy } from './energy.js';
 import { createDoctor } from './doctor.js'; // doctor
 import { createLink } from './link.js';
+import { createWake } from './wake.js';
 import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -271,10 +272,18 @@ function renderFixBanner(t) {
   } else {
     const off = wentOff(t);
     $('#fixBannerTitle').textContent = off ? 'Switched off' : 'Not responding';
-    $('#fixBannerText').textContent = off ? (canWakeNow(t) ? 'Press any button and it wakes up. Still connected.' : 'Turn it on with its own remote. Still connected.') : 'Asleep, unplugged, or moved?';
-    btn.textContent = off ? 'Check it' : 'Fix it';
-    btn.dataset.doctor = 'fix';
-    delete btn.dataset.action;
+    $('#fixBannerText').textContent = off ? (canWakeNow(t) ? 'Press any button and it wakes up. Still connected.' : 'Turn it on with its own remote, or let your phone do it.') : 'Asleep, unplugged, or moved?';
+    if (off && !canWakeNow(t)) {
+      // Off, and the phone can't turn it on yet: the coach sets that up.
+      btn.textContent = 'Set up';
+      btn.removeAttribute('data-doctor');
+      btn.dataset.action = 'tv-wake';
+      btn.dataset.from = 'banner';
+    } else {
+      btn.textContent = off ? 'Check it' : 'Fix it';
+      btn.dataset.doctor = 'fix';
+      delete btn.dataset.action;
+    }
   }
 }
 
@@ -808,6 +817,7 @@ function sendKey(key, opts = {}) {
     return api('POST', `/tvs/${id}/key`, body).then(() => noteLatency(performance.now() - t0));
   }).catch((err) => {
     feedback('error');
+    if (/didn’t wake up/.test(err.message)) return link.wakeFailed(id);
     note(err.message, true);
   });
 }
@@ -824,6 +834,7 @@ async function power(id, on) {
     eggs.power(id);
   } catch (err) {
     feedback('error');
+    if (on && /didn’t wake up/.test(err.message)) return link.wakeFailed(id);
     note(err.message, true);
   }
 }
@@ -876,20 +887,19 @@ function openEdit(id = current) {
   $('#editRoom').value = t.room;
   $('#editMeta').textContent = [brandName(t.brand), t.model, t.ip].filter(Boolean).join(' · ');
   doctor.renderCodes($('#codesBox'), t); // doctor
-  renderWakeVia(t);
+  renderWakeRow(t);
   openSheet('#editSheet');
 }
 
-// "Turns on with": the box on this TV's HDMI that wakes it (HDMI-CEC).
-const WAKE_BOXES = new Set(['roku', 'appletv']);
-let wakeViaPicked;
-function renderWakeVia(t) {
-  const boxes = [...tvs.values()].filter((b) => b.id !== t.id && b.paired && WAKE_BOXES.has(b.brand));
-  wakeViaPicked = t.wakeVia ?? null;
-  $('#wakeVia').hidden = WAKE_BOXES.has(t.brand) || !boxes.length;
-  const chip = (id, label) => `<button type="button" class="chip${(id ?? null) === wakeViaPicked ? ' active' : ''}" data-press="up" data-wake-via="${esc(id ?? '')}">${esc(label)}</button>`;
-  $('#wakeViaPick').innerHTML = chip(null, 'Itself') + boxes.map((b) => chip(b.id, b.name)).join('');
+// TV settings: one row that says how this TV turns on, and opens the coach.
+function renderWakeRow(t) {
+  const sub = $('#wakeRowSub');
+  sub.textContent = 'Checking…';
+  api('GET', `/tvs/${t.id}/wake-plan`)
+    .then((p) => editing === t.id && (sub.textContent = p.summary))
+    .catch(() => (sub.textContent = 'Set it up'));
 }
+
 
 function openSettings() {
   for (const card of document.querySelectorAll('[data-skin-pick]')) card.classList.toggle('active', card.dataset.skinPick === prefs.skin);
@@ -956,12 +966,24 @@ const doctor = createDoctor({
   onGuide: (t, symptom) => guide.open({ tvId: t.id, device: { brand: t.brand, model: t.model }, name: t.name, symptom }),
 });
 
+const wake = createWake({
+  api,
+  getTv: (id) => tvs.get(id),
+  feedback,
+  track,
+  note,
+  onSaved: (tv) => {
+    tvs.set(tv.id, tv);
+    current ? renderRemote() : render();
+  },
+});
 link = createLink({
   getTv: (id) => tvs.get(id),
   current: () => current,
   feedback,
   track,
   onFix: (id) => doctor.handle({ dataset: { doctor: 'fix', tv: id } }),
+  onWake: (id) => wake.open(id, { from: 'failed' }),
   onWakeVia: async (id, via) => {
     try {
       const tv = await api('PATCH', `/tvs/${id}`, { wakeVia: via });
@@ -1253,6 +1275,12 @@ function onPress(el, info) {
     case 'edit':
       haptic('tap');
       return openEdit();
+    case 'tv-wake': {
+      haptic('tap');
+      const id = el.dataset.tv || editing || current;
+      if ($('#editSheet').open) $('#editSheet').close();
+      return wake.open(id, { from: el.dataset.from || 'settings' });
+    }
     case 'pair':
       return setup.open({ tvId: current, candidate: tvs.get(current) });
     case 'power': {
@@ -1363,20 +1391,10 @@ function wire() {
     if (msg) say(msg).then(() => ($('#sayInput').value = ''));
   });
 
-  $('#wakeViaPick').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-wake-via]');
-    if (!b) return;
-    wakeViaPicked = b.dataset.wakeVia || null;
-    for (const c of $('#wakeViaPick').children) c.classList.toggle('active', c === b);
-    feedback('tick');
-  });
-
   $('#editForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const was = tvs.get(editing)?.wakeVia ?? null;
-      const tv = await api('PATCH', `/tvs/${editing}`, { name: $('#editName').value, room: $('#editRoom').value, ...(wakeViaPicked !== was ? { wakeVia: wakeViaPicked } : {}) });
-      if (wakeViaPicked !== was) track('wake_via_set', { how: 'settings', on: Boolean(wakeViaPicked) });
+      const tv = await api('PATCH', `/tvs/${editing}`, { name: $('#editName').value, room: $('#editRoom').value });
       tvs.set(tv.id, tv);
       feedback('success');
       $('#editSheet').close();

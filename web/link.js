@@ -22,7 +22,7 @@ function names(ids, getTv) {
   return `${list.length} TVs`;
 }
 
-export function createLink({ getTv, current = () => null, onFix = () => {}, onWakeVia = () => {}, onChange = () => {}, feedback = () => {}, track = () => {} }) {
+export function createLink({ getTv, current = () => null, onFix = () => {}, onWake = () => {}, onWakeVia = () => {}, onChange = () => {}, feedback = () => {}, track = () => {} }) {
   const seeking = new Set();
   const moved = new Map(); // id → when
   let el = null;
@@ -53,6 +53,7 @@ export function createLink({ getTv, current = () => null, onFix = () => {}, onWa
       if (!b) return;
       if (b.dataset.link === 'fix') onFix(b.dataset.tv);
       if (b.dataset.link === 'wake-via') onWakeVia(b.dataset.tv, b.dataset.via);
+      if (b.dataset.link === 'wake') onWake(b.dataset.tv);
       hide(0);
     });
     return el;
@@ -168,6 +169,22 @@ export function createLink({ getTv, current = () => null, onFix = () => {}, onWa
           sky: ['hearth-flame', 'ember', 0.35],
           for: here ? 7000 : 3600,
         });
+      });
+    },
+
+    // A press that had to wake the TV, and it never came on: offer the
+    // coach, which finds a way that works for this TV and tests it.
+    wakeFailed(id) {
+      const tv = getTv(id);
+      if (!tv) return;
+      track('link_wake_failed', { brand: tv.brand });
+      show({
+        kind: 'missing',
+        title: `${tv.name} didn’t turn on`,
+        sub: 'Let’s find a way your phone can turn it on. It takes a minute.',
+        actions: `<button type="button" class="netlink-btn" data-link="wake" data-tv="${esc(tv.id)}">Set up</button>`,
+        sky: ['hearth-flame', 'ember', 0.35],
+        for: 9000,
       });
     },
 

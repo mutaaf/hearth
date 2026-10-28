@@ -8,6 +8,7 @@ import { runDoctor, runDoctorAll } from './doctor.js';
 import { badRequest, HearthError } from './errors.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { deviceGuide } from './devices.js';
+import { wakePlan } from './wake-plan.js';
 import { iconData } from './icons.js';
 import { log } from './log.js';
 
@@ -79,6 +80,9 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
       return hub.wakeFor(tv).then(() => hub.driver(tv).key(body.key, { hold })).then(() => settled(tv));
     }),
     r('POST', `/tvs/${id}/power`, ([tv], body) => hub.power(tv, Boolean(body.on))),
+    // ── the wake coach: how this TV can be turned on from the phone, and a live test ──
+    r('GET', `/tvs/${id}/wake-plan`, ([tv]) => wakePlan(hub.view(hub.get(tv)), hub.list())),
+    r('POST', `/tvs/${id}/wake-test`, ([tv], body) => hub.wakeTest(tv, { via: body.via ? String(body.via) : undefined })),
     r('POST', `/tvs/${id}/volume`, ([tv], body) => {
       if (!Number.isFinite(body.level)) throw badRequest('level must be a number 0–100');
       return hub.wakeFor(tv).then(() => hub.driver(tv).setVolume(body.level)).then(() => settled(tv));

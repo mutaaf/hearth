@@ -144,7 +144,7 @@ function samsungGuide({ known, year }) {
   // network can wake them. A box on HDMI with CEC can.
   const noWake = year === 2016;
   const keepReachable = noWake
-    ? [{ title: 'Anynet+ (HDMI-CEC)', wake: false, path: `2016 Samsungs don’t have Power On with Mobile, and they leave the Wi-Fi about a minute after switching off, so no phone can turn them on. Plug a Roku or Apple TV into it, turn on ${menu.anynet}, and pick the box in Hearth under TV settings → Turns on with: the TV comes on with the box.` }]
+    ? [{ title: 'Anynet+ (HDMI-CEC)', wake: false, path: `2016 Samsungs don’t have Power On with Mobile, and they leave the Wi-Fi about a minute after switching off, so no phone can turn them on. Plug a Roku or Apple TV into it, turn on ${menu.anynet}, and then in Hearth open TV settings → Turn on from your phone: the TV comes on with the box.` }]
     : [{ title: 'Power On with Mobile', path: menu.powerOnMobile + (legacy ? ' (if your TV has it)' : '') }];
   if (year == null || year >= 2020) keepReachable.push({ title: 'IP Remote', path: `${menu.ipRemote} (if your TV has it)` });
   if (legacy && !noWake) keepReachable.push({ title: 'Network cable', path: 'Plug in a network cable if you can: 2016-17 sets wake from the phone far more reliably on a cable than on Wi-Fi.' });
@@ -159,7 +159,7 @@ function samsungGuide({ known, year }) {
     { when: 'not-found', fix: `Turn the TV on with its own remote and check it’s on the same Wi-Fi as your phone: ${menu.status}.` },
     { when: 'drops', fix: 'Give the TV a fixed address in your router (a DHCP reservation), or plug in a network cable.' },
     noWake
-      ? { when: 'wont-wake', fix: `2016 Samsungs can’t be woken over the network: they leave it about a minute after switching off. Use the TV remote, or a streaming box on HDMI with ${menu.anynet} (then TV settings → Turns on with, in Hearth).` }
+      ? { when: 'wont-wake', fix: `2016 Samsungs can’t be woken over the network: they leave it about a minute after switching off. Use the TV remote, or a streaming box on HDMI with ${menu.anynet} (then TV settings → Turn on from your phone, in Hearth).` }
       : legacy
       ? { when: 'wont-wake', fix: `This set leaves the network about a minute after it’s switched off, so the phone often can’t reach it. Try ${menu.powerOnMobile} if it’s listed, and a network cable; otherwise use the TV remote to switch it on.` }
       : { when: 'wont-wake', fix: `Switch on ${menu.powerOnMobile}. A network cable makes waking more reliable than Wi-Fi.` },

@@ -10,6 +10,7 @@ import { anonymise, modelYear, rate } from './health.js';
 import { Insights } from './llm.js';
 import { instrument, Telemetry } from './telemetry.js';
 import { billRequest, Energy } from './energy.js';
+import { WAKE_BOXES } from './wake-plan.js';
 
 
 // Ports a TV listens on even before it's paired: enough to tell "on" from
@@ -22,9 +23,6 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 // that only runs on a computer. src/hub.js adds every brand and the Apple TV
 // bridge for the home server. The HTTP server is
 // a thin layer over it; tests drive it directly with fake drivers.
-// Boxes that turn their TV on over HDMI-CEC when they wake.
-const WAKE_BOXES = new Set(['roku', 'appletv']);
-
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
@@ -526,6 +524,48 @@ export class Hub extends EventEmitter {
     this.emit('wake-via', { id: tv.id, via: w.id });
   }
 
+  // The wake coach's "Test it": wake the TV the way the person just set up
+  // (through `via`, a box, without saving it yet), and watch for it to come
+  // on. → { ok, ms } or { ok: false, reason: 'already-on'|'no-answer' }
+  async wakeTest(id, { via } = {}) {
+    const tv = this.get(id);
+    const awake = () => {
+      const s = this.view(this.get(id)).state;
+      return Boolean(s?.online && (s.power === 'on' || s.power === 'unknown'));
+    };
+    if (awake()) return { ok: false, reason: 'already-on' };
+    let box = null;
+    if (via) {
+      box = this.tvs.find((t) => t.id === via);
+      if (!box || box === tv || !WAKE_BOXES.has(box.brand)) throw badRequest('Pick a Roku or Apple TV that’s plugged into this TV');
+    }
+    this.#offAt.delete(id);
+    const started = Date.now();
+    const own = this.driver(id).powerOn();
+    const tries = box ? [own, this.#wakeBox(box)] : [own];
+    if (box) this.#boxWokeAt = { id: box.id, at: started };
+    await Promise.allSettled(tries);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const reseek = [...(this.reseekMs ?? [8000, 16_000])];
+    let kicked = started;
+    while (Date.now() - started < (this.wakeTestMs ?? 40_000)) {
+      if (awake()) {
+        this.settle(id);
+        return { ok: true, ms: Date.now() - started };
+      }
+      if (reseek.length && Date.now() - started >= reseek[0]) {
+        reseek.shift();
+        this.seek({ force: true });
+      }
+      if (Date.now() - kicked > (this.kickEveryMs ?? 5000)) {
+        kicked = Date.now();
+        this.kick(id, { force: true });
+      }
+      await sleep(this.pollMs ?? 500);
+    }
+    return { ok: false, reason: 'no-answer' };
+  }
+
   // Any button on a sleeping TV wakes it first, then does the press, so
   // nobody has to find the power button. Presses that arrive while it's
   // waking share one wake. → true if it woke the TV.
@@ -574,7 +614,7 @@ export class Hub extends EventEmitter {
             reseek.shift();
             this.seek({ force: true });
           }
-          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote${this.#viaBox(tv) || !this.tvs.some((t) => WAKE_BOXES.has(t.brand)) ? '' : ', or pick the Roku or Apple TV plugged into it in TV settings → Turns on with'}.`);
+          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
           // A TV coming up gets a fresh connection attempt every few seconds,
           // not the driver's next backoff tick.
           if (Date.now() - kicked > (this.kickEveryMs ?? 5000) && !this.view(this.get(id)).state?.online) {

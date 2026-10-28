@@ -403,6 +403,42 @@
       var brand = (t && t.brand) || (body && body.device && body.device.brand) || 'lg';
       return wait(500).then(function () { return { guide: demoGuide(brand, (t && t.model) || (body && body.device && body.device.model) || ''), ai: null }; });
     }],
+    // ── the wake coach (src/wake-plan.js, canned): Wi-Fi for the TVs, a box for the rest ──
+    ['GET', /^\/tvs\/([\w-]+)\/wake-plan$/, function (m) {
+      var t = find(m[1]);
+      var boxes = tvs.filter(function (b) { return b.id !== t.id && (b.brand === 'roku' || b.brand === 'appletv'); })
+        .map(function (b) { return { id: b.id, name: b.name, brand: b.brand, room: b.room }; });
+      var isBox = t.brand === 'roku' || t.brand === 'appletv';
+      var lg = t.brand === 'lg';
+      var net = t.brand === 'androidtv'
+        ? { possible: false, why: 'Google TVs only turn on from their own remote or Google Home, not from other apps.' }
+        : { possible: true, auto: lg || isBox, why: lg ? 'Hearth already switched on its “Turn on via Wi-Fi” setting.' : isBox ? 'It wakes over the network by itself.' : 'One setting on the TV lets your phone wake it.',
+            steps: lg || isBox ? [] : [{ title: 'Power On with Mobile', path: 'Settings → General → Network → Expert Settings → Power On with Mobile: On' }, { title: 'IP Remote', path: 'Settings → General → Network → Expert Settings → IP Remote: Enable (if your TV has it)' }] };
+      var cec = { samsung: ['Anynet+ (HDMI-CEC)', 'Settings → General → External Device Manager → Anynet+ (HDMI-CEC): On'], lg: ['SIMPLINK (HDMI-CEC)', 'Settings → General → Devices → HDMI Settings → SIMPLINK (HDMI-CEC): On'] }[t.brand] || ['HDMI-CEC', 'Settings → Channels & Inputs → HDMI-CEC: On'];
+      var box = isBox ? { possible: false, why: 'This is the box itself.' } : {
+        possible: boxes.length > 0, why: 'A box plugged into the TV turns it on when the box wakes.', boxes: boxes,
+        tvStep: { title: cec[0], path: cec[1] }, via: t.wakeVia || null, note: 'Waking through a box switches the TV to that box’s input.',
+        boxSteps: { roku: [{ title: '1-touch play', path: 'On the Roku: Settings → System → Control other devices (CEC) → 1-touch play: On' }, { title: 'Wall power', path: 'Plug the Roku’s power into a wall socket, not the TV’s USB port, so it’s awake when the TV is off.' }],
+          appletv: [{ title: 'Control TVs', path: 'On the Apple TV: Settings → Remotes and Devices → Control TVs and Receivers: On' }] } };
+      var way = t.wakeVia ? 'box' : net.possible ? 'network' : box.possible ? 'box' : 'remote';
+      var via = t.wakeVia && boxes.filter(function (b) { return b.id === t.wakeVia; })[0];
+      return wait(700).then(function () {
+        return { id: t.id, name: t.name, family: { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' }[t.brand], model: t.model, way: way,
+          headline: way === 'network' ? (net.auto ? t.name + ' is ready to wake from your phone' : t.name + ' can wake from your phone') : way === 'box' ? t.name + ' can turn on through a box' : t.name + ' only turns on with its own remote',
+          why: way === 'network' ? net.why : way === 'box' ? box.why : net.why, network: net, box: box,
+          summary: via ? 'Through ' + via.name : way === 'network' ? (net.auto ? 'From your phone' : 'From your phone, after Power On with Mobile') : way === 'box' ? 'Needs a box: tap to set up' : 'Its own remote only' };
+      });
+    }],
+    ['POST', /^\/tvs\/([\w-]+)\/wake-test$/, function (m) {
+      var t = find(m[1]);
+      t.state = Object.assign({}, t.state, { online: false, power: 'off' });
+      emit('tv', t);
+      return wait(3200).then(function () {
+        t.state = Object.assign({}, t.state, { online: true, power: 'on' });
+        emit('tv', t);
+        return { ok: true, ms: 3200 };
+      });
+    }],
     ['POST', /^\/support$/, function () { return wait(700).then(function () { return { id: 'demo' + Math.random().toString(36).slice(2, 8) }; }); }],
     ['GET', /^\/support\/([a-z0-9]+)$/, function (m) { return { id: m[1], status: 'new', resolution: null }; }],
     ['GET', /^\/info$/, function () { return { name: 'hearth', friendlyUrl: null }; }],
