@@ -111,6 +111,8 @@ class FakeTv extends Driver {
     return INSTALLED[this.tv.brand];
   }
   async launch(id) { log.push([this.tv.name, 'launch', id]); }
+  // `handOn`: someone switched it on with its own remote; a reconnect finds it.
+  async reconnect() { log.push([this.tv.name, 'reconnect']); if (this.handOn) this.setState({ online: true, power: 'on' }); }
   refresh() { this.refreshes++; }
   setActive(a) { this.active = a; }
 }
@@ -122,7 +124,7 @@ let base;
 before(async () => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'hearth-catalog-'));
   hub = await new Hub({ store: new Store(dir), drivers: { lg: FakeTv, samsung: FakeTv, roku: FakeTv, androidtv: FakeTv }, probeFn: async () => null }).init();
-  Object.assign(hub, { pollMs: 10, wakeMs: 1000, wakeSettleMs: 0, settleDelays: [5] });
+  Object.assign(hub, { pollMs: 10, wakeMs: 1000, wakeSettleMs: 0, settleDelays: [5], lookFirstMs: 40, kickEveryMs: 100, kickGapMs: 0 });
   for (const [brand, ip, name] of [['lg', '10.0.0.5', 'Living'], ['samsung', '10.0.0.6', 'Study'], ['roku', '10.0.0.7', 'Off'], ['androidtv', '10.0.0.8', 'Upstairs']]) {
     const tv = await hub.add({ ip, brand, name, macs: ['aa:bb:cc:dd:ee:0' + ip.slice(-1)] });
     await hub.pair(tv.id);
@@ -180,7 +182,7 @@ test('any button on a sleeping TV wakes it first, then does the press; presses w
   const id = idOf('Off');
   const [a, b] = await Promise.all([call('POST', `/api/tvs/${id}/key`, { key: 'ok' }), call('POST', `/api/tvs/${id}/key`, { key: 'down' })]);
   assert.deepEqual([a.status, b.status], [200, 200]);
-  assert.deepEqual(log.map((l) => l[1]), ['on', 'key', 'key'], 'one wake, then both presses');
+  assert.deepEqual(log.map((l) => l[1]).filter((v) => v !== 'reconnect'), ['on', 'key', 'key'], 'one wake, then both presses');
   log.length = 0;
   await call('POST', `/api/tvs/${idOf('Living')}/key`, { key: 'ok' });
   assert.deepEqual(log.map((l) => l[1]), ['key'], 'an awake TV is never woken');
@@ -203,6 +205,39 @@ test('a TV that never wakes fails the press with a plain answer', async () => {
   drv.powerOn = real;
   assert.equal(status, 503);
   assert.match(body.error, /didn’t wake up/);
+});
+
+test('a TV switched on by hand while its driver waits out a backoff: a press reconnects, nothing toggles power', async () => {
+  reset();
+  await hub.power(idOf('Off'), true); // forget earlier switch-offs
+  await new Promise((r) => setTimeout(r, 40));
+  reset();
+  const drv = hub.driver(idOf('Off'));
+  drv.handOn = true;
+  try {
+    const { status } = await call('POST', `/api/tvs/${idOf('Off')}/key`, { key: 'ok' });
+    assert.equal(status, 200);
+    assert.deepEqual(log.map((l) => l[1]), ['reconnect', 'key'], 'reconnected, no Wake-on-LAN or power key');
+  } finally {
+    drv.handOn = false;
+  }
+});
+
+test('while Hearth is open, an offline TV whose port opens is reconnected at once', async () => {
+  reset();
+  const drv = hub.driver(idOf('Off'));
+  drv.handOn = true;
+  Object.assign(hub, { lookoutMs: 20, portOpenFn: async () => true });
+  hub.setViewers(1);
+  try {
+    for (let i = 0; i < 50 && !drv.state.online; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(drv.state.online, true);
+    assert.ok(log.some((l) => l[0] === 'Off' && l[1] === 'reconnect'));
+  } finally {
+    hub.setViewers(0);
+    drv.handOn = false;
+    delete hub.portOpenFn;
+  }
 });
 
 test('launch: Google TV explains apps Cast can’t open; junk is rejected', async () => {

@@ -57,6 +57,7 @@ export class Hub extends EventEmitter {
     clearInterval(this.#discoveryTimer);
     for (const timers of this.#settleTimers.values()) timers.forEach(clearTimeout);
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
+    this.#stopLookout();
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
     await this.telemetry.flush();
     await this.onClose();
@@ -430,14 +431,33 @@ export class Hub extends EventEmitter {
     // Samsung takes ~40 s) must not switch it straight back on.
     if (Date.now() - (this.#offAt.get(id) ?? 0) < 45_000) return false;
     if (!this.#waking.has(id)) {
+      const awake = () => {
+        const s = this.view(this.get(id)).state;
+        return Boolean(s?.online && (s.power === 'on' || s.power === 'unknown'));
+      };
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const job = (async () => {
+        // It may already be on (switched on with its own remote) while the
+        // driver sits out its backoff (up to 60 s): connect now and look
+        // before sending anything that could toggle it.
+        if (!st?.online) {
+          this.kick(id, { force: true });
+          for (let t = 0; t < (this.lookFirstMs ?? 2500) && !awake(); t += this.pollMs ?? 500) await sleep(this.pollMs ?? 500);
+          if (awake()) return;
+        }
         await this.power(id, true);
         const deadline = Date.now() + (this.wakeMs ?? 25_000);
+        let kicked = Date.now();
         for (;;) {
-          const s = this.view(this.get(id)).state;
-          if (s?.online && (s.power === 'on' || s.power === 'unknown')) break;
+          if (awake()) break;
           if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
-          await new Promise((r) => setTimeout(r, this.pollMs ?? 500));
+          // A TV coming up gets a fresh connection attempt every few seconds,
+          // not the driver's next backoff tick.
+          if (Date.now() - kicked > (this.kickEveryMs ?? 5000) && !this.view(this.get(id)).state?.online) {
+            kicked = Date.now();
+            this.kick(id, { force: true });
+          }
+          await sleep(this.pollMs ?? 500);
         }
         // Freshly awake sets need a moment before they take keys.
         await new Promise((r) => setTimeout(r, this.wakeSettleMs ?? 1500));
@@ -494,6 +514,49 @@ export class Hub extends EventEmitter {
     const now = this.viewers > 0;
     if (was === now) return;
     for (const d of this.#drivers.values()) d.setActive?.(now);
+    if (now) this.#startLookout();
+    else this.#stopLookout();
+  }
+
+  // A paired TV that's off drops off the network, and its driver retries on a
+  // backoff that grows to 60 s. So while someone has Hearth open, knock on
+  // each offline TV's control port every few seconds and reconnect the moment
+  // it answers: a TV switched on with its own remote is back in seconds.
+  #lookout = null;
+  #looking = false;
+  #kicked = new Map();
+  #startLookout(everyMs = this.lookoutMs ?? 4000) {
+    if (this.#lookout) return;
+    const tick = async () => {
+      if (this.#looking) return;
+      this.#looking = true;
+      try {
+        for (const tv of this.tvs) {
+          const d = this.#drivers.get(tv.id);
+          if (!tv.credentials || !d?.reconnect || d.state?.online) continue;
+          let up = false;
+          for (const port of REACH_PORTS[tv.brand] ?? []) if (!up) up = await (this.portOpenFn ?? portOpen)(tv.ip, port, 900);
+          if (up) this.kick(tv.id);
+        }
+      } finally {
+        this.#looking = false;
+      }
+    };
+    this.#lookout = setInterval(() => tick().catch(() => {}), everyMs);
+    this.#lookout.unref?.();
+  }
+  #stopLookout() {
+    clearInterval(this.#lookout);
+    this.#lookout = null;
+  }
+  // A fresh connection now (at most every 8 s per TV unless forced).
+  kick(id, { force = false } = {}) {
+    const t = Date.now();
+    if (!force && t - (this.#kicked.get(id) ?? 0) < (this.kickGapMs ?? 8000)) return;
+    this.#kicked.set(id, t);
+    Promise.resolve()
+      .then(() => this.#drivers.get(id)?.reconnect?.())
+      .catch(() => {});
   }
 
   // Installed apps per TV, cached: the launcher resolves "YouTube TV" → this

@@ -4,7 +4,7 @@
 // there. The server resolves each TV's own app id (src/catalog.js) and answers
 // per TV, so the ✓ / ✕ chips say exactly where it opened and why not.
 import { feedback, haptic } from './feel.js';
-import { brandSvg, hydrate, tvIconImg } from './icons.js';
+import { brandSvg, hydrate, storeIconImg, tvIconImg } from './icons.js';
 import { track } from './analytics.js';
 import { plain, quip } from './quips.js';
 
@@ -82,7 +82,7 @@ export function createLauncher({ api, note, getTvs, getCurrent, getSelected, isS
   function tile(app, { press, data, badge, missing, current, hold, label }) {
     return `<button type="button" class="app cat${missing ? ' missing' : ''}${current ? ' current' : ''}${hold ? ' hold' : ''}${busy === app.key ? ' busy' : ''}" data-press="${press}" ${data}="${esc(app.key)}" aria-label="${esc(label)}">
       ${hold ? '<span class="charge" aria-hidden="true"></span>' : ''}
-      <span class="app-icon cat-icon" style="--tint:${esc(app.color)};--fg:${ink(app.color)}">${brandSvg(app.key) || `<b data-len="${[...app.mark].length}">${esc(app.mark)}</b>`}${tvIcon(app)}</span>
+      <span class="app-icon cat-icon" style="--tint:${esc(app.color)};--fg:${ink(app.color)}">${brandSvg(app.key) || `<b data-len="${[...app.mark].length}">${esc(app.mark)}</b>`}${tvIcon(app)}${storeIconImg(app.title)}</span>
       <span>${esc(app.title)}</span>
       ${badge ? `<small class="cat-badge mono">${esc(badge)}</small>` : ''}
     </button>`;

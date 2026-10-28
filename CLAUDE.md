@@ -155,6 +155,17 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `screen` (screen, from, prev_s, brand/mode or tvs) comes from one MutationObserver in app.js watching `hidden`/`open`: the open overlay (#setup, #health, #energy, #sceneEditor) or dialog wins, else house/remote. New overlays: add them to `OVERLAYS`/`SHEETS`.
 - Others: `tap` (every `data-action`), `remote_tab`, `remote_mode`, `power`, `refresh`, `ui_error` (error notes), `scrolled` (house depth in 25 % steps, on leaving), `setting` (every savePrefs change), `launch_app`, `scene_run`, `setup_step`, `tour_start`/`tour_end`, `guide_open`, `support_report`.
 
+## Getting back to a TV (hub-core)
+
+- A TV that's been off drops off the network, and its driver's retries back off to 60 s. While someone has Hearth open (`setViewers` > 0) the hub's lookout knocks on every paired, offline TV's control port (`REACH_PORTS`) every 4 s and calls `driver.reconnect()` the moment one answers (`kick()`, at most every 8 s per TV).
+- `wakeFor()` first reconnects and looks (2.5 s) before sending anything that could toggle power, and keeps reconnecting every 5 s while it waits. Before this, a TV switched on with its own remote failed presses with "didn't wake up" until the driver's next backoff tick.
+
+## App icons at runtime
+
+- Worker `GET /hearth/api/app-icon?name=Netflix[&strict=1]` (src/worker/app-icon.js): Apple's public App Store search (no key), best match cached in D1 `app_icons` for 30 days (a real "no match" for 7), then a 302 to Apple's artwork CDN at 256 px. Only the app's name is sent.
+- Catalog tiles ask loosely (first result sharing a non-generic word: "Max" is "HBO Max"); apps a TV lists ask `strict` (App Store name before its ": tagline" must equal it). web/icons.js `storeIconImg()` stacks it on top of the TV's icon / vector / letter; a failed load removes itself.
+- The App Store search rejects `+` for spaces (use `%20`) and sometimes answers Cloudflare with an error or nothing: retried once, never cached.
+
 ## Toasts, copy and easter eggs
 
 - `note(message, kind)` in app.js: kind `true`/'error', 'success', 'wake' or info. It's a `popover="manual"` (top layer, so it shows over open `<dialog>` sheets), never blank (`plain()` in web/quips.js turns empty/"undefined" into a friendly line), lasts by length, flick up or tap to dismiss.

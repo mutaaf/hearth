@@ -1,3 +1,4 @@
+import { appIcon } from './app-icon.js';
 // hearth Worker: mutaafaziz.com/hearth/api/* — AI health insights for the
 // home app. Everything else under /hearth is static assets (dist/).
 //
@@ -54,6 +55,7 @@ const tablesReady = new WeakSet(); // per database (tests use several)
 async function ensureTables(db) {
   if (!db || tablesReady.has(db)) return;
   await db.prepare('CREATE TABLE IF NOT EXISTS ai_usage (bucket TEXT PRIMARY KEY, n INTEGER NOT NULL)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS app_icons (k TEXT PRIMARY KEY, url TEXT NOT NULL, at INTEGER NOT NULL)').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS device_guides (key TEXT PRIMARY KEY, guide TEXT NOT NULL, model TEXT, at INTEGER NOT NULL, hits INTEGER NOT NULL DEFAULT 0)').run();
   await db
     .prepare(
@@ -355,6 +357,7 @@ export async function handle(req, env) {
   const url = new URL(req.url);
   if (!url.pathname.startsWith('/hearth/api/')) return env.ASSETS ? env.ASSETS.fetch(req) : json({ error: 'not found' }, 404);
   const path = url.pathname.slice('/hearth/api'.length);
+  if (path === '/app-icon' && req.method === 'GET') return ensureTables(env.DB).then(() => appIcon(url, env));
   if (path === '/health' && req.method === 'GET') return json({ ok: true, edge: EDGE_MODELS[0], ai: !!env.AI });
   if (path === '/providers' && req.method === 'GET') {
     return json({
