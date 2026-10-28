@@ -159,6 +159,8 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 
 - A TV that's been off drops off the network, and its driver's retries back off to 60 s. While someone has Hearth open (`setViewers` > 0) the hub's lookout knocks on every paired, offline TV's control port (`REACH_PORTS`) every 4 s and calls `driver.reconnect()` the moment one answers (`kick()`, at most every 8 s per TV).
 - `wakeFor()` first reconnects and looks (2.5 s) before sending anything that could toggle power, and keeps reconnecting every 5 s while it waits. Before this, a TV switched on with its own remote failed presses with "didn't wake up" until the driver's next backoff tick.
+- Routers hand TVs new addresses overnight (seen 2026-10-28, an LG and a Samsung). `hub.seek()` (throttled to 20 s) looks for them now: called by `wakeFor()` when the first reconnect finds nothing, and by the lookout once per visit for each quiet TV. With a 'seek' listener (the app) it emits and the app sweeps the Wi-Fi; otherwise it scans.
+- `#heal` follows a TV by id or MAC, then by the OS neighbour table. Without any MAC (the phone can't read ARP, and a swept LG says nothing until paired), it falls back to the brand: a TV of that brand at an address none of ours has, while exactly one paired TV of that brand is offline, is that TV. A MAC-less TV seen while every paired TV of its brand is online goes into `#strangers` and is never matched, so an unpaired second LG can't take the paired one's place and show a pairing prompt.
 
 ## App icons at runtime
 

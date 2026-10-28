@@ -199,3 +199,56 @@ test('unpair forgets the key but keeps the TV', async () => {
   await hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('no MAC to go on: the one quiet paired TV of that brand is followed to its new address', async () => {
+  const { hub, dir } = await makeHub({
+    tvs: [living()],
+    // What the phone's sweep reports for an LG: no MAC, id from the address.
+    discover: async () => [{ id: 'lg-10006', brand: 'lg', name: 'LG TV', ip: '10.0.0.6', macs: [] }],
+  });
+  const found = await hub.scan();
+  assert.equal(hub.get('lg-aabbcc000001').ip, '10.0.0.6');
+  assert.equal(found[0].added, true, 'not offered as a new TV');
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('no MAC: a second LG seen while ours answers is a stranger, never ours', async () => {
+  let others = [{ id: 'lg-10009', brand: 'lg', name: 'LG TV', ip: '10.0.0.9', macs: [] }];
+  const { hub, dir } = await makeHub({ tvs: [living()], discover: async () => others });
+  const ours = made.at(-1);
+  ours.state = { ...ours.state, online: true };
+  await hub.scan();
+  assert.equal(hub.get('lg-aabbcc000001').ip, '10.0.0.5');
+  ours.state = { ...ours.state, online: false }; // ours switched off
+  await hub.scan();
+  assert.equal(hub.get('lg-aabbcc000001').ip, '10.0.0.5', 'still not moved onto the other set');
+  others = [];
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('no MAC, two quiet LGs: too close to call, nobody moves', async () => {
+  const kitchen = { ...living(), id: 'lg-aabbcc000002', name: 'Kitchen', ip: '10.0.0.7', macs: ['aa:bb:cc:00:00:02'] };
+  const { hub, dir } = await makeHub({ tvs: [living(), kitchen], discover: async () => [{ id: 'lg-10006', brand: 'lg', ip: '10.0.0.6', macs: [] }] });
+  await hub.scan();
+  assert.deepEqual(hub.list().map((t) => t.ip).sort(), ['10.0.0.5', '10.0.0.7']);
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('seek(): one look now, throttled; the app can take it over', async () => {
+  let scans = 0;
+  const { hub, dir } = await makeHub({ tvs: [living()], discover: async () => (scans++, []) });
+  assert.equal(hub.seek(), true);
+  assert.equal(hub.seek(), false, 'throttled');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(scans, 1);
+  hub.seekGapMs = 0;
+  let heard = 0;
+  hub.on('seek', () => heard++);
+  hub.seek();
+  assert.equal(heard, 1);
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});

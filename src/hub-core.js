@@ -199,6 +199,12 @@ export class Hub extends EventEmitter {
 
   async #scan() {
     const raw = await this.discoverFn();
+    // A MAC-less TV seen while every paired TV of its brand is answering is
+    // someone else (a second, unpaired set): never mistake it for one of ours.
+    for (const f of raw) {
+      const ours = this.tvs.filter((t) => t.brand === f.brand && t.credentials);
+      if (!f.macs?.length && ours.length && !ours.some((t) => t.ip === f.ip) && ours.every((t) => this.#drivers.get(t.id)?.state?.online)) this.#strangers.add(f.ip);
+    }
     for (const f of raw) await this.#heal(f).catch(() => null); // ── doctor
     const found = raw.map((tv) => ({
       ...tv,
@@ -213,6 +219,8 @@ export class Hub extends EventEmitter {
     return found;
   }
 
+  #strangers = new Set();
+
   // ── doctor: self-healing addresses ──
   // A known TV (same id, or any shared MAC) answering at a new IP has simply
   // been given a new address by the router: follow it.
@@ -224,10 +232,30 @@ export class Hub extends EventEmitter {
       const mac = await this.macForFn(f.ip);
       if (mac) known = this.tvs.find((t) => sameBrand(t) && t.macs?.includes(mac));
     }
+    // No MAC to go on (the phone can't read ARP, and an LG only says its MAC
+    // once paired): a TV of this brand at an address none of ours has, while
+    // exactly one paired TV of that brand has gone quiet, is that TV.
+    if (!known && !f.macs?.length && !this.#strangers.has(f.ip) && !this.tvs.some((t) => t.ip === f.ip)) {
+      const quiet = this.tvs.filter((t) => sameBrand(t) && t.credentials && !this.#drivers.get(t.id)?.state?.online);
+      if (quiet.length === 1) known = quiet[0];
+    }
     if (!known || known.ip === f.ip) return null;
     // Someone else already lives there: don't steal their address.
     if (this.tvs.some((t) => t !== known && t.ip === f.ip)) return null;
     return this.relocate(known.id, f.ip);
+  }
+
+  // A paired TV isn't answering where we left it: it may be off, or the
+  // router gave it a new address overnight. Look around for it now rather
+  // than at the next scheduled scan (at most every 20 s). The app listens for
+  // 'seek' to sweep the Wi-Fi; elsewhere a scan's multicast is enough.
+  #soughtAt = 0;
+  seek() {
+    if (Date.now() - this.#soughtAt < (this.seekGapMs ?? 20_000)) return false;
+    this.#soughtAt = Date.now();
+    if (this.listenerCount('seek')) this.emit('seek');
+    else this.scan().catch(() => {});
+    return true;
   }
 
   async relocate(id, ip) {
@@ -444,6 +472,9 @@ export class Hub extends EventEmitter {
           this.kick(id, { force: true });
           for (let t = 0; t < (this.lookFirstMs ?? 2500) && !awake(); t += this.pollMs ?? 500) await sleep(this.pollMs ?? 500);
           if (awake()) return;
+          // Not where we left it: look for a new address while it wakes
+          // (Wake-on-LAN goes by MAC, so it finds the TV either way).
+          this.seek();
         }
         await this.power(id, true);
         const deadline = Date.now() + (this.wakeMs ?? 25_000);
@@ -537,6 +568,11 @@ export class Hub extends EventEmitter {
           let up = false;
           for (const port of REACH_PORTS[tv.brand] ?? []) if (!up) up = await (this.portOpenFn ?? portOpen)(tv.ip, port, 900);
           if (up) this.kick(tv.id);
+          // Once per visit: maybe it moved rather than switched off.
+          else if (!this.#sought.has(tv.id)) {
+            this.#sought.add(tv.id);
+            this.seek();
+          }
         }
       } finally {
         this.#looking = false;
@@ -545,7 +581,9 @@ export class Hub extends EventEmitter {
     this.#lookout = setInterval(() => tick().catch(() => {}), everyMs);
     this.#lookout.unref?.();
   }
+  #sought = new Set();
   #stopLookout() {
+    this.#sought.clear();
     clearInterval(this.#lookout);
     this.#lookout = null;
   }
