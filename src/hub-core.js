@@ -198,14 +198,29 @@ export class Hub extends EventEmitter {
   }
 
   async #scan() {
-    const raw = await this.discoverFn();
+    // A look someone asked for (seek()): the UI shows it and its outcome.
+    const seeking = this.#seekWanted;
+    this.#seekWanted = null;
+    const healed = new Set();
+    const raw = await this.discoverFn().catch((err) => {
+      if (seeking) this.emit('looking', { on: false, tvs: seeking, found: [], missing: seeking });
+      throw err;
+    });
     // A MAC-less TV seen while every paired TV of its brand is answering is
     // someone else (a second, unpaired set): never mistake it for one of ours.
     for (const f of raw) {
       const ours = this.tvs.filter((t) => t.brand === f.brand && t.credentials);
       if (!f.macs?.length && ours.length && !ours.some((t) => t.ip === f.ip) && ours.every((t) => this.#drivers.get(t.id)?.state?.online)) this.#strangers.add(f.ip);
     }
-    for (const f of raw) await this.#heal(f).catch(() => null); // ── doctor
+    for (const f of raw) {
+      const h = await this.#heal(f).catch(() => null); // ── doctor
+      if (h) healed.add(h.id);
+    }
+    if (seeking) {
+      const found = seeking.filter((id) => healed.has(id));
+      const missing = seeking.filter((id) => !healed.has(id) && this.tvs.some((t) => t.id === id) && !this.#drivers.get(id)?.state?.online);
+      this.emit('looking', { on: false, tvs: seeking, found, missing });
+    }
     const found = raw.map((tv) => ({
       ...tv,
       added: this.tvs.some((t) => t.id === tv.id || t.ip === tv.ip),
@@ -249,12 +264,24 @@ export class Hub extends EventEmitter {
   // router gave it a new address overnight. Look around for it now rather
   // than at the next scheduled scan (at most every 20 s). The app listens for
   // 'seek' to sweep the Wi-Fi; elsewhere a scan's multicast is enough.
+  // 'looking' { on: true, tvs } now, and { on: false, tvs, found, missing }
+  // when that look is done (found: followed to a new address).
   #soughtAt = 0;
+  #seekWanted = null;
   seek() {
     if (Date.now() - this.#soughtAt < (this.seekGapMs ?? 20_000)) return false;
+    const quiet = this.tvs.filter((t) => t.credentials && !this.#drivers.get(t.id)?.state?.online).map((t) => t.id);
+    if (!quiet.length) return false;
     this.#soughtAt = Date.now();
+    this.#seekWanted = quiet;
+    this.emit('looking', { on: true, tvs: quiet });
     if (this.listenerCount('seek')) this.emit('seek');
-    else this.scan().catch(() => {});
+    // After any scan already running (it started before we asked).
+    else
+      Promise.resolve(this.#scanning)
+        .catch(() => {})
+        .then(() => this.scan())
+        .catch(() => {});
     return true;
   }
 

@@ -1,0 +1,88 @@
+/* The link (web/link.js): Hearth's connection, told the same way everywhere.
+   A night-glass capsule under the status bar, the same in every skin and
+   both modes, with an aurora inside: CSS curtains for the colour, the
+   aurora-field particles on top for the shape (a signal while it looks, a TV
+   when it finds one, an ember when it gives up). */
+
+.netlink {
+  --a1: #5ee7ff; --a2: #7a6bff; --a3: #3fd3a0;
+  position: fixed; inset: calc(max(10px, var(--safe-t)) + 2px) auto auto 50%; margin: 0; z-index: 94;
+  display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px;
+  width: min(calc(100% - 24px), 440px); min-height: 66px; padding: 10px 12px 10px 14px; box-sizing: border-box;
+  border: 0; border-radius: 26px; overflow: hidden; isolation: isolate;
+  color: #f4f6ff; background: #05070d;
+  box-shadow: 0 22px 50px -18px #000c, 0 0 0 1px #ffffff17 inset, 0 0 40px -18px var(--a1);
+  transform: translate(-50%, -150%) scale(.86, .7); opacity: 0; visibility: hidden;
+  transition: transform .6s cubic-bezier(.2, 1.3, .3, 1), opacity .25s, visibility 0s .6s, box-shadow .6s;
+}
+.netlink.show { transform: translate(-50%, 0) scale(1); opacity: 1; visibility: visible; transition-delay: 0s; }
+.netlink::backdrop { display: none; }
+.netlink[data-kind="found"] { --a1: #ffb35c; --a2: #ff6a2b; --a3: #ffe2a8; }
+.netlink[data-kind="missing"] { --a1: #ff8a5c; --a2: #6d5a8c; --a3: #2b3550; }
+
+/* The sky: two drifting curtains and a slow shimmer, under the particles. */
+.netlink-sky { position: absolute; inset: 0; z-index: -1; overflow: hidden; border-radius: inherit; }
+.netlink-sky::before, .netlink-sky::after {
+  content: ''; position: absolute; inset: -60% -20%;
+  background:
+    radial-gradient(40% 55% at 20% 60%, color-mix(in srgb, var(--a1) 55%, transparent), transparent 70%),
+    radial-gradient(35% 50% at 70% 40%, color-mix(in srgb, var(--a2) 60%, transparent), transparent 70%),
+    radial-gradient(30% 45% at 50% 90%, color-mix(in srgb, var(--a3) 40%, transparent), transparent 70%);
+  filter: blur(14px) saturate(1.3); opacity: .55;
+  animation: netlink-drift 9s ease-in-out infinite alternate;
+}
+.netlink-sky::after {
+  inset: -40% -40%; opacity: .35; mix-blend-mode: screen;
+  background: conic-gradient(from 90deg at 50% 50%, transparent, color-mix(in srgb, var(--a1) 50%, transparent), transparent 30%, color-mix(in srgb, var(--a2) 45%, transparent), transparent 60%);
+  animation: netlink-turn 14s linear infinite;
+}
+.netlink-field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; mix-blend-mode: screen; opacity: .95; }
+@keyframes netlink-drift { to { transform: translate3d(8%, -6%, 0) scale(1.15); } }
+@keyframes netlink-turn { to { transform: rotate(1turn); } }
+
+/* The glyph: Wi-Fi arcs that ripple outwards while it looks. */
+.netlink-glyph { position: relative; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #ffffff10; box-shadow: 0 0 0 1px #ffffff1f inset, 0 0 22px -6px var(--a1); }
+.netlink-glyph i { position: absolute; left: 50%; top: 58%; border: 2.4px solid transparent; border-top-color: var(--a1); border-radius: 50%; transform: translate(-50%, -50%); opacity: .35; }
+.netlink-glyph i:nth-child(1) { width: 12px; height: 12px; }
+.netlink-glyph i:nth-child(2) { width: 21px; height: 21px; }
+.netlink-glyph i:nth-child(3) { width: 30px; height: 30px; }
+.netlink-glyph b { position: absolute; left: 50%; top: 58%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px var(--a1); }
+.netlink[data-kind="looking"] .netlink-glyph i { animation: netlink-arc 1.5s ease-in-out infinite; }
+.netlink[data-kind="looking"] .netlink-glyph i:nth-child(2) { animation-delay: .18s; }
+.netlink[data-kind="looking"] .netlink-glyph i:nth-child(3) { animation-delay: .36s; }
+@keyframes netlink-arc { 0%, 100% { opacity: .25; } 40% { opacity: 1; filter: drop-shadow(0 0 4px var(--a1)); } }
+.netlink[data-kind="found"] .netlink-glyph i { opacity: 1; border-top-color: #fff3df; }
+.netlink[data-kind="found"] .netlink-glyph { animation: netlink-pop .6s cubic-bezier(.2, 1.6, .3, 1); }
+@keyframes netlink-pop { 40% { transform: scale(1.18); } }
+.netlink[data-kind="missing"] .netlink-glyph i { opacity: .18; }
+.netlink[data-kind="missing"] .netlink-glyph i:nth-child(1) { opacity: .7; }
+
+.netlink-body { min-width: 0; text-shadow: 0 1px 10px #000a; }
+.netlink-title { margin: 0; font: 700 16px/1.2 var(--display); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.netlink-sub { margin: 3px 0 0; font-size: 10.5px; line-height: 1.35; color: #d9def5cc; transition: opacity .22s, transform .22s; }
+.netlink-sub.swap { opacity: 0; transform: translateY(4px); }
+.netlink-actions:empty { display: none; }
+.netlink-btn {
+  appearance: none; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer;
+  font: 700 14px/1 var(--display); color: #160c06; background: linear-gradient(180deg, #fff, #ffd9bf);
+  box-shadow: 0 6px 18px -6px var(--a1);
+}
+
+/* Cards and the remote's header, while it looks or just after it moved. */
+.unit.seeking { position: relative; }
+.unit.seeking::after, .unit.moved::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(110deg, transparent 20%, #5ee7ff30 40%, #7a6bff38 50%, #3fd3a028 60%, transparent 80%) 0 0 / 250% 100%;
+  animation: netlink-sheen 1.8s linear infinite;
+}
+.unit.moved::after { background: radial-gradient(80% 120% at 50% 0%, #ffb35c33, transparent 70%); animation: netlink-glow 2.4s ease-in-out 3; }
+@keyframes netlink-sheen { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+@keyframes netlink-glow { 50% { opacity: .3; } }
+.unit.seeking .led { background: #5ee7ff !important; box-shadow: 0 0 10px #5ee7ff; animation: netlink-blink 1s ease-in-out infinite; }
+@keyframes netlink-blink { 50% { opacity: .35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .netlink, .netlink-sub { transition: opacity .2s; }
+  .netlink { transform: translate(-50%, 0); }
+  .netlink-sky::before, .netlink-sky::after, .netlink-glyph i, .unit.seeking::after, .unit.moved::after, .unit.seeking .led { animation: none !important; }
+}

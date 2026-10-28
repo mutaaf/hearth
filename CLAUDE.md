@@ -78,6 +78,7 @@ web/icons.js           app icons, best first: the TV's own icon for that app (Ro
                        api/tvs/:id/icon, the phone app gets GET /api/tvs/:id/icon-data), then web/brand-icons.js
                        (Simple Icons, CC0, `node scripts/brand-icons.mjs`; Prime Video, Disney+, Hulu, Peacock, ESPN,
                        Pluto TV and Sling aren't there at their owners' request), then a letter tile
+web/link.js|.css       the link: "Looking for <TV>" / "Found <TV>" capsule with an aurora-field inside (hub 'looking'/'healed')
 web/guide.js|.css      "we know your TV": the model's guide in setup (pairing screen), after a failed pair or doctor
                        run, and from TV settings; "Ask the AI"; "Still stuck? Send it to us" → POST /api/support;
                        checks its tickets every 6 h and says when one is `supported`
@@ -161,6 +162,9 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - `wakeFor()` first reconnects and looks (2.5 s) before sending anything that could toggle power, and keeps reconnecting every 5 s while it waits. Before this, a TV switched on with its own remote failed presses with "didn't wake up" until the driver's next backoff tick.
 - Routers hand TVs new addresses overnight (seen 2026-10-28, an LG and a Samsung). `hub.seek()` (throttled to 20 s) looks for them now: called by `wakeFor()` when the first reconnect finds nothing, and by the lookout once per visit for each quiet TV. With a 'seek' listener (the app) it emits and the app sweeps the Wi-Fi; otherwise it scans.
 - `#heal` follows a TV by id or MAC, then by the OS neighbour table. Without any MAC (the phone can't read ARP, and a swept LG says nothing until paired), it falls back to the brand: a TV of that brand at an address none of ours has, while exactly one paired TV of that brand is offline, is that TV. A MAC-less TV seen while every paired TV of its brand is online goes into `#strangers` and is never matched, so an unpaired second LG can't take the paired one's place and show a pairing prompt.
+
+- The UI shows it (web/link.js|.css, "the link"): hub `looking` {on, tvs} / {on:false, tvs, found, missing} and `healed` drive a night-glass capsule at the top (a popover, same in every skin and mode) with its own aurora-field inside (shape `hearth-signal` in ice while looking, `hearth-tv` in ember when found, `hearth-flame` when it gives up). Cards of TVs being looked for say "Looking…" with an aurora sheen; a moved TV's card says "New address · found" for 8 s; the remote's orb turns into the signal. A TV that's simply off gets a soft "isn't on the Wi-Fi, probably just off" for 3.6 s; Fix only for the TV whose remote is open. Analytics `link_looking`, `link_result`. Demo: the Basement doctor run plays it.
+- Its classes are `.netlink-*`: health.css already owns `.link` (underlined text).
 
 ## App icons at runtime
 

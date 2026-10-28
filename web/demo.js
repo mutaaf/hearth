@@ -303,13 +303,15 @@
     }).then(function () {
       if (moved) step('wake', 'Wake it up', 'warn', 'It didn’t wake up at the old address.');
       step('find', 'Look for it again', moved ? 'running' : 'ok', moved ? 'Searching the whole network…' : 'Not needed: same address as before');
-      return wait(moved ? 1400 : 200);
+      if (moved) emit('looking', { on: true, tvs: [t.id] }); // the link (web/link.js)
+      return wait(moved ? 2600 : 200);
     }).then(function () {
       if (moved) {
         movedOnce = true;
         t.ip = '192.168.1.61';
         step('find', 'Look for it again', 'ok', 'Found it at a new address: ' + t.ip, { from: oldIp, to: t.ip });
         emit('healed', { id: t.id, name: t.name, from: oldIp, to: t.ip, message: t.name + ' moved to ' + t.ip + ' — reconnected' });
+        emit('looking', { on: false, tvs: [t.id], found: [t.id], missing: [] });
         emit('tv', t);
       }
       step('reconnect', 'Reconnect', 'running', 'Restarting Hearth’s connection…');

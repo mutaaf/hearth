@@ -252,3 +252,31 @@ test('seek(): one look now, throttled; the app can take it over', async () => {
   await hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('seek(): says it is looking, then what it found (moved) or missed', async () => {
+  let at = '10.0.0.6';
+  const { hub, dir } = await makeHub({ tvs: [living()], discover: async () => (at ? [{ id: 'lg-x', brand: 'lg', ip: at, macs: [] }] : []) });
+  const seen = [];
+  hub.on('looking', (e) => seen.push(e));
+  hub.seek();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(seen, [
+    { on: true, tvs: ['lg-aabbcc000001'] },
+    { on: false, tvs: ['lg-aabbcc000001'], found: ['lg-aabbcc000001'], missing: [] },
+  ]);
+  at = null;
+  hub.seekGapMs = 0;
+  seen.length = 0;
+  hub.seek();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(seen.at(-1), { on: false, tvs: ['lg-aabbcc000001'], found: [], missing: ['lg-aabbcc000001'] });
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('seek(): nothing quiet, nothing to look for', async () => {
+  const { hub, dir } = await makeHub({ tvs: [] });
+  assert.equal(hub.seek(), false);
+  await hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});

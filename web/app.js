@@ -20,6 +20,7 @@ import { createLauncher } from './launcher.js';
 import { createHealth } from './health.js'; // health
 import { createEnergy } from './energy.js';
 import { createDoctor } from './doctor.js'; // doctor
+import { createLink } from './link.js';
 import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -163,7 +164,10 @@ const isOn = (t) => t.state?.online && t.state.power === 'on';
 const isUnknown = (t) => t.state?.online && t.state.power === 'unknown';
 const isStandby = (t) => t.state?.online && /standby|screen_off|screen_saver/.test(t.state.power);
 const ledClass = (t) => (!t.paired ? 'unpaired' : isOn(t) ? 'on' : isStandby(t) ? 'standby' : 'off');
+// The link (web/link.js): who Hearth is looking for, who just moved.
+let link = null;
 const statusWord = (t) =>
+  link?.isSeeking(t.id) && !t.state?.online ? 'Looking…' : link?.justMoved(t.id) && t.state?.online ? 'New address · found' :
   t.state?.unavailable ? 'Needs setup' : !t.paired ? (t.state?.online ? 'On · tap to connect' : 'Off · tap to connect') : isOn(t) ? 'On' : isUnknown(t) ? 'Ready' : t.state?.online ? 'Asleep' : 'Off';
 const BRANDS = { lg: 'LG', samsung: 'Samsung', roku: 'Roku', androidtv: 'Google TV', appletv: 'Apple TV' };
 const brandName = (b) => BRANDS[b] ?? 'TV';
@@ -214,7 +218,7 @@ function renderHouse() {
   units.classList.toggle('settled', !firstPaint);
   units.innerHTML = list
     .map((t, i) => `
-      <article data-brand="${esc(t.brand)}" class="unit ${ledClass(t)} act-${activityOf(t).kind} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
+      <article data-brand="${esc(t.brand)}" class="unit ${ledClass(t)} ${link?.isSeeking(t.id) && !t.state?.online ? 'seeking' : ''} ${link?.justMoved(t.id) ? 'moved' : ''} act-${activityOf(t).kind} ${bulk?.isSelected(t.id) ? 'selected' : ''}" style="--i:${i}" data-press="long" data-open="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.name)}, ${esc(statusWord(t))}. Long-press to select."${bulk?.selecting ? ` aria-pressed="${bulk.isSelected(t.id)}"` : ''}>
         <span class="sel-check" aria-hidden="true"></span>
         <div class="screen"><div class="scan"></div>${activityBadge(t)}<span class="now">${esc(appName(t))}</span></div>
         ${t.paired || t.canWake ? `<button type="button" class="quick" data-press="down" data-quick="${esc(t.id)}" aria-label="Power ${esc(t.name)}"><svg><use href="#i-power"/></svg></button>` : ''}
@@ -224,7 +228,7 @@ function renderHouse() {
           <span class="unit-state mono"><span class="led"></span>${esc(statusWord(t))}</span>
         </div>
         ${t.paired ? '' : '<span class="unit-pair mono">Tap to connect</span>'}
-        ${t.paired && !t.state?.online && !wentOff(t) ? `<button type="button" class="unit-fix" data-press="up" data-doctor="fix" data-tv="${esc(t.id)}">Fix</button>` : ''}
+        ${t.paired && !t.state?.online && !wentOff(t) && !link?.isSeeking(t.id) ? `<button type="button" class="unit-fix" data-press="up" data-doctor="fix" data-tv="${esc(t.id)}">Fix</button>` : ''}
       </article>`)
     .join('');
   if (list.length) firstPaint = false;
@@ -688,7 +692,7 @@ function mountOrb() {
   if (prefs.skin !== 'aurora' || orbField) return;
   const small = innerWidth < 500;
   orbField = makeField($('#orbField'), $('#orbStage'), {
-    shapes: ['mind', 'hearth-tv', 'hearth-remote', 'hearth-flame'], initial: 'mind', count: small ? 1800 : 3200, stars: 70, depth: 2.4,
+    shapes: ['mind', 'hearth-tv', 'hearth-remote', 'hearth-flame', 'hearth-signal'], initial: 'mind', count: small ? 1800 : 3200, stars: 70, depth: 2.4,
     // A halo just outside the orb's ring, so the particles frame the pad.
     radius: (w) => w * 0.66,
   });
@@ -702,14 +706,14 @@ function unmountOrb() {
 let mood = '';
 function orbMood(t) {
   if (!orbField) return;
-  const next = !t.paired ? 'hearth-tv' : !t.state?.online ? 'hearth-flame' : 'mind';
+  const next = !t.paired ? 'hearth-tv' : link?.isSeeking(t.id) && !t.state?.online ? 'hearth-signal' : !t.state?.online ? 'hearth-flame' : 'mind';
   if (next !== mood) {
     mood = next;
     orbField.setShape(next, { pin: true });
     orbField.set({ autonomy: next === 'hearth-flame' ? 0.35 : 1 });
   }
-  // Tint the particles with what's on: games neon, browsing ice.
-  const palette = t.state?.online ? paletteFor(activityOf(t).kind) : 'ember';
+  // Tint the particles with what's on: games neon, browsing ice; looking for it, ice.
+  const palette = t.state?.online ? paletteFor(activityOf(t).kind) : next === 'hearth-signal' ? 'ice' : 'ember';
   if (palette !== orbPalette) {
     orbPalette = palette;
     orbField.set({ palette });
@@ -940,6 +944,15 @@ const doctor = createDoctor({
   onGuide: (t, symptom) => guide.open({ tvId: t.id, device: { brand: t.brand, model: t.model }, name: t.name, symptom }),
 });
 
+link = createLink({
+  getTv: (id) => tvs.get(id),
+  current: () => current,
+  feedback,
+  track,
+  onFix: (id) => doctor.handle({ dataset: { doctor: 'fix', tv: id } }),
+  onChange: () => (current ? renderRemote() : render()),
+});
+
 // Forget the old key, then jump straight into the right pairing step.
 async function pairAgain(tv, how) {
   if (!tv) return;
@@ -1091,7 +1104,9 @@ function connectEvents() {
   });
   es.addEventListener('scene', (e) => scenes.onEvent('scene', JSON.parse(e.data)));
   es.addEventListener('doctor', (e) => doctor.onEvent(JSON.parse(e.data))); // doctor
-  es.addEventListener('healed', (e) => doctor.onHealed(JSON.parse(e.data)));
+  // A healed TV is told by the link (web/link.js), not a toast.
+  es.addEventListener('healed', (e) => link.healed(JSON.parse(e.data)));
+  es.addEventListener('looking', (e) => link.looking(JSON.parse(e.data)));
   es.addEventListener('scenes', (e) => scenes.onEvent('scenes', JSON.parse(e.data)));
   es.addEventListener('nearby', (e) => {
     const was = nearby.length;
