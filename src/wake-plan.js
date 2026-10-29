@@ -8,6 +8,7 @@
 //   remote:  nothing can; its own remote it is
 
 import { deviceGuide } from './devices.js';
+import { canBroadcast } from './wol.js';
 
 export const WAKE_BOXES = new Set(['roku', 'appletv']);
 
@@ -34,7 +35,8 @@ const CEC_ON_BOX = {
 const cut = (s) => String(s ?? '').replace(/: On$/, '');
 
 // view: hub.view(tv); all: hub.list(). → the plan the coach shows.
-export function wakePlan(view, all = []) {
+// broadcast: can this machine send Wake-on-LAN at all (wol.js).
+export function wakePlan(view, all = [], { broadcast = canBroadcast() } = {}) {
   const guide = deviceGuide({ brand: view.brand, model: view.model });
   const name = view.name || 'This TV';
   const boxes = all.filter((b) => b.id !== view.id && b.paired && WAKE_BOXES.has(b.brand)).map((b) => ({ id: b.id, name: b.name, brand: b.brand, room: b.room ?? '' }));
@@ -47,6 +49,8 @@ export function wakePlan(view, all = []) {
     network = { possible: false, why: 'Google TVs only turn on from their own remote or Google Home, not from other apps.' };
   } else if (noNetwork) {
     network = { possible: false, why: `${guide.year ? `Samsungs from ${guide.year}` : 'This TV'} leave the Wi-Fi about a minute after switching off, so nothing on the network can reach them.` };
+  } else if (broadcast === false && (view.brand === 'lg' || view.brand === 'samsung')) {
+    network = { possible: false, blocked: true, why: 'Your iPhone can’t send the wake-up signal over the Wi-Fi yet: Apple has to allow it for Hearth, and an update will switch it on.' };
   } else if (view.brand === 'appletv') {
     network = { possible: Boolean(view.paired), auto: true, why: 'A connected Apple TV wakes over the network by itself.', steps: [] };
   } else if (!view.canWake && view.brand !== 'roku') {

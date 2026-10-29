@@ -4,6 +4,7 @@ import { classify } from './activity.js';
 import { discover, isIPv4, isMac, macFor, portOpen, probe, tvId } from './discovery.js';
 import { isForbiddenTarget } from './guard.js';
 import { log } from './log.js';
+import { canBroadcast } from './wol.js';
 // ── health: telemetry, diagnostics, rating, AI insights ──
 import { diagnose } from './diagnostics.js';
 import { anonymise, modelYear, rate } from './health.js';
@@ -140,7 +141,7 @@ export class Hub extends EventEmitter {
       model: tv.model ?? '',
       ip: tv.ip,
       paired: Boolean(tv.credentials),
-      canWake: Boolean(tv.macs?.length || this.#viaBox(tv)),
+      canWake: Boolean((tv.macs?.length && canBroadcast() !== false) || this.#viaBox(tv)),
       wakeVia: this.#viaBox(tv)?.id ?? null,
       powerToggles: Boolean(driver?.powerToggles),
       capabilities: driver?.capabilities ?? {},
@@ -579,7 +580,7 @@ export class Hub extends EventEmitter {
     if (!tv.credentials || st?.online && (st.power === 'on' || st.power === 'unknown')) return false;
     // Google TVs need Google's code for power; anything else needs a way in:
     // still on the network (standby), or a MAC for Wake-on-LAN.
-    if (tv.brand === 'androidtv' || !(st?.online || view.canWake)) return false;
+    if (tv.brand === 'androidtv' || !(st?.online || view.canWake || tv.macs?.length)) return false;
     // Just switched off from here: a stray press while it powers down (a
     // Samsung takes ~40 s) must not switch it straight back on.
     if (Date.now() - (this.#offAt.get(id) ?? 0) < 45_000) return false;
@@ -614,7 +615,7 @@ export class Hub extends EventEmitter {
             reseek.shift();
             this.seek({ force: true });
           }
-          if (Date.now() > deadline) throw new HearthError(503, `${tv.name} didn’t wake up. Turn it on with its own remote.`);
+          if (Date.now() > deadline) throw new HearthError(503, canBroadcast() === false && !this.#viaBox(tv) ? `${tv.name} didn’t wake up: this phone can’t send the wake-up signal yet. Turn it on with its own remote.` : `${tv.name} didn’t wake up. Turn it on with its own remote.`);
           // A TV coming up gets a fresh connection attempt every few seconds,
           // not the driver's next backoff tick.
           if (Date.now() - kicked > (this.kickEveryMs ?? 5000) && !this.view(this.get(id)).state?.online) {

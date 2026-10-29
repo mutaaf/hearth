@@ -178,3 +178,13 @@ test('wake test: through a box without saving it; reports how long it took, or t
     await done();
   }
 });
+
+test('wake plan: a phone that can’t broadcast says so for an LG, and points at the box', () => {
+  const lg = view({ brand: 'lg', model: '55UP7000PUA', state: { online: true, power: 'on', wakeOnLan: true } });
+  const p = wakePlan(lg, [roku], { broadcast: false });
+  assert.equal(p.network.possible, false);
+  assert.equal(p.network.blocked, true);
+  assert.equal(p.way, 'box');
+  assert.match(p.why, /can’t send the wake-up signal/);
+  assert.equal(wakePlan(lg, [roku], { broadcast: true }).way, 'network');
+});

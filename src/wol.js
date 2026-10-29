@@ -30,31 +30,19 @@ export function broadcastFor(ip, interfaces = os.networkInterfaces()) {
   return null;
 }
 
-// Every address in the /22 around this machine's own (a mesh router's whole
-// network, and always the /24 inside it), nearest first, minus our own.
-export function neighbours(interfaces = os.networkInterfaces()) {
-  for (const addr of Object.values(interfaces).flat()) {
-    if (!addr || addr.family !== 'IPv4' || addr.internal || !net.isIPv4(addr.address)) continue;
-    const me = toInt(addr.address);
-    const base = me - (me % 1024);
-    const all = [];
-    for (let n = base + 1; n < base + 1023; n++) if (n !== me) all.push(n);
-    return all.sort((a, b) => Math.abs(a - me) - Math.abs(b - me)).map(toIp);
-  }
-  return [];
-}
-
-// Where broadcast isn't allowed (an iPhone without Apple's multicast
-// entitlement), knock on every neighbour instead: a sleeping TV keeps its
-// address and answers ARP, so a unicast magic packet to wherever the router
-// put it overnight still wakes it. Set by the host; also kicks in by itself
-// when a broadcast send fails.
-const options = { spray: false };
+// Can this machine broadcast? An iPhone can't without Apple's multicast
+// entitlement, and then nothing reaches a TV that's off: a sleeping LG
+// doesn't answer ARP (seen 2026-10-29, "(incomplete)"), so a unicast magic
+// packet never leaves the phone either. The host says so up front
+// (`configureWake({ broadcast: false })`); otherwise the first wake finds out.
+const options = { broadcast: null };
+let seen = null;
 export function configureWake(next) {
   Object.assign(options, next);
 }
+export const canBroadcast = () => options.broadcast ?? seen;
 
-export async function wake(macs, ip, { spray = options.spray, hosts = neighbours, gapMs = 800 } = {}) {
+export async function wake(macs, ip) {
   // Belt and braces: the subnet broadcast, the global broadcast, and the
   // TV's own address (the OS often still knows its MAC), on ports 9 and 7.
   const targets = new Set(['255.255.255.255']);
@@ -94,19 +82,7 @@ export async function wake(macs, ip, { spray = options.spray, hosts = neighbours
       }
       if (round < 2) await new Promise((r) => setTimeout(r, 120));
     }
-    if (spray || refused) {
-      // Two passes: the first makes the OS ask "who has…?" (packets to
-      // addresses it hasn't met yet are dropped while it asks), the second
-      // goes out once the answers are in.
-      const others = hosts().filter((h) => h !== ip);
-      for (let pass = 0; pass < 2 && others.length; pass++) {
-        for (const mac of macs) {
-          const packet = magicPacket(mac);
-          for (let i = 0; i < others.length; i += 64) await Promise.all(others.slice(i, i + 64).map((host) => send(packet, 9, host)));
-        }
-        if (pass === 0) await new Promise((r) => setTimeout(r, gapMs));
-      }
-    }
+    if (broadcasts.size) seen = !refused;
   } finally {
     try {
       socket.close();
