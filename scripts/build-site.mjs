@@ -5,6 +5,7 @@
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { demoAdsSnippet } from './demo-ads.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist', 'hearth');
@@ -41,7 +42,9 @@ writeFileSync(
   html
     .replace(anchor, `  <script src="demo.js"></script>\n${anchor}`)
     .replace('<title>Hearth</title>', '<title>Hearth demo</title>')
-    .replace('<link rel="manifest" href="manifest.webmanifest">\n', ''),
+    .replace('<link rel="manifest" href="manifest.webmanifest">\n', '')
+    // Ads: this demo page only, and only on mutaafaziz.com (see demo-ads.mjs).
+    .replace('</body>', `${demoAdsSnippet()}</body>`),
 );
 
 // no-transform keeps Cloudflare from injecting analytics into the pages,
