@@ -166,7 +166,7 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 
 ## Privacy and security
 
-Hearth talks only to devices on your home network. TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser.
+Hearth talks only to devices on your home network. Your Hearth never shows ads; only the public demo at mutaafaziz.com/hearth/demo/ carries a small ad under it ([ad policy](https://mutaafaziz.com/ads/privacy/)). TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser.
 
 **Only your household's phones can work the TVs.** Being on the Wi-Fi isn't enough: a new phone sees a number pad and types the 6-digit **house code** once, or scans an invite from a phone that's already in (⚙ → Get Hearth on another phone; an invite works for one phone, within a day). To see the code, open ⚙ → **Phones in this house** on any phone that's in, open Hearth on the computer running it (that computer is always in), or run `npm run code`. The same screen lists every phone, lets you rename one, hold to remove one (it's cut off at once), or pick a new code (phones already in stay in). Wrong codes are rate limited, and after 20 wrong codes in an hour typing a code pauses (invites still work). Commands require a JSON request, so a random website can't press buttons on your TV through your browser.
 
