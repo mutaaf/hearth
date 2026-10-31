@@ -123,7 +123,7 @@ const LIMITED = [
   ['POST', /^\/api\/scan$/, 'scan'],
   ['POST', /^\/api\/tvs$/, 'add'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
-  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models|energy\/bill|guide|support)$/, 'ai'],
+  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models|energy\/bill|guide|support|scenes\/draft)$/, 'ai'],
   ['POST', /^\/api\/household\/join$/, 'join'],
   ['POST', /^\/api\/refresh$/, 'refresh'],
 ];

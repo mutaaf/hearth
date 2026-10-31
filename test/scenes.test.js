@@ -149,3 +149,58 @@ test('scheduler: fires once in its minute, never replays missed minutes', async 
 test('seedScenes with no TVs still makes sense', () => {
   assert.equal(seedScenes([])[1].steps[0].target, 'all');
 });
+
+test('just say it: the AI sees TV1/TV2, never names; the draft comes back with ids and names', async () => {
+  let seen;
+  const before = hub.insights;
+  hub.insights = {
+    scene: async (request) => {
+      seen = request;
+      return {
+        model: 'fake',
+        draft: {
+          name: 'Bedtime', emoji: '🌙', summary: 'Quiets TV2, says goodnight on TV2, then turns TV2 off.',
+          steps: [
+            { action: 'volume', target: ['TV2'], args: { level: 10 } },
+            { action: 'say', target: ['TV2'], args: { message: 'Goodnight from TV2' } },
+            { action: 'power', target: ['TV2'], args: { on: false } },
+          ],
+          schedule: { days: [0, 1, 2, 3, 4], time: '20:30' },
+        },
+      };
+    },
+  };
+  try {
+    const r = await call('POST', '/api/scenes/draft', { text: 'Bedtime on school nights at 8:30 in the basement: quiet, goodnight, off' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.ok(!/basement|living room/i.test(JSON.stringify(seen)), JSON.stringify(seen));
+    assert.match(seen.text, /in the TV2:/);
+    const basement = hub.tvs.find((t) => t.name === 'Basement').id;
+    assert.deepEqual(r.body.draft.steps.map((s) => s.target), [[basement], [basement], [basement]]);
+    assert.match(r.body.draft.summary, /Quiets Basement/);
+    assert.equal(r.body.draft.steps[1].args.message, 'Goodnight from Basement');
+    assert.deepEqual(r.body.draft.schedule, { days: [0, 1, 2, 3, 4], time: '20:30', enabled: true });
+    assert.equal(hub.scenes.list().some((s) => s.name === 'Bedtime'), false, 'a draft is never saved');
+  } finally {
+    hub.insights = before;
+  }
+});
+
+test('try it: a draft runs for real under the id "draft" and isn’t saved', async () => {
+  const count = hub.scenes.list().length;
+  const events = [];
+  const on = (e) => events.push(e);
+  hub.scenes.on('progress', on);
+  log.length = 0;
+  try {
+    const r = await hub.scenes.tryDraft({ name: 'Try', steps: [{ target: 'all', action: 'volume', args: { level: 7 } }] });
+    assert.equal(r.ok, true);
+  } finally {
+    hub.scenes.off('progress', on);
+  }
+  assert.ok(events.every((e) => e.id === 'draft' && e.trigger === 'try'));
+  assert.ok(events.at(-1).done);
+  assert.ok(log.some(([, what, level]) => what === 'volume' && level === 7));
+  assert.equal(hub.scenes.list().length, count);
+  await assert.rejects(hub.scenes.tryDraft({ steps: [] }), /Add a step first/);
+});

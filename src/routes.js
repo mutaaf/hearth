@@ -9,6 +9,7 @@ import { badRequest, HearthError } from './errors.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { deviceGuide } from './devices.js';
 import { wakePlan } from './wake-plan.js';
+import { restoreScene, sceneRequest } from './scene-schema.js';
 import { iconData } from './icons.js';
 import { log } from './log.js';
 
@@ -106,6 +107,16 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
     r('POST', '/bulk', (_, body) => bulk(hub, body.ids, String(body.action ?? ''), body.args ?? {}).then((results) => ({ results }))),
     r('GET', '/scenes', () => scenesOf(hub).list()),
     r('POST', '/scenes', (_, body) => scenesOf(hub).create(body)),
+    // "Just say it": a sentence → a draft scene for the editor (nothing saved).
+    // Names never leave: sceneRequest() swaps them for TV1, TV2… and back.
+    r('POST', '/scenes/draft', async (_, body) => {
+      const tvs = hub.list().filter((t) => t.paired);
+      const { request, refs } = sceneRequest(body.text, tvs);
+      if (!request) throw badRequest('Say a little more about what it should do.');
+      const { draft, model } = await hub.insights.scene(request);
+      return { draft: restoreScene(draft, refs, tvs), model };
+    }),
+    r('POST', '/scenes/try', (_, body) => scenesOf(hub).tryDraft(body)),
     r('PATCH', `/scenes/${id}`, ([sc], body) => scenesOf(hub).update(sc, body)),
     r('DELETE', `/scenes/${id}`, ([sc]) => scenesOf(hub).remove(sc)),
     r('POST', `/scenes/${id}/run`, ([sc]) => {

@@ -188,6 +188,22 @@ export class Scenes extends EventEmitter {
   // 'progress' after each step so the app can animate the scene card.
   async run(id, { trigger = 'manual' } = {}) {
     const scene = this.get(id);
+    const out = await this.#play(id, scene, trigger);
+    if (out.error) return out;
+    scene.lastRun = this.clock().toISOString();
+    await this.#changed();
+    return out;
+  }
+
+  // "Try it": play a draft from the editor without saving it. Progress goes
+  // out under the id 'draft'.
+  async tryDraft(input) {
+    const scene = sanitizeScene({ name: 'Scene', emoji: '✨', steps: [], ...input, schedule: null });
+    if (!scene.steps.length) throw badRequest('Add a step first');
+    return this.#play('draft', scene, 'try');
+  }
+
+  async #play(id, scene, trigger) {
     if (this.running.has(id)) return { ok: false, error: 'Already running' };
     this.running.add(id);
     const steps = [];
@@ -219,10 +235,8 @@ export class Scenes extends EventEmitter {
     } finally {
       this.running.delete(id);
     }
-    scene.lastRun = this.clock().toISOString();
     const ok = steps.every((s) => s.results.every((r) => r.ok));
     this.emit('progress', { id, name: scene.name, step: total, total, done: true, ok, trigger });
-    await this.#changed();
     return { ok, steps };
   }
 

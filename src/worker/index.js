@@ -12,6 +12,8 @@ import { appIcon } from './app-icon.js';
 //   POST /hearth/api/device            { device, symptom?, builtIn? } → { guide, cached, model }
 //                                      A model-specific connection guide, written once by the AI
 //                                      and then shared by every house with the same TV (D1 cache).
+//   POST /hearth/api/scene             { request } → { draft, model, ms }: "just say it", a scene from
+//                                      a sentence. TVs are tokens (TV1…), never names (src/scene-schema.js).
 //   POST /hearth/api/support           { report } → { id }: "it won't connect" into the queue
 //   GET  /hearth/api/support/status/:id → { status, resolution, updated } (the app checks back)
 //   GET  /hearth/api/support?status=   (Bearer SUPPORT_TOKEN) the queue, for the triage agent
@@ -28,6 +30,7 @@ import { appIcon } from './app-icon.js';
 import { complete, costUsd, describeError, EDGE_MODELS, EDGE_VISION_MODELS, listModels, pickModel, PROVIDERS } from './ai/providers.js';
 import { BILL_IMAGE_PROMPT, BILL_SCHEMA, BILL_SYSTEM, billPrompt, chargeLines, checkImage, validateBill } from '../bill-schema.js';
 import { detectProvider, extractJson, sanitizePayload, SYSTEM, userPrompt, validateInsight } from '../insight-schema.js';
+import { SCENE_SCHEMA, SCENE_SYSTEM, sanitizeSceneRequest, scenePrompt, validateSceneDraft } from '../scene-schema.js';
 import { GUIDE_SCHEMA, GUIDE_SYSTEM, guideKey, guidePrompt, sanitizeDevice, sanitizeSupport, sanitizeSymptom, validateGuide } from '../device-schema.js';
 
 const EDGE_DAILY_CAP = 150; // free insights per UTC day (~17 neurons each); the 10k free allowance is shared with COLD GAS
@@ -37,6 +40,7 @@ const MODELS_HOURLY_PER_IP = 30;
 const GUIDE_HOURLY_PER_IP = 20;
 const GUIDE_TTL_MS = 30 * 86_400_000; // a model's guide is rewritten at most monthly
 const SUPPORT_HOURLY_PER_IP = 5;
+const SCENE_HOURLY_PER_IP = 20;
 const SUPPORT_STATUS = ['new', 'triaged', 'in-progress', 'supported', 'wont-fix', 'duplicate'];
 const MAX_BODY = 16_384;
 const MAX_BILL_BODY = 2_300_000; // a cropped, downscaled photo as a data URL
@@ -301,6 +305,40 @@ async function device(req, env) {
   }
 }
 
+// "Just say it": never cached or stored; each answer is one house's.
+async function scene(req, env) {
+  const t0 = Date.now();
+  const { body, error } = await readBody(req);
+  if (error) return error;
+  const request = sanitizeSceneRequest(body?.request);
+  if (!request) return json({ error: 'Say a little more about what it should do.' }, 400);
+  const db = env.DB;
+  await ensureTables(db);
+  const ip = await ipHash(req);
+  const allowed = (await bump(db, `scene:${ip}:${hour()}`)) <= SCENE_HOURLY_PER_IP && (await bump(db, `edge-day:${day()}`)) <= EDGE_DAILY_CAP && !!env.AI;
+  if (!allowed) return json({ error: 'The AI is busy for now. Build it with the buttons below.' }, 429);
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 30_000);
+  try {
+    let lastErr = null;
+    for (const m of EDGE_MODELS) {
+      try {
+        const r = await complete({ provider: 'edge', env, key: '', model: m, system: SCENE_SYSTEM, user: scenePrompt(request), schema: SCENE_SCHEMA, signal: abort.signal, maxTokens: 700 });
+        const draft = validateSceneDraft(extractJson(r.text), request.tvs.map((t) => t.ref));
+        if (!draft) throw Object.assign(new Error('The AI’s answer wasn’t usable.'), { userFacing: true });
+        return json({ draft, model: r.model || m, ms: Date.now() - t0 });
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
+  } catch (err) {
+    return json({ error: describeError('edge', err) }, 502);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── support queue: "it won't connect" reports for the triage agent ──
 const ticketId = () => [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(36).padStart(2, '0')).join('').slice(0, 10);
 const isAdmin = (req, env) => !!env.SUPPORT_TOKEN && req.headers.get('authorization') === `Bearer ${env.SUPPORT_TOKEN}`;
@@ -369,6 +407,7 @@ export async function handle(req, env) {
   if (path === '/models' && req.method === 'POST') return models(req, env);
   if (path === '/bill' && req.method === 'POST') return bill(req, env);
   if (path === '/device' && req.method === 'POST') return device(req, env);
+  if (path === '/scene' && req.method === 'POST') return scene(req, env);
   if (path === '/support' && req.method === 'POST') return supportAdd(req, env);
   if (path === '/support' && req.method === 'GET') return supportList(req, env, url);
   let m = path.match(/^\/support\/status\/([a-z0-9]{6,16})$/);

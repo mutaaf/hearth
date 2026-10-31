@@ -1,6 +1,7 @@
 import { HearthError } from './errors.js';
 import { guideKey, sanitizeDevice, sanitizeSupport, sanitizeSymptom, validateGuide } from './device-schema.js';
 import { sanitizePayload, validateInsight } from './insight-schema.js';
+import { sanitizeSceneRequest, validateSceneDraft } from './scene-schema.js';
 
 // AI insights relay. The browser asks the hub; the hub sends the anonymised
 // report to the hearth Worker (Gemma 4 on Cloudflare by default, or the
@@ -83,6 +84,17 @@ export class Insights {
     const result = { guide, model: data.model ?? null, cached: Boolean(data.cached) };
     this.cache.set(`guide:${key}`, { at: this.now(), result });
     return result;
+  }
+
+  // "Just say it": a scene from a sentence (src/scene-schema.js). `request`
+  // is already tokenised by sceneRequest(); not cached.
+  async scene(request) {
+    const req = sanitizeSceneRequest(request);
+    if (!req) throw new HearthError(400, 'Say a little more about what it should do.');
+    const data = await this.#post('/scene', { request: req }, '', 35_000);
+    const draft = validateSceneDraft(data.draft, req.tvs.map((t) => t.ref));
+    if (!draft) throw new HearthError(502, 'The AI answer wasn’t usable. Try saying it another way.');
+    return { draft, model: data.model ?? null };
   }
 
   // "It won't connect" → the support queue. → { id }

@@ -114,6 +114,28 @@ body.selecting .colophon { padding-bottom: 300px; }
 .ed-days input[type="time"] { margin-left: auto; min-height: 46px; padding: 0 12px; border-radius: 14px; font-size: 17px; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); }
 .ed-save { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 20px calc(16px + var(--safe-b)); background: linear-gradient(transparent, var(--bg) 35%); display: grid; justify-items: center; }
 .ed-save .cta { width: min(100%, 480px); }
+/* Save + Try it side by side; the try's progress line sits above them. */
+.ed-save .say-actions { width: min(100%, 480px); display: flex; gap: 10px; }
+.ed-save .say-actions .cta { flex: 1; width: auto; }
+.ed-save .say-actions .ghost { flex: none; }
+.say-try { margin: 0 0 10px; font-size: 12px; text-align: center; color: var(--ink-soft); }
+.say-ok { color: var(--ink); }
+.say-bad { color: var(--danger, #e5484d); }
+
+/* "Just say it": the wake coach's night-glass sky and words (wake.css),
+   with a big friendly text box and the house's own examples. */
+.say .wake-sky { margin: 0; }
+.say-text {
+  width: 100%; box-sizing: border-box; padding: 16px 18px; border-radius: 20px; resize: none;
+  font-family: inherit; font-size: 18px; line-height: 1.4; font-weight: 500; color: var(--ink); background: var(--body); border: 1px solid var(--body-edge); box-shadow: var(--shadow);
+}
+.say-text:focus { outline: 2px solid var(--a1); outline-offset: 2px; }
+.say-ex { display: grid; grid-template-columns: 1fr; gap: 8px; overflow: visible; }
+.say-ex .chip { width: 100%; min-width: 0; height: auto; padding: 12px 16px; justify-content: flex-start; text-align: left; white-space: normal; line-height: 1.35; font-size: 14px; }
+.say-err { margin: 0; font-size: 14.5px; line-height: 1.45; }
+.say-made { display: grid; gap: 6px; }
+.say-made p:not(.wake-ai-head) { margin: 0; font-size: 15px; line-height: 1.45; }
+.say-made .ghost { justify-self: start; }
 
 /* ── Aurora ────────────────────────────── */
 [data-skin="aurora"] .select-btn, [data-skin="aurora"] .scene-card, [data-skin="aurora"] .ed-name input, [data-skin="aurora"] .ed-emojis button,

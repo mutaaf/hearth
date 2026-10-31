@@ -263,10 +263,10 @@
     sc.steps.forEach(function (st, i) {
       setTimeout(function () {
         var targets = st.target === 'all' ? tvs.filter(function (t) { return t.paired; }) : tvs.filter(function (t) { return st.target.indexOf(t.id) >= 0; });
-        targets.forEach(function (t) {
-          try { if (st.action !== 'wait') act(t, st.action, st.args); } catch (e) { allOk = false; }
+        var results = st.action === 'wait' ? [] : targets.map(function (t) {
+          try { act(t, st.action, st.args); return { id: t.id, ok: true }; } catch (e) { allOk = false; return { id: t.id, ok: false, error: e.message }; }
         });
-        emit('scene', { id: sc.id, name: sc.name, step: i + 1, total: total, done: false });
+        emit('scene', { id: sc.id, name: sc.name, step: i + 1, total: total, done: false, results: results });
         if (i === total - 1) {
           sc.lastRun = new Date().toISOString();
           emit('scene', { id: sc.id, name: sc.name, step: total, total: total, done: true, ok: allOk });
@@ -274,6 +274,36 @@
       }, 700 * (i + 1));
     });
     if (!total) emit('scene', { id: sc.id, name: sc.name, step: 0, total: 0, done: true, ok: true });
+  }
+  // "Just say it" in the demo: no AI here, a few words go a long way.
+  function demoDraft(text) {
+    var low = String(text || '').toLowerCase();
+    var paired = tvs.filter(function (t) { return t.paired; });
+    var named = paired.filter(function (t) { return low.indexOf(t.name.toLowerCase()) >= 0 || (t.room && low.indexOf(t.room.toLowerCase()) >= 0); });
+    var target = named.length ? named.map(function (t) { return t.id; }) : 'all';
+    var who = named.length ? named.map(function (t) { return t.name; }).join(' and ') : 'every TV';
+    var steps = [];
+    var said = [];
+    var off = /\b(off|bed|sleep|goodnight)\b/.test(low);
+    var app = ['Netflix', 'YouTube TV', 'YouTube', 'Disney+', 'Hulu', 'Prime Video', 'Max'].filter(function (a) { return low.indexOf(a.toLowerCase()) >= 0; })[0];
+    if (!off || app || /turn (it |them )?on\b|\bon (with|and)\b|\bon,/.test(low)) { steps.push({ target: target, action: 'power', args: { on: true } }); said.push('turns on ' + who); }
+    var vol = low.match(/volume (?:to |at )?(\d{1,2})/) || (/quiet|low/.test(low) && [0, '10']);
+    if (vol) { steps.push({ target: target, action: 'volume', args: { level: Math.min(60, +vol[1]) } }); said.push('sets the volume to ' + vol[1]); }
+    if (app) { steps.push({ target: 'all', action: 'wait', args: { seconds: 5 } }); steps.push({ target: target, action: 'launch', args: { title: app } }); said.push('opens ' + app); }
+    if (/goodnight|say/.test(low)) { steps.push({ target: target, action: 'say', args: { message: 'Goodnight 🌙' } }); said.push('says goodnight'); }
+    if (off) { if (/goodnight|say/.test(low)) steps.push({ target: 'all', action: 'wait', args: { seconds: 30 } }); steps.push({ target: target, action: 'power', args: { on: false } }); said.push('turns ' + who + ' off'); }
+    var days = /school night/.test(low) ? [0, 1, 2, 3, 4] : /weekday/.test(low) ? [1, 2, 3, 4, 5] : /weekend/.test(low) ? [0, 6] : /every ?day|nightly|daily/.test(low) ? [0, 1, 2, 3, 4, 5, 6] : null;
+    var t = low.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+    var time = null;
+    if (/midnight/.test(low)) time = '00:00';
+    else if (t && (t[2] || t[3] || / at \d/.test(low))) { var h = +t[1] % 12 + (t[3] === 'am' ? 0 : t[3] === 'pm' || +t[1] < 7 || /night|bed/.test(low) ? 12 : 0); if (+t[1] === 12 && t[3] !== 'am') h = 12; time = String(h).padStart(2, '0') + ':' + (t[2] || '00'); }
+    var name = app ? (low.indexOf('movie') >= 0 ? 'Movie Night' : app + ' Time') : off ? (/bed|school/.test(low) ? 'Bedtime' : 'All Off') : 'My Scene';
+    return {
+      name: name, emoji: app ? '🍿' : off ? '🌙' : '✨',
+      summary: 'This ' + said.join(', then ') + ((days || time) ? ', ' + (days ? (days.length === 7 ? 'every day' : days.length === 2 ? 'on weekends' : days[0] === 0 ? 'on school nights' : 'on weekdays') : 'every day') + (time ? ' at ' + time : '') : '') + '. (The demo has no AI; at home the AI reads what you say.)',
+      steps: steps,
+      schedule: days || time ? { days: days || [0, 1, 2, 3, 4, 5, 6], time: time || '21:00', enabled: true } : null,
+    };
   }
   function findScene(id) {
     var sc = scenes.filter(function (x) { return x.id === id; })[0];
@@ -394,6 +424,15 @@
       scenes = scenes.filter(function (x) { return x !== sc; });
       scenesChanged();
       return { ok: true };
+    }],
+    ['POST', /^\/scenes\/draft$/, function (_, body) {
+      if (String(body.text || '').trim().length < 3) throw new Error('Say a little more about what it should do.');
+      return wait(1600).then(function () { return { draft: demoDraft(body.text), model: 'demo' }; });
+    }],
+    ['POST', /^\/scenes\/try$/, function (_, body) {
+      if (!body.steps || !body.steps.length) throw new Error('Add a step first');
+      runScene({ id: 'draft', name: body.name || 'Scene', steps: body.steps });
+      return { ok: true, started: true };
     }],
     ['POST', /^\/scenes\/([\w-]+)\/run$/, function (m) { runScene(findScene(m[1])); return { ok: true, started: true }; }],
     ['GET', /^\/tvs$/, function () { return tvs; }],
