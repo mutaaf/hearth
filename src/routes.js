@@ -9,7 +9,7 @@ import { badRequest, HearthError } from './errors.js';
 import { catalogStatus, launchOn } from './launch.js';
 import { deviceGuide } from './devices.js';
 import { wakePlan } from './wake-plan.js';
-import { restoreScene, sceneRequest } from './scene-schema.js';
+import { daysFromText, restoreScene, sceneRequest } from './scene-schema.js';
 import { iconData } from './icons.js';
 import { log } from './log.js';
 
@@ -114,7 +114,10 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
       const { request, refs } = sceneRequest(body.text, tvs);
       if (!request) throw badRequest('Say a little more about what it should do.');
       const { draft, model } = await hub.insights.scene(request);
-      return { draft: restoreScene(draft, refs, tvs), model };
+      const scene = restoreScene(draft, refs, tvs);
+      const days = daysFromText(body.text);
+      if (scene.schedule && days) scene.schedule.days = days;
+      return { draft: scene, model };
     }),
     r('POST', '/scenes/try', (_, body) => scenesOf(hub).tryDraft(body)),
     r('PATCH', `/scenes/${id}`, ([sc], body) => scenesOf(hub).update(sc, body)),

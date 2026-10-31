@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { restoreScene, sanitizeSceneRequest, sceneRequest, validateSceneDraft } from '../src/scene-schema.js';
+import { daysFromText, restoreScene, sanitizeSceneRequest, sceneRequest, validateSceneDraft } from '../src/scene-schema.js';
 import { handle } from '../src/worker/index.js';
 
 const tvs = [
@@ -13,7 +13,7 @@ test('sceneRequest: names and rooms become tokens (longest first), junk is dropp
   const { request, refs } = sceneRequest("Movie night on the living room tv and Zara's TV in the den, call 469 555 1234 or a@b.co https://x.y", tvs);
   assert.deepEqual(refs, { TV1: 'lg-1', TV2: 'roku-1', TV3: 'lg-2' });
   assert.equal(request.text, 'Movie night on the TV3 and TV2 in the TV1, call or');
-  assert.deepEqual(request.tvs[1], { ref: 'TV2', brand: 'roku', box: true, on: false });
+  assert.deepEqual(request.tvs[1], { ref: 'TV2', brand: 'roku', box: true, on: false, says: false });
   assert.ok(!/zara|living|den\b/i.test(JSON.stringify(request)));
   assert.equal(sanitizeSceneRequest({ text: 'hi' }), null);
 });
@@ -66,4 +66,14 @@ test('Worker /scene: sanitises again, asks the AI, validates; never stores', asy
   assert.deepEqual(body.draft.schedule, { days: [0, 1, 2, 3, 4, 5, 6], time: '00:00' });
   assert.ok(!/Living Room|me@x\.com/.test(prompt), 'only the sanitised request reaches the model');
   assert.equal((await handle(req({ request: { text: '' } }), env)).status, 400);
+});
+
+test('daysFromText: the days someone named win over the AI’s numbers', () => {
+  assert.deepEqual(daysFromText('Saturday morning cartoons at 8'), [6]);
+  assert.deepEqual(daysFromText('Tues and Thurs at 7'), [2, 4]);
+  assert.deepEqual(daysFromText('on Mondays, Wednesdays and Fridays'), [1, 3, 5]);
+  assert.deepEqual(daysFromText('bedtime on school nights'), [0, 1, 2, 3, 4]);
+  assert.deepEqual(daysFromText('weekend mornings'), [0, 6]);
+  assert.equal(daysFromText('movie night with the satellite box'), null);
+  assert.equal(daysFromText('everything off at midnight'), null);
 });

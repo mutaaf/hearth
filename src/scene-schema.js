@@ -35,7 +35,7 @@ export function sceneRequest(text, tvs = []) {
     const ref = `TV${i + 1}`;
     refs[ref] = t.id;
     const room = flat(t.room, 40);
-    list.push({ ref, brand: BRANDS.includes(t.brand) ? t.brand : 'tv', box: t.brand === 'roku' || t.brand === 'appletv', on: t.state?.power === 'on' });
+    list.push({ ref, brand: BRANDS.includes(t.brand) ? t.brand : 'tv', box: t.brand === 'roku' || t.brand === 'appletv', on: t.state?.power === 'on', says: Boolean(t.capabilities?.toast) });
     for (const n of [flat(t.name, 40), room]) if (n.length >= 2) named.push([n, ref]);
   });
   // Longest names first, so "Basement TV" goes before "Basement".
@@ -51,7 +51,7 @@ export function sanitizeSceneRequest(req) {
   const tvs = (Array.isArray(req?.tvs) ? req.tvs : [])
     .slice(0, 20)
     .filter((t) => REF.test(String(t?.ref)))
-    .map((t) => ({ ref: String(t.ref), brand: BRANDS.includes(t.brand) ? t.brand : 'tv', box: Boolean(t.box), on: Boolean(t.on) }));
+    .map((t) => ({ ref: String(t.ref), brand: BRANDS.includes(t.brand) ? t.brand : 'tv', box: Boolean(t.box), on: Boolean(t.on), says: Boolean(t.says) }));
   return { text, tvs };
 }
 
@@ -90,14 +90,14 @@ export const SCENE_SCHEMA = {
 };
 
 export const SCENE_SYSTEM = `You turn what someone says into a Hearth scene: a short list of steps that Hearth runs across the TVs in their home, by tapping it or on a weekly schedule.
-Steps (one action each): power {on:true|false}; volume {level:0-60, a comfortable level is 12-25}; mute {on:true|false}; launch {app:"Netflix"} (an app by its usual name); say {message:"…"} (a short note shown on the TV screen, max 60 characters, may end with one emoji); wait {seconds:1-60}.
+Steps (one action each): power {on:true|false}; volume {level:0-60: comfortable 15-25, "quiet"/"low" 8, "loud" 30; never 0, use mute for silence}; mute {on:true|false}; launch {app:"Netflix"} (an app by its usual name); say {message:"…"} (a short note shown on the TV screen, max 60 characters, may end with one emoji; only TVs marked "shows messages" can, so leave say out for the others and mention that in the summary); wait {seconds:1-60}.
 Each step has target "all" or a list of TV refs (TV1, TV2…) from the list you are given. TVs are referred to only by these refs. A "box" is a Roku or Apple TV plugged into a TV: turning a box on also turns its TV on.
-Rules: answer with ONLY a JSON object. Use only the refs given; if the person names a TV you can't match, use "all". Turning a TV on comes before anything else for it; add wait 5 after turning TVs on only before launch. Keep it to what they asked, at most 8 steps. A schedule only if they said when: days 0=Sunday … 6=Saturday ("school nights" = 0,1,2,3,4; "weekdays" = 1,2,3,4,5; "weekends" = 0,6; "every day" = all), time "HH:MM" 24-hour. name: 1-3 words, Title Case. emoji: one from ${SCENE_EMOJI.join(' ')}. summary: one plain sentence saying what it will do, using the refs.`;
+Rules: answer with ONLY a JSON object. Use only the refs given; if the person names a TV you can't match, use "all". Only turn TVs on when they want something to start (watch, open an app, "turn on"); then it comes first, with wait 5 before any launch. A scene that winds down or ends (bedtime, quiet, off) never turns anything on. Keep it to what they asked, at most 8 steps. A schedule only if they said when: days: Sunday 0, Monday 1, Tuesday 2, Wednesday 3, Thursday 4, Friday 5, Saturday 6 ("school nights" = 0,1,2,3,4; "weekdays" = 1,2,3,4,5; "weekends" = 0,6; "every day" = all), time "HH:MM" 24-hour. name: 1-3 words, Title Case. emoji: one from ${SCENE_EMOJI.join(' ')}. summary: one plain sentence saying what it will do, using the refs.`;
 
 const SHAPE = `{"name":"Bedtime","emoji":"🌙","summary":"…","steps":[{"action":"volume","target":["TV1"],"level":12},{"action":"say","target":["TV1"],"message":"Bedtime in 5 🌙"},{"action":"wait","target":"all","seconds":60},{"action":"power","target":["TV1"],"on":false}],"schedule":{"days":[0,1,2,3,4],"time":"20:30"}}`;
 
 export const scenePrompt = (req) =>
-  `TVs in this home:\n${req.tvs.map((t) => `- ${t.ref}: ${t.brand}${t.box ? ' (box)' : ''}${t.on ? ', on now' : ''}`).join('\n') || '- none yet'}\n\nWhat they said: "${req.text}"\n\nAnswer with JSON exactly like: ${SHAPE}`;
+  `TVs in this home:\n${req.tvs.map((t) => `- ${t.ref}: ${t.brand}${t.box ? ' (box)' : ''}${t.says ? ', shows messages' : ''}${t.on ? ', on now' : ''}`).join('\n') || '- none yet'}\n\nWhat they said: "${req.text}"\n\nAnswer with JSON exactly like: ${SHAPE}`;
 
 const clampInt = (v, lo, hi, dflt) => {
   const n = Math.round(Number(v));
@@ -144,6 +144,19 @@ export function validateSceneDraft(d, refs = []) {
     steps,
     schedule,
   };
+}
+
+// The days someone named, read from their own words (small models mix up
+// "Saturday" and 0). null when they named none.
+const DAY_WORDS = [/\bsun(days?)?\b/, /\bmon(days?)?\b/, /\btues?(days?)?\b/, /\bwed(nesdays?)?\b/, /\bthu(rs?|rsdays?)?\b/, /\bfri(days?)?\b/, /\bsat(urdays?)?\b/];
+export function daysFromText(text) {
+  const t = String(text ?? '').toLowerCase();
+  if (/school ?nights?/.test(t)) return [0, 1, 2, 3, 4];
+  if (/week ?days?\b/.test(t)) return [1, 2, 3, 4, 5];
+  if (/week ?ends?\b/.test(t)) return [0, 6];
+  if (/every ?day|daily|every night|nightly|each day/.test(t)) return [0, 1, 2, 3, 4, 5, 6];
+  const days = DAY_WORDS.map((re, d) => (re.test(t) ? d : -1)).filter((d) => d >= 0);
+  return days.length ? days : null;
 }
 
 // Tokens back to this house's TVs: ids in targets, names in the words.
