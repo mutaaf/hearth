@@ -99,10 +99,12 @@ export class Hub extends EventEmitter {
       // A box switched on (or put to work) with its own remote turns on the
       // TV it's plugged into (HDMI-CEC): look for that TV now, not in a minute.
       if (WAKE_BOXES.has(tv.brand)) {
-        const busy = on ? `on|${state.app ?? ''}` : 'off';
+        // Only a start counts: off → on, or the home screen → an app. Hopping
+        // between apps is someone already watching.
+        const busy = !on ? 'off' : state.app ? 'app' : 'on';
         const was = this.#boxBusy.get(tv.id);
         this.#boxBusy.set(tv.id, busy);
-        if (was !== undefined && busy !== 'off' && busy !== was) this.boxActive(tv.id);
+        if (was !== undefined && (was === 'off' ? busy !== 'off' : was === 'on' && busy === 'app')) this.boxActive(tv.id);
       }
       this.emit('change', this.view(tv));
     });
@@ -457,6 +459,9 @@ export class Hub extends EventEmitter {
       this.#apps.delete(id);
       this.#since.delete(id);
       this.#wasOn.delete(id);
+      this.#boxBusy.delete(id);
+      this.#burstFrom.delete(id);
+      this.#wasOnline.delete(id);
       this.#activitySince.delete(id);
       await driver?.stop();
       this.telemetry.forget(id); // ── health
@@ -530,18 +535,25 @@ export class Hub extends EventEmitter {
   // a little while (`burstMs`, 30 s): a knock every `burstEveryMs` (2 s), a
   // reconnect the moment one answers, a re-read of any that's online but asleep.
   #closed = false;
+  // A burst never stretches: presses during one don't extend it, and the same
+  // box starts another only after `burstGapMs` (2 min), so someone flicking
+  // through a Roku isn't a stream of knocks on every TV in the house.
   boxActive(id) {
-    if (this.#closed) return;
-    this.#boxWokeAt = { id, at: Date.now() };
-    this.#burstUntil = Date.now() + (this.burstMs ?? 30_000);
-    if (this.#burst) return;
+    if (this.#closed || (this.burstMs ?? 30_000) <= 0) return;
+    const now = Date.now();
+    if (this.#burst || now - (this.#burstFrom.get(id) ?? -Infinity) < (this.burstGapMs ?? 120_000)) return;
+    this.#burstFrom.set(id, now);
+    this.#boxWokeAt = { id, at: now };
+    this.#burstUntil = now + (this.burstMs ?? 30_000);
+    let n = 0;
     const tick = () => {
       if (Date.now() > this.#burstUntil) {
         clearInterval(this.#burst);
         this.#burst = null;
         return;
       }
-      this.#knock({ refreshAsleep: true }).catch(() => {});
+      // Asleep-but-online TVs re-read power every third knock (~6 s), not every one.
+      this.#knock({ refreshAsleep: n++ % 3 === 0 }).catch(() => {});
     };
     this.#burst = setInterval(tick, this.burstEveryMs ?? 2000);
     this.#burst.unref?.();
@@ -549,6 +561,7 @@ export class Hub extends EventEmitter {
   }
   #burst = null;
   #burstUntil = 0;
+  #burstFrom = new Map(); // box id → when it last started a burst
   #offered = new Set(); // "tv|box" already suggested
   // A quiet TV that comes on within moments of Hearth waking a box is
   // probably plugged into it: offer to wake it that way from now on.
@@ -716,6 +729,7 @@ export class Hub extends EventEmitter {
     const now = this.viewers > 0;
     if (was === now) return;
     for (const d of this.#drivers.values()) d.setActive?.(now);
+    if (!now) this.#sought.clear(); // the next visit looks for moved TVs again
     this.#startLookout(); // fast while someone looks, slow otherwise
   }
 
@@ -730,7 +744,7 @@ export class Hub extends EventEmitter {
   #kicked = new Map();
   #lookoutEvery = 0;
   #startLookout(everyMs = this.viewers > 0 ? this.lookoutMs ?? 4000 : this.idleLookoutMs ?? 30_000) {
-    if (this.#lookout && this.#lookoutEvery === everyMs) return;
+    if (this.#closed || (this.#lookout && this.#lookoutEvery === everyMs)) return;
     clearInterval(this.#lookout);
     this.#lookoutEvery = everyMs;
     const tick = () => this.#knock({ seek: this.viewers > 0 }).catch(() => {});
@@ -749,7 +763,9 @@ export class Hub extends EventEmitter {
         const d = this.#drivers.get(tv.id);
         if (!tv.credentials || !d) return;
         if (d.state?.online) {
-          if (refreshAsleep && d.state.power !== 'on' && d.refresh) await Promise.resolve(d.refresh()).catch(() => {});
+          // Not a Google TV: Cast pushes its own standby changes, and a re-read it
+          // doesn't answer in time drops its socket.
+          if (refreshAsleep && d.state.power !== 'on' && d.refresh && tv.brand !== 'androidtv') await Promise.resolve(d.refresh()).catch(() => {});
           return;
         }
         if (!d.reconnect) return;

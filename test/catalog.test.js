@@ -123,7 +123,9 @@ let server;
 let base;
 before(async () => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'hearth-catalog-'));
-  hub = await new Hub({ store: new Store(dir), drivers: { lg: FakeTv, samsung: FakeTv, roku: FakeTv, androidtv: FakeTv }, probeFn: async () => null }).init();
+  hub = new Hub({ store: new Store(dir), drivers: { lg: FakeTv, samsung: FakeTv, roku: FakeTv, androidtv: FakeTv }, probeFn: async () => null });
+  hub.burstMs = 0; // the "Off" TV is a Roku: its wakes would start CEC bursts that knock into later tests
+  await hub.init();
   Object.assign(hub, { pollMs: 10, wakeMs: 1000, wakeSettleMs: 0, settleDelays: [5], lookFirstMs: 40, kickEveryMs: 100, kickGapMs: 0 });
   for (const [brand, ip, name] of [['lg', '10.0.0.5', 'Living'], ['samsung', '10.0.0.6', 'Study'], ['roku', '10.0.0.7', 'Off'], ['androidtv', '10.0.0.8', 'Upstairs']]) {
     const tv = await hub.add({ ip, brand, name, macs: ['aa:bb:cc:dd:ee:0' + ip.slice(-1)] });

@@ -258,8 +258,9 @@ test('seek(): says it is looking, then what it found (moved) or missed', async (
   const { hub, dir } = await makeHub({ tvs: [living()], discover: async () => (at ? [{ id: 'lg-x', brand: 'lg', ip: at, macs: [] }] : []) });
   const seen = [];
   hub.on('looking', (e) => seen.push(e));
+  const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((r) => setTimeout(r, 10)); };
   hub.seek();
-  await new Promise((r) => setTimeout(r, 30));
+  await until(() => seen.length >= 2);
   assert.deepEqual(seen, [
     { on: true, tvs: ['lg-aabbcc000001'] },
     { on: false, tvs: ['lg-aabbcc000001'], found: ['lg-aabbcc000001'], missing: [] },
@@ -268,7 +269,7 @@ test('seek(): says it is looking, then what it found (moved) or missed', async (
   hub.seekGapMs = 0;
   seen.length = 0;
   hub.seek();
-  await new Promise((r) => setTimeout(r, 30));
+  await until(() => seen.at(-1)?.on === false);
   assert.deepEqual(seen.at(-1), { on: false, tvs: ['lg-aabbcc000001'], found: [], missing: ['lg-aabbcc000001'] });
   await hub.close();
   rmSync(dir, { recursive: true, force: true });

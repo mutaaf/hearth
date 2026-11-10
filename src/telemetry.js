@@ -192,7 +192,8 @@ export class Telemetry {
   offPattern(id) {
     const r = this.tvs.get(id);
     const now = this.now();
-    const lastCmd = r?.cmds.findLast((c) => now - c.t < 10 * 60_000);
+    // Presses only: an icon fetch, a scene's message or a pairing try isn't someone using the TV.
+    const lastCmd = r?.cmds.findLast((c) => now - c.t < 10 * 60_000 && /^(key|power|setVolume|launch|setInput)/.test(c.a));
     const trouble = Boolean(lastCmd && !lastCmd.ok && !/isn't supported|not supported/i.test(lastCmd.e ?? ''));
     if (!r?.power.length) return { last: null, autoOff: null, trouble };
     const asks = [];

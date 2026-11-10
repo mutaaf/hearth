@@ -230,3 +230,30 @@ test('the lookout knocks even with nobody looking (slowly), and at once when the
     await done();
   }
 });
+
+test('bursts don\'t stretch or repeat: presses during one, or a box switched on again soon after, start nothing new', async () => {
+  const { hub, ids, done } = await house();
+  try {
+    let knocks = 0;
+    Object.assign(hub, { burstEveryMs: 10, burstMs: 60, burstGapMs: 10_000, portOpenFn: async () => (knocks++, false) });
+    const atv = hub.driver(ids.atv);
+    atv.setState({ online: true, power: 'off' });
+    atv.setState({ power: 'on' }); // off → on: a burst
+    for (let i = 0; i < 4; i++) hub.boxActive(ids.atv); // presses meanwhile
+    await new Promise((r) => setTimeout(r, 150));
+    const first = knocks;
+    assert.ok(first > 0, 'it knocked');
+    atv.setState({ power: 'off' });
+    atv.setState({ power: 'on' }); // on again within the gap
+    hub.boxActive(ids.roku); // another box, also within its own first burst? no: a new box may start one
+    await new Promise((r) => setTimeout(r, 150));
+    const second = knocks - first;
+    assert.ok(second > 0 && second <= first + 2, 'only the Roku\'s own burst ran, about as long as the first');
+    atv.setState({ app: 'com.netflix' }); // hopping into an app while on: not a start
+    const before = knocks;
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(knocks, before);
+  } finally {
+    await done();
+  }
+});

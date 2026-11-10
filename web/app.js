@@ -126,10 +126,15 @@ function note(message, kind = false) {
   toast.text = text;
   const ms = noteMs(type, text);
   el.style.setProperty('--note-ms', `${ms}ms`);
+  if (toast.held) return; // mid-drag: new words, same gesture; the timer starts on release
   el.style.translate = '';
   el.style.opacity = '';
   try {
-    if (!el.matches(':popover-open')) el.showPopover(); // above any open <dialog>
+    // Re-open it when a sheet opened since: the top layer stacks by order, so
+    // the toast must go back on top of that dialog (or it sits dimmed under it).
+    const open = el.matches(':popover-open');
+    if (open && document.querySelector('dialog:modal')) el.hidePopover();
+    if (!open || !el.matches(':popover-open')) el.showPopover();
   } catch {}
   el.classList.remove('show', 'paused');
   void el.offsetWidth; // restart the entrance and the timer bar
@@ -170,7 +175,7 @@ document.addEventListener('visibilitychange', () => {
   let g = null;
   el?.addEventListener('pointerdown', (e) => {
     if (!el.classList.contains('show')) return;
-    g = { x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, dy: 0, left: Math.max(0, toast.until - Date.now()) };
+    g = { x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, dy: 0, left: Math.max(0, toast.until - Date.now()), text: toast.text };
     try {
       el.setPointerCapture(e.pointerId);
     } catch {}
@@ -188,7 +193,7 @@ document.addEventListener('visibilitychange', () => {
   });
   const end = (e) => {
     if (!g) return;
-    const { dx, dy, t, left } = g;
+    const { dx, dy, t, left, text: g0text } = g;
     g = null;
     toast.held = false;
     el.classList.remove('paused');
@@ -202,7 +207,7 @@ document.addEventListener('visibilitychange', () => {
     }
     el.style.translate = '';
     el.style.opacity = '';
-    armNote(Math.max(1200, left)); // let go: it finishes its time
+    armNote(Math.max(1200, g0text === toast.text ? left : noteMs(el.dataset.kind, toast.text))); // let go: it finishes its time
   };
   el?.addEventListener('pointerup', end);
   el?.addEventListener('pointercancel', end);
