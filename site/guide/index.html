@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hearth Guide: Set Up One Remote for Every TV</title>
+  <meta name="description" content="How to set up Hearth, connect LG, Samsung, Roku, Google TV and Apple TV, use every remote mode, wake TVs from your phone, and fix a TV that stops answering.">
+  <link rel="canonical" href="https://mutaafaziz.com/hearth/guide/">
+  <link rel="icon" href="../demo/icons/icon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wdth,wght@87.5,400..600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../legal.css">
+  <style>
+    main { padding-left: 16px; padding-right: 16px; max-width: 42rem; }
+    h3 { margin: 26px 0 4px; font-size: 18px; letter-spacing: -.01em; }
+    ol { padding-left: 1.3em; }
+    .open { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
+    .open a { display: inline-block; padding: 12px 20px; border-radius: 999px; font-weight: 700; text-decoration: none; }
+    .open .go { background: var(--ember); color: #fff; box-shadow: 0 6px 22px -8px var(--ember); }
+    .open .ghost { border: 1px solid var(--hair); color: var(--ink); background: var(--card); }
+    .toc { font: 12px/1.9 'Martian Mono', ui-monospace, monospace; color: var(--soft); }
+    .toc a { color: var(--soft); }
+    .scroll { overflow-x: auto; margin: 14px 0; border: 1px solid var(--hair); border-radius: 16px; background: var(--card); }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--hair); }
+    tr:last-child td { border-bottom: 0; }
+    th { font: 500 11px/1.4 'Martian Mono', ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+    kbd, code { font: 13px 'Martian Mono', ui-monospace, monospace; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--hair); background: var(--card); }
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="../"><i aria-hidden="true"></i>hearth</a>
+  <p class="kicker">Guide</p>
+  <h1>Hearth Guide: Set Up One Remote for Every TV</h1>
+  <p class="lede">Hearth finds the TVs on your Wi-Fi and turns every phone in the house into one fast remote. Here is setup, each brand, every mode and what to do when a TV stops answering.</p>
+  <div class="open">
+    <a class="go" href="/hearth/">Open Hearth</a>
+    <a class="ghost" href="/hearth/demo/">Try the demo</a>
+  </div>
+  <p class="toc"><a href="#what">What it is</a> · <a href="#start">Set it up</a> · <a href="#brands">Each brand</a> · <a href="#wake">Turning TVs on</a> · <a href="#remote">The remote</a> · <a href="#house">The whole house</a> · <a href="#fix">When it breaks</a> · <a href="#looks">Settings</a> · <a href="#privacy">Privacy</a> · <a href="#faq">FAQ</a></p>
+
+  <h2 id="what">What Hearth is</h2>
+  <p>Hearth is an open-source universal remote for the smart TVs in your home. It gives every phone, tablet and computer in the house the same controller: power, D-pad, volume, apps, inputs and even a message on screen. No accounts and no cloud: the remote talks straight to the TVs on your home network.</p>
+  <p>It works with LG webOS (2014 and newer), Samsung Tizen (2016 and newer), Roku players and Roku TVs, Google TV and Android TV, and Apple TV (tvOS 15 and newer). The <a href="/hearth/demo/">live demo</a> runs the real app with pretend TVs, so you can press every button first.</p>
+
+  <h2 id="start">Set it up</h2>
+  <ol>
+    <li><b>Pick a computer that stays on.</b> A Mac mini, an old laptop or a Raspberry Pi on your Wi-Fi works. Install Node.js 20.19 or newer. For "what's playing" on an Apple TV, also install Python 3.10 or newer; without it Apple TVs still get the full remote.</li>
+    <li><b>Run <code>npm run up</code></b> in the Hearth folder. It installs what it needs, starts Hearth in the background and prints a link and a QR code. Running it again is safe: it never starts a second copy.</li>
+    <li><b>Open the link on your phone.</b> Scan the QR code or type the address it shows (something like <code>http://your-computer.local:8770</code>). The phone has to be on the same Wi-Fi.</li>
+    <li><b>Type the house code once.</b> Being on the Wi-Fi isn't enough to press buttons. A new phone types the 6-digit house code, which you can see with <code>npm run code</code> on the computer or under Settings, <b>Phones in this house</b>, on a phone that's already in. A family member can also show you a one-time invite QR code that works for one phone within a day.</li>
+    <li><b>Add your TVs.</b> Turn the TV on and tap <b>Set up a TV</b>. Hearth looks for it, walks you through that brand's connect step, and asks which room it's in. New TVs that appear later show up as a "New TV nearby" banner.</li>
+  </ol>
+  <p>A short tour points at each feature the first time; replay it with the <b>?</b> button.</p>
+
+  <h2 id="brands">Connecting each brand</h2>
+  <div class="card"><b>LG</b>Pick <i>Show a number on the TV</i> and type it into your phone, or press <i>Allow</i> on the TV. You get live volume, named HDMI inputs, app icons, typing into search and messages on screen.</div>
+  <div class="card"><b>Samsung</b>2016 and 2017 sets connect by themselves with nothing to press. Newer ones ask you to press <i>Allow</i> once on the TV. Hearth shows the app on screen and the live volume level.</div>
+  <div class="card"><b>Roku</b>Nothing to press. Holding OK or an arrow is a real press-and-hold, and Roku TVs can also switch HDMI inputs. If the Roku refuses commands, set Settings, System, Advanced system settings, <i>Control by mobile apps</i>, Network access to Default.</div>
+  <div class="card"><b>Google TV and Android TV</b>Connects over Cast with no code, which covers volume, mute, asleep or on, and opening apps that have a Cast app. For arrows, OK, back, home and power, open the TV's settings in Hearth, tap <i>Unlock full remote</i> and type the 6-character code the TV shows.</div>
+  <div class="card"><b>Apple TV</b>The TV shows 4 digits; type them in and the remote works. With Python installed it then shows 4 more, which let Hearth see what's playing the moment it changes. If no numbers appear, on the Apple TV set Settings, AirPlay and HomeKit, Allow Access to <i>Anyone on the Same Network</i>.</div>
+
+  <h2 id="wake">Turning TVs on from your phone</h2>
+  <p>A TV that's switched off isn't on the network, so Hearth wakes it with a Wake-on-LAN signal. Most brands need one setting switched on once, and the setup's last screen names the right one for your model:</p>
+  <ul>
+    <li><b>LG:</b> Hearth turns on the TV's "Turn on via Wi-Fi" setting for you after pairing.</li>
+    <li><b>Samsung:</b> Settings, General, Network, Expert Settings, <b>Power On with Mobile</b>.</li>
+    <li><b>Roku:</b> nothing to set; it wakes from standby. A stick powered by the TV's USB port dies with the TV, so give it the wall adapter.</li>
+    <li><b>Apple TV:</b> nothing to set. Waking it also turns the TV on over HDMI.</li>
+    <li><b>Google TV:</b> power needs the unlocked full remote.</li>
+  </ul>
+  <p>Once that's set, any button wakes a sleeping TV: press a key or open an app and Hearth turns the TV on first, then sends the press. If a TV still won't wake, open its settings and tap <b>Turn on from your phone</b>. That coach walks through the plan for your model, tests it live, and can use a Roku or Apple TV on that TV's HDMI to switch it on instead.</p>
+
+  <h2 id="remote">Using the remote</h2>
+  <p>The remote changes with what's on the TV. When something is playing it becomes the <b>Watch</b> screen; when you're looking for something it's the D-pad; a web browser gets a trackpad and keyboard; a game gets a gamepad. You can always switch yourself with the Remote, Watch, Trackpad and Gamepad bar.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Mode</th><th>On a phone</th><th>On a keyboard</th></tr></thead>
+    <tbody>
+      <tr><td><b>Remote</b></td><td>Tap a direction or OK. Hold to repeat, faster the longer you hold. Drag across the pad like a trackpad to fly through rows. Hold OK for a long press (a real hold on Samsung, Roku and Apple TV).</td><td>Arrows, <kbd>Enter</kbd> for OK, <kbd>Backspace</kbd> or <kbd>Esc</kbd> for back, <kbd>H</kbd> home, <kbd>+</kbd> <kbd>-</kbd> volume, <kbd>M</kbd> mute.</td></tr>
+      <tr><td><b>Watch</b></td><td>Tap anywhere to play or pause. Tap or swipe a side to skip, hold a side to scrub, swipe down to go back. <b>Browse</b> brings back the D-pad.</td><td>Same keys as Remote.</td></tr>
+      <tr><td><b>Trackpad</b></td><td>Slide one finger to move, tap to click, two-finger tap for back, two-finger drag to scroll. Type in the text box to send letters to the TV.</td><td>Type straight onto the TV.</td></tr>
+      <tr><td><b>Gamepad</b></td><td>A sideways controller: A is OK (hold for a long press), B is back, X is play or pause, Y is info, shoulders skip and change volume.</td><td><kbd>X</kbd> play, <kbd>I</kbd> info, <kbd>[</kbd> <kbd>]</kbd> rewind and forward.</td></tr>
+    </tbody>
+  </table></div>
+  <p>On a computer, <kbd>1</kbd> to <kbd>4</kbd> switch modes and <kbd>?</kbd> lists the shortcuts. Every press buzzes back (iPhone needs iOS 18 or newer), and a long-press on a TV card opens its settings.</p>
+
+  <h2 id="house">Controlling the whole house</h2>
+  <ul>
+    <li><b>Power:</b> tap the power button to toggle this TV. Hold it, or <b>Hold: all off</b> on the house screen, until the bar fills to turn off every TV.</li>
+    <li><b>Watch on every TV:</b> the house screen has a row of popular apps (YouTube, YouTube TV, Netflix, Prime Video, Disney+, Max, Hulu and more). Hold one to open it on every TV, waking any that are off. Each TV answers with a check or a cross and the reason, such as "not installed".</li>
+    <li><b>Scenes:</b> tap <b>New scene</b> and say what you want in plain words, like "turn on the living room TV and open Netflix" or "mute the kids' TV at 8:30 on school nights". Hearth drafts the steps, <b>Try it now</b> runs them live, and you save it if it's right.</li>
+    <li><b>Pull to refresh:</b> pull down on the house or a remote and every TV re-reads what it's doing. What you see always comes from the TV itself, re-checked right after every press.</li>
+  </ul>
+
+  <h2 id="fix">When a TV stops answering</h2>
+  <p>Tap <b>Fix connection</b>. It appears on a TV's card after a press fails, on the remote's "Not responding" banner, in the TV's settings and in Health. It checks, in order: is the TV on the network; if not, wake it; still nothing, look for it at a new address (routers sometimes move TVs, and Hearth follows them); reconnect; check it still trusts Hearth; and if it doesn't, take you straight to the right pairing step.</p>
+  <p>Health (the pulse icon) gives every TV a report card for how quickly it answers, how reliable it is and how well it wakes, plus <b>What your TVs cost</b>: add your power bill and Hearth works out what each TV costs a day, a month and a year, from the hours it was really on and watts estimated from its size and year.</p>
+
+  <h2 id="looks">Settings and looks</h2>
+  <ul>
+    <li><b>Three skins:</b> Aurora, Classic (70s hi-fi) and 8-bit, a pocket game console with a dot-matrix screen that tells you what the TV is doing. Aurora and Classic come in Light (the default), Dark or Auto.</li>
+    <li><b>Sound and buzz</b> can each be turned off. With your phone's Reduce Motion setting on, the old-TV power-on animation is skipped.</li>
+  </ul>
+
+  <h2 id="privacy">Privacy</h2>
+  <p>On your home network, finding TVs and every press stay on the network. Pairing keys live in <code>~/.hearth/tvs.json</code> on the computer, readable only by your user, and are never sent to a browser. The optional AI help (scene drafting, model guides, reading a power bill) swaps TV and room names for placeholders and strips email addresses, links and long numbers before anything leaves. A PDF power bill is read on your phone; only the price and kWh lines are sent. Your own Hearth never shows ads; only the public demo carries one small banner under it, as described in the <a href="/ads/privacy/">ad policy</a>. The iPhone app's data use is in its <a href="../privacy/">privacy policy</a>.</p>
+
+  <h2 id="faq">FAQ</h2>
+  <h3>Why does my TV turn itself off after about 15 minutes?</h3>
+  <p>A timer on the TV is doing it, usually No Signal Power Off or Auto Power Off. Hearth spots the pattern and the remote's banner says <i>Turns itself off after ~15 min</i>; tap it for the setting to change. On a Samsung that's under Eco Solution.</p>
+  <h3>"No TVs answered." Now what?</h3>
+  <p>Make sure the TV is really on and on the same network as the computer running Hearth; guest Wi-Fi keeps devices apart. You can also add a TV by the IP address shown in its network settings. On a Mac, allow Node under Privacy and Security, Local Network.</p>
+  <h3>How do I remove a lost phone?</h3>
+  <p>Open Settings, <b>Phones in this house</b>, and hold the phone's entry: it's cut off at once. You can also pick a new house code there; phones already in stay in.</p>
+  <h3>What happens when I leave home?</h3>
+  <p>The app doesn't show an error. It turns into Light Racer, a light-cycle game, and the remote comes back by itself when you're home again. Swipe to steer, tap a side to turn, hold to boost. The <a href="/hearth/racer/">offline copy</a> plays anywhere once it's on your home screen.</p>
+
+  <div class="open" style="margin-top:32px">
+    <a class="go" href="/hearth/">Open Hearth</a>
+    <a class="ghost" href="/hearth/demo/">Try the demo</a>
+  </div>
+
+  <p class="fine">Hearth: Universal TV Remote · <a href="../support/">Support</a> · <a href="../privacy/">Privacy policy</a></p>
+</main>
+</body>
+</html>
