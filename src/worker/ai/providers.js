@@ -89,7 +89,9 @@ const userParts = (user, image) => (image ? [{ type: 'text', text: user }, { typ
 async function completeEdge({ env, model, system, user, image, signal, maxTokens = 1100 }) {
   const body = { messages: [{ role: 'system', content: system }, { role: 'user', content: userParts(user, image) }], max_tokens: maxTokens };
   if (/gemma-4|qwen3|glm/.test(model)) body.chat_template_kwargs = { enable_thinking: false };
-  const res = await env.AI.run(model, body, { signal });
+  // env.AI is Prompter (github.com/mutaaf/prompter), the shared AI gateway. An AbortSignal can't cross a
+  // service binding, so the timeout races the call here instead.
+  const res = await (signal ? Promise.race([env.AI.run(model, body), new Promise((_, no) => { const stop = () => no(Object.assign(new Error('timed out'), { name: 'AbortError' })); if (signal.aborted) stop(); else signal.addEventListener('abort', stop, { once: true }); })]) : env.AI.run(model, body));
   const text = typeof res === 'string' ? res : res?.response ?? res?.choices?.[0]?.message?.content ?? '';
   const u = res?.usage ?? {};
   return { text: typeof text === 'string' ? text : JSON.stringify(text), inTokens: u.prompt_tokens || 0, outTokens: u.completion_tokens || 0, neurons: u.neurons || 0 };
@@ -147,6 +149,7 @@ export function complete({ provider, env, key, model, system, user, image = null
 // A short, key-free message when a provider call fails.
 export function describeError(provider, err) {
   if (err?.userFacing) return err.message;
+  if (/^Prompter: .*used up/.test(String(err?.message))) return "Hearth's free AI is resting until 00:00 UTC. Add your own key in AI settings to keep going.";
   const label = PROVIDERS[provider]?.label || provider;
   const status = err?.status;
   if (status === 401 || status === 403) return `${label} rejected the key.`;
