@@ -75,6 +75,23 @@
 .wn-text b { font-size: 16.5px; line-height: 1.2; letter-spacing: -.02em; font-weight: 720; }
 .wn-text small { font-size: 14px; line-height: 1.42; color: var(--ink-soft); }
 
+/* A card with somewhere to go is one big button: the whole card is the tap. */
+.wn-card-go { padding: 0; }
+.wn-tap {
+  all: unset; box-sizing: border-box; display: flex; gap: 14px; align-items: flex-start; width: 100%;
+  padding: 14px 16px 15px 14px; border-radius: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .14s cubic-bezier(.2, .9, .2, 1), background-color .14s;
+}
+.wn-tap:active { transform: scale(.975); background: color-mix(in srgb, var(--c1) 10%, transparent); }
+.wn-tap:focus-visible { outline: 3px solid var(--c2); outline-offset: -3px; }
+.wn-go-hint {
+  justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 7px; padding: 5px 11px 5px 12px;
+  border-radius: 99px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; color: #fff;
+  background: linear-gradient(90deg, var(--c2), var(--c1)); box-shadow: 0 6px 14px -8px var(--c2);
+}
+.wn-go-hint i { font-style: normal; transition: transform .2s; }
+.wn-tap:hover .wn-go-hint i, .wn-tap:focus-visible .wn-go-hint i { transform: translateX(3px); }
+
 /* ── The full notes ── */
 .wn-more { margin-top: 12px; border-radius: 20px; background: var(--body); border: 1px solid var(--body-edge); overflow: hidden; }
 .wn-more summary {
@@ -119,5 +136,5 @@
 @media (prefers-reduced-motion: reduce) {
   .wn-glow, .wn-bulbs::before, .wn-bulbs::after { animation: none; }
   .wn-sheet[open] .wn-title > *, .wn-sheet[open] .wn-card, .wn-sheet[open] .wn-more { animation: none; }
-  .wn-more summary::after { transition: none; }
+  .wn-more summary::after, .wn-tap, .wn-go-hint i { transition: none; }
 }

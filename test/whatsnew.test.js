@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { compareVersions, createWhatsNew, decide, hadHistory, launchDecision, SEEN_KEY, skipReason } from '../web/whatsnew.js';
+import { compareVersions, createWhatsNew, decide, DESTINATIONS, goFor, hadHistory, launchDecision, SEEN_KEY, skipReason } from '../web/whatsnew.js';
 import { NOTES, RELEASE_VERSION, notesFor, storeText } from '../web/whatsnew-notes.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -88,6 +88,79 @@ test('skipped under the demo, store capture, the landing frame and automation; n
   // ?whatsnew=preview shows it anyway and records nothing.
   const ls = fakeStorage();
   assert.deepEqual(launchDecision({ env: { ...plainEnv, demo: true, preview: true }, ls }), { show: true, record: null, why: 'preview' });
+});
+
+test('the phone app can force it (Debug only): shows, records nothing, even if seen', () => {
+  const ls = fakeStorage({ [SEEN_KEY]: RELEASE_VERSION, 'hearth.prefs': '{}' });
+  const prev = globalThis.window;
+  globalThis.window = { location: { search: '' }, HearthHost: { native: true, whatsNew: 'preview' } };
+  globalThis.window.top = globalThis.window.self = globalThis.window;
+  try {
+    const d = launchDecision({ ls, current: RELEASE_VERSION, hasHistory: true });
+    assert.deepEqual(d, { show: true, record: null, why: 'preview' });
+    globalThis.window.HearthHost.whatsNew = undefined;
+    assert.equal(launchDecision({ ls, current: RELEASE_VERSION, hasHistory: true }).show, false, 'without the flag: already seen');
+  } finally {
+    globalThis.window = prev;
+  }
+  assert.equal(ls.getItem(SEEN_KEY), RELEASE_VERSION);
+});
+
+test('callouts go to their feature: known places only, the rest stay plain', () => {
+  assert.equal(goFor({ go: 'scene-say' }), 'scene-say');
+  assert.equal(goFor({ go: 'nowhere' }), null, 'unknown → plain card');
+  assert.equal(goFor({}), null);
+  for (const n of NOTES) for (const c of n.callouts) if ('go' in c) assert.ok(DESTINATIONS.includes(c.go), `${n.version}: "${c.title}" goes to a known place (${c.go})`);
+  // 0.16.0: the three cards with a screen go there; "it moved" just happens.
+  const by = Object.fromEntries(notesFor('0.16.0').callouts.map((c) => [c.title, goFor(c)]));
+  assert.deepEqual(by, { 'Scenes, just say it': 'scene-say', 'A wake-up call that works': 'wake', 'Plot twist: it moved': null, 'Daylight mode': 'settings' });
+  // app.js opens every destination.
+  const app = read('web/app.js');
+  const router = app.slice(app.indexOf('const whatsNewGo = {'), app.indexOf('const whatsNew = createWhatsNew'));
+  for (const to of DESTINATIONS) assert.match(router, new RegExp(`['"]?${to}['"]?: \\(\\) =>`), `app.js routes ${to}`);
+  assert.match(app, /onGo: \(to\) => whatsNewGo\[to\]/);
+});
+
+test('a card tap closes the sheet, then opens the place; the tour stays away', () => {
+  // A tiny dialog stand-in: enough for open() → go() → close → onClose/onGo.
+  const events = [];
+  const fakeDialog = () => ({
+    open: false, dataset: {}, listeners: {}, scrollTop: 0, innerHTML: '',
+    setAttribute() {}, querySelector: () => null,
+    addEventListener(t, f) { (this.listeners[t] ??= []).push(f); },
+    showModal() { this.open = true; },
+    close() { this.open = false; for (const f of this.listeners.close ?? []) f(); },
+  });
+  let dlg;
+  const prevDoc = globalThis.document;
+  globalThis.document = { createElement: () => (dlg = fakeDialog()), body: { append() {} } };
+  try {
+    const wn = createWhatsNew({ track: (e, p) => events.push(['track', p.step, p.to]), onClose: ({ went }) => events.push(['close', went]), onGo: (to) => events.push(['go', to]), ls: fakeStorage() });
+    wn.open('0.16.0', 'test');
+    assert.match(dlg.innerHTML, /data-wn-go="scene-say"/);
+    assert.match(dlg.innerHTML, /data-wn-go="wake"/);
+    assert.match(dlg.innerHTML, /data-wn-go="settings"/);
+    assert.equal((dlg.innerHTML.match(/data-wn-go=/g) ?? []).length, 3, '"it moved" has nowhere to go: plain');
+    events.length = 0;
+    assert.equal(wn.go('nowhere'), false, 'unknown place: nothing happens');
+    assert.equal(dlg.open, true);
+    assert.equal(wn.go('wake'), true);
+    assert.equal(dlg.open, false);
+    assert.deepEqual(events, [['track', 'go', 'wake'], ['track', 'close', 'wake'], ['close', 'wake'], ['go', 'wake']]);
+    // Without onGo the cards are plain and go() does nothing.
+    const plain = createWhatsNew({ ls: fakeStorage() });
+    plain.open('0.16.0', 'test');
+    assert.doesNotMatch(dlg.innerHTML, /data-wn-go=/);
+    assert.equal(plain.go('wake'), false);
+    // Closing with the button: no destination, so the tour may come.
+    events.length = 0;
+    const wn2 = createWhatsNew({ track: (e, p) => events.push(['track', p.step, p.to]), onClose: ({ went }) => events.push(['close', went]), onGo: (to) => events.push(['go', to]), ls: fakeStorage() });
+    wn2.open('0.16.0', 'test');
+    dlg.close();
+    assert.deepEqual(events.slice(-2), [['track', 'close', ''], ['close', null]]);
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });
 
 test('notes exist for the current version, which is package.json’s', () => {

@@ -1075,7 +1075,22 @@ const away = createAway({ isDemo: Boolean(demo) });
 // for the screen to settle; skipped while setup or a sheet is up.
 const tour = createTour();
 // "What's new", once after an update (web/whatsnew.js); the tour waits for it.
-const whatsNew = createWhatsNew({ track, haptic, onClose: () => tourSoon() });
+// A callout with `go` (web/whatsnew-notes.js) closes the sheet and opens its place;
+// the tour stays away then, so it doesn't land on top of that place.
+const whatsNewGo = {
+  'scene-say': () => scenes.openEditor(),
+  wake: () => {
+    const t = tvs.get(current) ?? [...tvs.values()].find((x) => x.paired !== false);
+    return t ? wake.open(t.id, { from: 'whatsnew' }) : setup.open();
+  },
+  settings: () => openSettings(),
+};
+const whatsNew = createWhatsNew({
+  track,
+  haptic,
+  onClose: ({ went } = {}) => went || tourSoon(),
+  onGo: (to) => whatsNewGo[to]?.(),
+});
 let tourTimer = 0;
 function tourSoon() {
   clearTimeout(tourTimer);
