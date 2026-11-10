@@ -180,11 +180,17 @@ export class LgDriver extends Driver {
     await new Promise((resolve, reject) => {
       const done = (err) => {
         clearTimeout(t);
+        clearInterval(again);
         this.off('connect', ok);
         err ? reject(err) : resolve();
       };
       const ok = () => done();
       const t = setTimeout(() => done(offline()), ms);
+      // lgtv2 says nothing when a try fails the same way as the last one, so a
+      // try that died just before this press still looks in flight: dial again
+      // every second while someone waits (seen as a press failing "offline"
+      // right after the TV came on).
+      const again = setInterval(() => this.#client && this.#dial(this.#client, true), 1000);
       this.on('connect', ok);
     });
     return this.#client;
