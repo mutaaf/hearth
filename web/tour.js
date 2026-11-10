@@ -7,7 +7,7 @@
 // no per-frame work), one bubble, CSS animations on transform/opacity only,
 // one getBoundingClientRect per step. Steps whose control isn't on screen
 // (another look, a TV that's off, no Live Activities on the web) are skipped.
-import { haptic } from './feel.js';
+import { haptic, safeInsets } from './feel.js';
 import { track } from './analytics.js';
 
 const SEEN = 'hearth.tour.seen';
@@ -194,12 +194,16 @@ export function createTour() {
     const tip = root.querySelector('.tour-tip');
     const vw = innerWidth;
     const vh = innerHeight;
+    // Keep the bubble clear of a camera or status bar on the side (iPhone Duo's
+    // outer screen) or the top/bottom.
+    const safe = safeInsets();
+    const [L, R, T, B] = [16 + safe.left, 16 + safe.right, 16 + safe.top, 16 + safe.bottom];
     root.classList.toggle('carded', !step.el);
     if (!step.el) {
       // A card in the middle: the spotlight shrinks to nothing behind it.
       spot.style.transform = `translate(${vw / 2}px, ${vh / 2}px)`;
       spot.style.width = spot.style.height = '0px';
-      tip.style.transform = `translate(${Math.max(16, (vw - tip.offsetWidth) / 2)}px, ${Math.max(16, (vh - tip.offsetHeight) / 2)}px)`;
+      tip.style.transform = `translate(${Math.max(L, (vw - tip.offsetWidth) / 2)}px, ${Math.max(T, (vh - tip.offsetHeight) / 2)}px)`;
       return;
     }
     const r = step.el.getBoundingClientRect();
@@ -213,10 +217,10 @@ export function createTour() {
     spot.style.borderRadius = getComputedStyle(step.el).borderRadius === '50%' || r.width === r.height ? '50%' : '22px';
     const tw = tip.offsetWidth;
     const th = tip.offsetHeight;
-    const below = box.y + box.h + GAP + th < vh - 16 || box.y < th + GAP + 16;
-    const y = below ? Math.min(box.y + box.h + GAP, vh - th - 16) : box.y - GAP - th;
-    const x = Math.min(Math.max(16, box.x + box.w / 2 - tw / 2), vw - tw - 16);
-    tip.style.transform = `translate(${x}px, ${Math.max(16, y)}px)`;
+    const below = box.y + box.h + GAP + th < vh - B || box.y < th + GAP + T;
+    const y = below ? Math.min(box.y + box.h + GAP, vh - th - B) : box.y - GAP - th;
+    const x = Math.min(Math.max(L, box.x + box.w / 2 - tw / 2), vw - tw - R);
+    tip.style.transform = `translate(${x}px, ${Math.max(T, y)}px)`;
     tip.classList.toggle('above', !below);
     tip.style.setProperty('--arrow-x', `${Math.min(Math.max(24, box.x + box.w / 2 - x), tw - 24)}px`);
   }

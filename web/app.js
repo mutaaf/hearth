@@ -102,62 +102,111 @@ const household = createHousehold({ api, note, isDemo: Boolean(demo) });
 const eggs = createEggs({ note, feedback, savePrefs: (p) => (savePrefs(p), refreshFields(), render()) });
 document.querySelector('.masthead .brand')?.addEventListener('click', () => eggs.logo());
 
-let noteTimer;
 // The toast. kind: true/'error', 'success', 'wake', or info (default).
 // It sits in the top layer (popover), so it shows over open sheets too, and
 // it's never blank: an empty or junk message becomes a friendly line.
+// Short by design: 1.6-3 s (errors 3.6 s). The same line again doesn't restart
+// it (a burst of failed presses used to keep one up for good); a finger on it
+// pauses it; a flick in any direction but down, or a tap, sends it away.
 const NOTE_ICON = { error: '!', success: '✓', wake: '⚡', info: '' };
+const noteMs = (type, text) => (type === 'error' ? 3600 : Math.min(3000, 1600 + text.length * 18));
+const toast = { timer: 0, until: 0, text: '', held: false, hiding: 0 };
 function note(message, kind = false) {
   const type = kind === true ? 'error' : kind || 'info';
   const text = plain(message, type === 'error' ? quip('oops') : '');
   if (!text) return;
   if (type === 'error') track('ui_error', { message: text.slice(0, 80), screen: currentScreen() ?? '' });
   const el = $('#note');
+  const up = el.classList.contains('show');
+  if (up && text === toast.text && el.dataset.kind === type) return; // already saying it
+  clearTimeout(toast.hiding);
   el.querySelector('.note-text').textContent = text;
   el.querySelector('.note-ico').textContent = NOTE_ICON[type] ?? '';
   el.dataset.kind = type;
-  const ms = type === 'error' ? 4600 : Math.min(4200, 1900 + text.length * 28);
+  toast.text = text;
+  const ms = noteMs(type, text);
   el.style.setProperty('--note-ms', `${ms}ms`);
+  el.style.translate = '';
+  el.style.opacity = '';
   try {
-    if (el.matches(':popover-open')) el.hidePopover();
-    el.showPopover(); // above any open <dialog>
+    if (!el.matches(':popover-open')) el.showPopover(); // above any open <dialog>
   } catch {}
-  el.classList.remove('show');
+  el.classList.remove('show', 'paused');
   void el.offsetWidth; // restart the entrance and the timer bar
   el.classList.add('show');
-  clearTimeout(noteTimer);
-  noteTimer = setTimeout(hideNote, ms);
+  armNote(ms);
+}
+function armNote(ms) {
+  clearTimeout(toast.timer);
+  toast.until = Date.now() + ms;
+  toast.timer = setTimeout(hideNote, ms);
 }
 function hideNote() {
   const el = $('#note');
-  el.classList.remove('show');
-  clearTimeout(noteTimer);
-  setTimeout(() => {
+  clearTimeout(toast.timer);
+  toast.until = 0;
+  toast.held = false;
+  toast.text = '';
+  el.classList.remove('show', 'paused');
+  clearTimeout(toast.hiding);
+  toast.hiding = setTimeout(() => {
     if (el.classList.contains('show')) return;
+    el.style.translate = '';
+    el.style.opacity = '';
     try {
       el.hidePopover();
     } catch {}
-  }, 400);
+  }, 450);
 }
-// Flick it away (up), or tap it.
+// Timers sleep with the app in the background: a toast that outlived its
+// time while away goes the moment the app is back.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && toast.until && !toast.held && Date.now() >= toast.until) hideNote();
+});
+// Flick it away (up or sideways), or tap it. The pill follows the finger, and
+// pointer capture keeps the gesture ours when the finger leaves the pill.
 {
   const el = document.querySelector('#note');
-  let y0 = null;
-  el?.addEventListener('pointerdown', (e) => (y0 = e.clientY));
-  el?.addEventListener('pointermove', (e) => {
-    if (y0 == null) return;
-    const dy = Math.min(0, e.clientY - y0);
-    el.style.translate = `0 ${dy}px`;
+  let g = null;
+  el?.addEventListener('pointerdown', (e) => {
+    if (!el.classList.contains('show')) return;
+    g = { x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, dy: 0, left: Math.max(0, toast.until - Date.now()) };
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {}
+    clearTimeout(toast.timer); // a finger on it holds it
+    toast.held = true;
+    el.classList.add('paused');
   });
-  const up = (e) => {
-    if (y0 == null) return;
-    const dy = e.clientY - y0;
-    y0 = null;
+  el?.addEventListener('pointermove', (e) => {
+    if (!g) return;
+    g.dx = e.clientX - g.x;
+    g.dy = e.clientY - g.y;
+    const dy = g.dy < 0 ? g.dy : g.dy * 0.2; // down only rubber-bands
+    el.style.translate = `${g.dx}px ${dy}px`;
+    el.style.opacity = String(Math.max(0.2, 1 - Math.max(Math.abs(g.dx) / 220, -g.dy / 90, 0)));
+  });
+  const end = (e) => {
+    if (!g) return;
+    const { dx, dy, t, left } = g;
+    g = null;
+    toast.held = false;
+    el.classList.remove('paused');
+    const v = Math.hypot(dx, dy) / Math.max(1, performance.now() - t); // px/ms
+    const tap = Math.hypot(dx, dy) < 8 && e.type === 'pointerup';
+    const flung = dy < -24 || Math.abs(dx) > 60 || (v > 0.35 && (dy < 0 || Math.abs(dx) > Math.abs(dy)));
+    if (tap || flung) {
+      if (flung) el.style.translate = `${dx * 2.5}px ${Math.min(dy, 0) * 2.5 - (Math.abs(dx) > Math.abs(dy) ? 0 : 60)}px`;
+      el.style.opacity = '0';
+      return hideNote();
+    }
     el.style.translate = '';
-    if (dy < -24 || Math.abs(dy) < 6) hideNote();
+    el.style.opacity = '';
+    armNote(Math.max(1200, left)); // let go: it finishes its time
   };
-  el?.addEventListener('pointerup', up);
-  el?.addEventListener('pointercancel', up);
+  el?.addEventListener('pointerup', end);
+  el?.addEventListener('pointercancel', end);
+  el?.addEventListener('lostpointercapture', end);
 }
 
 const isOn = (t) => t.state?.online && t.state.power === 'on';
@@ -251,11 +300,11 @@ function renderSwitcher() {
   }
 }
 
-// A paired TV that isn't answering. If it switched off normally there's
-// nothing to fix (still paired): say how to turn it on, and say so plainly
-// when it keeps switching itself off. Only a TV that vanished while on gets
-// the doctor.
-const wentOff = (t) => t.paired && !t.state?.online && t.off?.last === 'off';
+// A paired TV that isn't answering. Still paired, so there's nothing to fix:
+// say how to turn it on, and say so plainly when it keeps switching itself off.
+// Off the network is "off" unless a press just failed (`off.trouble`): a TV
+// switched off with its own remote, or off for days, is not a problem to fix.
+const wentOff = (t) => t.paired && !t.state?.online && !t.off?.trouble;
 function renderFixBanner(t) {
   const show = t.paired && !t.state?.online;
   $('#fixBanner').hidden = !show;

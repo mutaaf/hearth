@@ -4,7 +4,7 @@ html.at-door body { overflow: hidden; }
 html.at-door.stale::after { display: none; } /* not "Reconnecting…": the phone is just not in yet */
 .door {
   position: fixed; inset: 0; z-index: 97; display: grid; place-items: center; overflow-y: auto;
-  padding: max(20px, var(--safe-t)) 16px max(20px, var(--safe-b));
+  padding: max(20px, var(--safe-t)) var(--gut-r) max(20px, var(--safe-b)) var(--gut-l);
   background: radial-gradient(90% 55% at 50% 0%, var(--signal-soft), transparent 70%), var(--bg);
   color: var(--ink); animation: doorin .5s cubic-bezier(.2, .9, .2, 1);
 }

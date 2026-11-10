@@ -186,10 +186,15 @@ export class Telemetry {
   // it vanished while on (unplugged, Wi-Fi). `autoOff`: it keeps switching
   // itself off after the same time on, with nobody pressing power on any TV
   // (a Roku's power-off reaches its TV over HDMI-CEC) → a sleep timer.
+  // `trouble`: the last thing asked of this TV in the past 10 minutes failed
+  // (not a capability answer). A paired TV that's simply off the network is
+  // off; only trouble is worth a "Not responding · Fix".
   offPattern(id) {
     const r = this.tvs.get(id);
-    if (!r?.power.length) return { last: null, autoOff: null };
     const now = this.now();
+    const lastCmd = r?.cmds.findLast((c) => now - c.t < 10 * 60_000);
+    const trouble = Boolean(lastCmd && !lastCmd.ok && !/isn't supported|not supported/i.test(lastCmd.e ?? ''));
+    if (!r?.power.length) return { last: null, autoOff: null, trouble };
     const asks = [];
     for (const rec of this.tvs.values()) for (const c of rec.cmds) if (/^power(Off|All)/.test(c.a)) asks.push(c.t);
     const asked = (t) => asks.some((a) => a <= t + 2000 && t - a < 30_000);
@@ -212,9 +217,9 @@ export class Telemetry {
       const near = itself.filter((y) => Math.abs(y.end - y.start - (x.end - x.start)) <= 2 * 60_000);
       if (near.length > best.length) best = near;
     }
-    if (best.length < 2 || best.length * 2 < itself.length) return { last, autoOff: null };
+    if (best.length < 2 || best.length * 2 < itself.length) return { last, autoOff: null, trouble };
     const lens = best.map((x) => x.end - x.start).sort((a, b) => a - b);
-    return { last, autoOff: { minutes: Math.round(lens[Math.floor(lens.length / 2)] / 60_000), count: best.length, lastAt: Math.max(...best.map((x) => x.end)) } };
+    return { last, trouble, autoOff: { minutes: Math.round(lens[Math.floor(lens.length / 2)] / 60_000), count: best.length, lastAt: Math.max(...best.map((x) => x.end)) } };
   }
 
   summary(id) {

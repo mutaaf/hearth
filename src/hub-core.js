@@ -52,6 +52,7 @@ export class Hub extends EventEmitter {
     await this.energy.load();
     this.tvs = await this.store.load();
     for (const tv of this.tvs) this.#attach(tv);
+    this.#startLookout();
     return this;
   }
 
@@ -60,6 +61,9 @@ export class Hub extends EventEmitter {
     for (const timers of this.#settleTimers.values()) timers.forEach(clearTimeout);
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);
     this.#stopLookout();
+    clearInterval(this.#burst);
+    this.#burst = null;
+    this.#closed = true;
     await Promise.all([...this.#drivers.values()].map((d) => d.stop()));
     await this.telemetry.flush();
     await this.onClose();
@@ -92,6 +96,14 @@ export class Hub extends EventEmitter {
       const online = Boolean(state.online);
       if (online && this.#wasOnline.get(tv.id) === false) this.#cameWith(tv);
       this.#wasOnline.set(tv.id, online);
+      // A box switched on (or put to work) with its own remote turns on the
+      // TV it's plugged into (HDMI-CEC): look for that TV now, not in a minute.
+      if (WAKE_BOXES.has(tv.brand)) {
+        const busy = on ? `on|${state.app ?? ''}` : 'off';
+        const was = this.#boxBusy.get(tv.id);
+        this.#boxBusy.set(tv.id, busy);
+        if (was !== undefined && busy !== 'off' && busy !== was) this.boxActive(tv.id);
+      }
       this.emit('change', this.view(tv));
     });
     driver.on('connection-error', () => {});
@@ -511,7 +523,32 @@ export class Hub extends EventEmitter {
     if (box.brand === 'roku') await d.key('home').catch(() => {});
   }
   #wasOnline = new Map();
-  #boxWokeAt = null; // { id, at }: the box Hearth just woke
+  #boxBusy = new Map(); // box id → 'off' | 'on|<app>'
+  #boxWokeAt = null; // { id, at }: the box Hearth just woke (or saw come on)
+  // A Roku or Apple TV just came on or got a press: the TV on its HDMI may be
+  // coming on with it (CEC), whoever pressed. Watch every quiet TV closely for
+  // a little while (`burstMs`, 30 s): a knock every `burstEveryMs` (2 s), a
+  // reconnect the moment one answers, a re-read of any that's online but asleep.
+  #closed = false;
+  boxActive(id) {
+    if (this.#closed) return;
+    this.#boxWokeAt = { id, at: Date.now() };
+    this.#burstUntil = Date.now() + (this.burstMs ?? 30_000);
+    if (this.#burst) return;
+    const tick = () => {
+      if (Date.now() > this.#burstUntil) {
+        clearInterval(this.#burst);
+        this.#burst = null;
+        return;
+      }
+      this.#knock({ refreshAsleep: true }).catch(() => {});
+    };
+    this.#burst = setInterval(tick, this.burstEveryMs ?? 2000);
+    this.#burst.unref?.();
+    tick();
+  }
+  #burst = null;
+  #burstUntil = 0;
   #offered = new Set(); // "tv|box" already suggested
   // A quiet TV that comes on within moments of Hearth waking a box is
   // probably plugged into it: offer to wake it that way from now on.
@@ -574,7 +611,7 @@ export class Hub extends EventEmitter {
   async wakeFor(id) {
     const tv = this.get(id);
     // Any press on a box can bring its TV on with it (CEC): watch for that.
-    if (WAKE_BOXES.has(tv.brand)) this.#boxWokeAt = { id, at: Date.now() };
+    if (WAKE_BOXES.has(tv.brand)) this.boxActive(id);
     const view = this.view(tv);
     const st = view.state;
     if (!tv.credentials || st?.online && (st.power === 'on' || st.power === 'unknown')) return false;
@@ -679,47 +716,62 @@ export class Hub extends EventEmitter {
     const now = this.viewers > 0;
     if (was === now) return;
     for (const d of this.#drivers.values()) d.setActive?.(now);
-    if (now) this.#startLookout();
-    else this.#stopLookout();
+    this.#startLookout(); // fast while someone looks, slow otherwise
   }
 
   // A paired TV that's off drops off the network, and its driver retries on a
   // backoff that grows to 60 s. So while someone has Hearth open, knock on
   // each offline TV's control port every few seconds and reconnect the moment
   // it answers: a TV switched on with its own remote is back in seconds.
+  // When nobody's looking it still knocks, slowly (`idleLookoutMs`, 30 s), so
+  // the house is right the moment the app opens and scenes find TVs on.
   #lookout = null;
   #looking = false;
   #kicked = new Map();
-  #startLookout(everyMs = this.lookoutMs ?? 4000) {
-    if (this.#lookout) return;
-    const tick = async () => {
-      if (this.#looking) return;
-      this.#looking = true;
-      try {
-        for (const tv of this.tvs) {
-          const d = this.#drivers.get(tv.id);
-          if (!tv.credentials || !d?.reconnect || d.state?.online) continue;
-          let up = false;
-          for (const port of REACH_PORTS[tv.brand] ?? []) if (!up) up = await (this.portOpenFn ?? portOpen)(tv.ip, port, 900);
-          if (up) this.kick(tv.id);
-          // Once per visit: maybe it moved rather than switched off.
-          else if (!this.#sought.has(tv.id)) {
-            this.#sought.add(tv.id);
-            this.seek();
-          }
-        }
-      } finally {
-        this.#looking = false;
-      }
-    };
-    this.#lookout = setInterval(() => tick().catch(() => {}), everyMs);
+  #lookoutEvery = 0;
+  #startLookout(everyMs = this.viewers > 0 ? this.lookoutMs ?? 4000 : this.idleLookoutMs ?? 30_000) {
+    if (this.#lookout && this.#lookoutEvery === everyMs) return;
+    clearInterval(this.#lookout);
+    this.#lookoutEvery = everyMs;
+    const tick = () => this.#knock({ seek: this.viewers > 0 }).catch(() => {});
+    this.#lookout = setInterval(tick, everyMs);
     this.#lookout.unref?.();
+    if (this.viewers > 0) tick(); // someone just opened the app: look now
+  }
+  // One knock on every paired TV that's off the network, all at once (one
+  // slow TV mustn't hold up the rest). With `refreshAsleep`, a TV that's on
+  // the network but not on (standby) re-reads its power too.
+  async #knock({ seek = false, refreshAsleep = false } = {}) {
+    if (this.#looking) return;
+    this.#looking = true;
+    try {
+      await Promise.all(this.tvs.map(async (tv) => {
+        const d = this.#drivers.get(tv.id);
+        if (!tv.credentials || !d) return;
+        if (d.state?.online) {
+          if (refreshAsleep && d.state.power !== 'on' && d.refresh) await Promise.resolve(d.refresh()).catch(() => {});
+          return;
+        }
+        if (!d.reconnect) return;
+        let up = false;
+        for (const port of REACH_PORTS[tv.brand] ?? []) if (!up) up = await (this.portOpenFn ?? portOpen)(tv.ip, port, 900);
+        if (up) this.kick(tv.id);
+        // Once per visit: maybe it moved rather than switched off.
+        else if (seek && !this.#sought.has(tv.id)) {
+          this.#sought.add(tv.id);
+          this.seek();
+        }
+      }));
+    } finally {
+      this.#looking = false;
+    }
   }
   #sought = new Set();
   #stopLookout() {
     this.#sought.clear();
     clearInterval(this.#lookout);
     this.#lookout = null;
+    this.#lookoutEvery = 0;
   }
   // A fresh connection now (at most every 8 s per TV unless forced).
   kick(id, { force = false } = {}) {

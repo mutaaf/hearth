@@ -6,7 +6,7 @@ html { touch-action: manipulation; } /* no double-tap zoom anywhere */
 
 .ptr {
   --p: 0; --pull: 0;
-  position: fixed; left: 50%; top: calc(var(--safe-t) + var(--demo-bar, 0px) + 6px); z-index: 70; width: 44px; height: 44px; margin-left: -22px;
+  position: fixed; left: calc(50% + var(--cx)); top: calc(var(--safe-t) + var(--demo-bar, 0px) + 6px); z-index: 70; width: 44px; height: 44px; margin-left: -22px;
   display: grid; place-items: center; border-radius: 50%; pointer-events: none; opacity: 0;
   background: var(--body); border: 1px solid var(--body-edge); box-shadow: 0 10px 30px -10px #0008;
   transform: translateY(calc(var(--pull) * 1px - 52px)) rotate(calc(var(--p) * 270deg));

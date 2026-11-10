@@ -188,3 +188,45 @@ test('wake plan: a phone that can’t broadcast says so for an LG, and points at
   assert.match(p.why, /can’t send the wake-up signal/);
   assert.equal(wakePlan(lg, [roku], { broadcast: true }).way, 'network');
 });
+
+test('a box switched on with its own remote: the TV on its HDMI is looked for at once, and the wake-via offer follows', async () => {
+  const { hub, ids, done } = await house();
+  try {
+    const den = hub.driver(ids.tv);
+    let denUp = false;
+    den.reconnect = async () => {
+      log.push(['Den', 'reconnect']);
+      if (denUp) den.setState({ online: true, power: 'on' });
+    };
+    Object.assign(hub, { burstEveryMs: 10, burstMs: 500, portOpenFn: async (ip) => ip === '10.0.0.6' && denUp });
+    const offers = [];
+    hub.on('wake-via', (e) => offers.push(e));
+    den.setState({ online: false, power: 'off' });
+    const roku = hub.driver(ids.roku);
+    roku.setState({ online: true, power: 'on' }); // first word from the box: a baseline, not a trigger
+    log.length = 0;
+    denUp = true; // CEC: the Samsung comes on with the Roku
+    roku.setState({ app: '12' }); // someone opened Netflix with the Roku remote
+    for (let i = 0; i < 50 && !den.state.online; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(den.state.online, true, 'found without anyone opening the app');
+    assert.ok(log.some((l) => l[0] === 'Den' && l[1] === 'reconnect'));
+    assert.deepEqual(offers, [{ id: ids.tv, via: ids.roku }]);
+  } finally {
+    await done();
+  }
+});
+
+test('the lookout knocks even with nobody looking (slowly), and at once when the app opens', async () => {
+  const { hub, ids, done } = await house();
+  try {
+    const den = hub.driver(ids.tv);
+    den.reconnect = async () => den.setState({ online: true, power: 'on' });
+    Object.assign(hub, { lookoutMs: 10_000, portOpenFn: async (ip) => ip === '10.0.0.6' });
+    hub.setViewers(1); // the first knock doesn't wait for the interval
+    for (let i = 0; i < 50 && !den.state.online; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(den.state.online, true);
+  } finally {
+    hub.setViewers(0);
+    await done();
+  }
+});

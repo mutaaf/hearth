@@ -12,7 +12,7 @@ html.is-racing body { overflow: hidden; }
    passing old TV state off as live. Pure CSS, so it needs no markup. */
 html.stale::after {
   content: 'Reconnecting…';
-  position: fixed; z-index: 999; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px);
+  position: fixed; z-index: 999; left: calc(50% + var(--cx, 0px)); top: calc(env(safe-area-inset-top, 0px) + 10px);
   transform: translateX(-50%);
   padding: 7px 14px 7px 30px; border-radius: 999px;
   font: 600 12px/1.2 var(--mono, ui-monospace, monospace); letter-spacing: 0.04em;

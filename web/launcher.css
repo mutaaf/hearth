@@ -34,7 +34,7 @@
 .wake-toggle.pressed { transform: scale(.95); }
 .watch-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: 84px; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity;
-  scrollbar-width: none; margin: 0 -16px; padding: 4px 16px 6px; overscroll-behavior-x: contain;
+  scrollbar-width: none; margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l)); padding: 4px var(--gut-r) 6px var(--gut-l); overscroll-behavior-x: contain;
 }
 .watch-row::-webkit-scrollbar { display: none; }
 .watch-row .app { scroll-snap-align: start; }
