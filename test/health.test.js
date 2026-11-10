@@ -300,10 +300,18 @@ test('telemetry: a TV that keeps switching itself off after ~15 min', () => {
   const f = r.findings.find((x) => /Turns itself off/.test(x.title));
   assert.equal(f.severity, 'high');
   assert.match(f.fix, /No Signal Power Off/);
-  // Vanished while on (unplugged): not a timer, and the doctor is the right call.
+  // Vanished while on (unplugged, or off with its own remote): not a timer,
+  // and not trouble either until a press fails.
   session('plug', 15, { lost: true });
   session('plug', 15, { lost: true });
-  assert.deepEqual(tel.offPattern('plug'), { last: 'lost', autoOff: null });
+  assert.deepEqual(tel.offPattern('plug'), { last: 'lost', autoOff: null, trouble: false });
+  tel.command('plug', 'key', false, 40, 'Living Room is offline');
+  assert.equal(tel.offPattern('plug').trouble, true, 'a press that just failed is trouble');
+  tel.command('plug', 'setInput', false, 10, "Changing input isn't supported on this TV");
+  assert.equal(tel.offPattern('plug').trouble, false, 'a capability answer is not');
+  tel.command('plug', 'toast', false, 10, 'TV is off or not reachable');
+  tel.command('plug', 'apps', false, 10, 'TV is off or not reachable');
+  assert.equal(tel.offPattern('plug').trouble, false, 'a scene\'s message or an icon fetch is not a press');
 });
 
 test('telemetry: switching a TV on by hand long after a wake isn’t a working wake', () => {

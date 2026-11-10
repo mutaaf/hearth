@@ -130,7 +130,7 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 
 ## Troubleshooting
 
-**First, tap Fix.** Every TV has a **Fix connection** button. It's on a card that stops answering, on the remote's "Not responding" banner, in the TV's ⚙ settings, in Health, and as a bulk action. Health also has **Fix every connection**. It checks, in order:
+**First, tap Fix.** Every TV has a **Fix connection** button. It shows on a card only when a press to that TV just failed (a TV that is simply off, even for days, just says *Off* and reconnects by itself when it comes back, including when a Roku or Apple TV on its HDMI turns it on), on the remote's "Not responding" banner, in the TV's ⚙ settings, in Health, and as a bulk action. Health also has **Fix every connection**. It checks, in order:
 
 1. Is the TV on the network?
 2. If not, wake it with Wake-on-LAN.

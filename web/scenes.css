@@ -23,8 +23,8 @@ body.selecting .dock { display: none; }
 body.selecting .colophon { padding-bottom: 300px; }
 
 .bulkbar {
-  position: fixed; left: 50%; bottom: calc(10px + var(--safe-b)); z-index: 45; transform: translateX(-50%);
-  width: min(calc(100% - 20px), 560px); max-height: 62dvh; overflow-y: auto; padding: 12px; border-radius: 26px;
+  position: fixed; left: calc(50% + var(--cx)); bottom: calc(10px + var(--safe-b)); z-index: 45; transform: translateX(-50%);
+  width: min(calc(var(--safe-w) - 20px), 560px); max-height: 62dvh; overflow-y: auto; padding: 12px; border-radius: 26px;
   background: color-mix(in srgb, var(--key) 94%, transparent); color: var(--key-ink); box-shadow: 0 24px 60px -12px #000c;
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); animation: sheet .3s cubic-bezier(.2, .9, .2, 1);
 }
@@ -57,7 +57,7 @@ body.selecting .colophon { padding-bottom: 300px; }
 .scenes-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 10px; }
 .scenes-head h3 { margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-soft); }
 .scenes-head small { font-size: 9px; text-transform: uppercase; color: var(--ink-faint); }
-.scenes-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 6px; }
+.scenes-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l)); padding: 2px var(--gut-r) 6px var(--gut-l); }
 .scenes-row::-webkit-scrollbar { display: none; }
 .scene-card {
   position: relative; flex: none; width: 148px; min-height: 112px; scroll-snap-align: start; overflow: hidden;
@@ -112,7 +112,7 @@ body.selecting .colophon { padding-bottom: 300px; }
 .ed-days button { width: 46px; height: 46px; border-radius: 50%; font-weight: 700; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); }
 .ed-days button.active { background: var(--signal); border-color: var(--signal); color: #fff; }
 .ed-days input[type="time"] { margin-left: auto; min-height: 46px; padding: 0 12px; border-radius: 14px; font-size: 17px; background: var(--body); border: 1px solid var(--body-edge); color: var(--ink); }
-.ed-save { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 20px calc(16px + var(--safe-b)); background: linear-gradient(transparent, var(--bg) 35%); display: grid; justify-items: center; }
+.ed-save { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px max(20px, calc(var(--safe-r) + 8px)) calc(16px + var(--safe-b)) max(20px, calc(var(--safe-l) + 8px)); background: linear-gradient(transparent, var(--bg) 35%); display: grid; justify-items: center; }
 .ed-save .cta { width: min(100%, 480px); }
 /* Save + Try it side by side; the try's progress line sits above them. */
 .ed-save .say-actions { width: min(100%, 480px); display: flex; gap: 10px; }

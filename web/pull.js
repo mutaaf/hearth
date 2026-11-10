@@ -10,7 +10,7 @@ const THRESHOLD = 72; // px of pull (after resistance) that refreshes
 const MAX = 120;
 // Where a pull may start in the remote view; the house view is all fair game.
 const REMOTE_ZONES = '.remote-top, .hud, .hud-ticker, .device-head, .mode-bar, .pair-banner, .fix-banner';
-const NEVER = '.pad, .orb-zone, .slider, .rocker-ch, .sc-surface, .mode-panel, .kb-overlay, input, textarea, select, dialog, .door, .away-overlay, .bulkbar, [data-no-pull]';
+const NEVER = '.pad, .orb-zone, .slider, .rocker-ch, .sc-surface, .mode-panel, .kb-overlay, input, textarea, select, dialog, .door, .away-overlay, .bulkbar, .note, [data-no-pull]';
 
 export function createPull({ onRefresh }) {
   const ind = document.createElement('div');

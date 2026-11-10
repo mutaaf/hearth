@@ -6,7 +6,7 @@
 .energy {
   position: fixed; inset: 0; z-index: 86; overflow-y: auto; -webkit-overflow-scrolling: touch;
   background: var(--bg); color: var(--ink);
-  padding: max(12px, var(--safe-t)) 16px calc(28px + var(--safe-b));
+  padding: max(12px, var(--safe-t)) var(--gut-r) calc(28px + var(--safe-b)) var(--gut-l);
   animation: fadein .25s ease-out;
 }
 .en-wrap { max-width: 640px; margin: 0 auto; display: grid; gap: 16px; }

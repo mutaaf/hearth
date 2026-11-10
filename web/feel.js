@@ -89,6 +89,22 @@ const iosVersion = (() => {
   return 0;
 })();
 // → 'vibrate' (Android), 'ios' (iPhone/iPad on iOS 18+), 'old-ios', or 'none' (computers).
+// The safe-area insets in px, read from a probe (env() inside a custom
+// property isn't resolved the same way in every engine). iPhone Duo's outer
+// screen has its camera and status bar down one side: left/right count.
+let probe = null;
+export function safeInsets() {
+  if (!probe) {
+    probe = document.createElement('div');
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+      'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+    document.body.append(probe);
+  }
+  const cs = getComputedStyle(probe);
+  return { top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 };
+}
+
 export function hapticSupport() {
   if (canVibrate) return 'vibrate';
   if (iosVersion >= 18) return 'ios';
