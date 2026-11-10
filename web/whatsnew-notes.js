@@ -13,8 +13,27 @@
 //   characters, franchises, brands, logos, quotes or real people. Brand
 //   names appear only where a feature needs them (which TVs or boxes).
 // - No politics, no tragedy, family-friendly.
-// - Callouts: 2-4, each { art, title (a few words), line (one short line) }.
-//   art is one of Hearth's own shapes (web/shapes.js).
+// - Callouts: 2-4, each { art, title (a few words), line (one short line),
+//   go? }. art is one of Hearth's own shapes (web/shapes.js).
+// - go (optional): where the card takes you. Tapping the card closes the
+//   sheet and opens that place. One of DESTINATIONS in web/whatsnew.js:
+//     'scene-say'  New scene, "just say it"
+//     'wake'       Turn on from your phone (the coach) for the TV on screen,
+//                  else the first TV; setup when there are none
+//     'settings'   Settings (Light / Dark / Auto, looks)
+//   Leave it out when the feature has no screen (it just happens): the card
+//   stays plain. app.js routes each one (`whatsNewGo`).
+// - One line per version may nod to something current (a season, what's on
+//   this month); keep the source and date in the PR, never in the app.
+//
+// Seeing it without updating (records nothing, so the real once-per-version
+// rule is untouched):
+// - Web: add ?whatsnew=preview to the URL (demo: /hearth/demo/?whatsnew=preview).
+// - iPhone app, Debug builds only (hearth-app sets HearthHost.whatsNew):
+//     xcrun simctl launch <sim> com.mutaaf.hearth -HearthWhatsNew YES
+//   or keep it on for every launch:
+//     xcrun simctl spawn <sim> defaults write com.mutaaf.hearth HearthWhatsNew -bool YES
+//   (and `defaults delete com.mutaaf.hearth HearthWhatsNew` to stop).
 
 export const RELEASE_VERSION = '0.16.0';
 
@@ -24,19 +43,21 @@ export const NOTES = [
     date: '2026-11-10',
     kicker: 'Now showing',
     headline: 'The blanket-season premiere',
-    dek: 'Popcorn on, game-day weekends ahead, and your remote just got a sequel worth staying in for.',
+    dek: 'The holiday movies showed up before the leftover candy ran out. Popcorn on: your remote just got a sequel worth staying in for.',
     callouts: [
       {
         art: 'hearth-remote',
         palette: 'ember',
         title: 'Scenes, just say it',
         line: 'Type one sentence and Hearth builds the scene. Try it live, then save.',
+        go: 'scene-say',
       },
       {
         art: 'hearth-tv',
         palette: 'ember',
         title: 'A wake-up call that works',
         line: 'A step-by-step coach finds what turns each TV on, even the box plugged into it.',
+        go: 'wake',
       },
       {
         art: 'hearth-signal',
@@ -49,6 +70,7 @@ export const NOTES = [
         palette: 'ember',
         title: 'Daylight mode',
         line: 'A bright new look by default. Light, Dark or Auto lives in Settings.',
+        go: 'settings',
       },
     ],
     notes: [

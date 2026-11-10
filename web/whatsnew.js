@@ -7,12 +7,19 @@
 // storage from an older version (then it's an upgrade and the sheet shows).
 // Never under the public demo / in-app demo / store capture (window.HearthDemo),
 // the landing page's phone frame (?embed=1 or an iframe) or automation
-// (navigator.webdriver). `?whatsnew=preview` shows it anyway without recording.
+// (navigator.webdriver). `?whatsnew=preview`, or the phone app's Debug-only
+// HearthHost.whatsNew = 'preview', shows it anyway without recording.
 // Settings → What's new opens it any time. The words: web/whatsnew-notes.js.
+// A card with `go` is a button: it closes the sheet and app.js opens that place.
 
 import { NOTES, RELEASE_VERSION, notesFor } from './whatsnew-notes.js';
 
 export const SEEN_KEY = 'hearth.whatsnew';
+
+// Places a callout can take you (app.js `whatsNewGo` opens each one).
+export const DESTINATIONS = ['scene-say', 'wake', 'settings'];
+// The card's destination, or null for a plain card (none, or one we don't know).
+export const goFor = (c) => (c && DESTINATIONS.includes(c.go) ? c.go : null);
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -62,7 +69,7 @@ function envNow() {
     embed: /[?&]embed=1\b/.test(search),
     framed,
     webdriver: Boolean(globalThis.navigator?.webdriver),
-    preview: /[?&]whatsnew=preview\b/.test(search),
+    preview: /[?&]whatsnew=preview\b/.test(search) || w?.HearthHost?.whatsNew === 'preview',
   };
 }
 
@@ -109,6 +116,8 @@ export function launchDecision({ env = envNow(), ls = storage(), current = RELEA
   return { ...decide({ seen: readSeen(ls), current, hasHistory, hasNotes: Boolean(notesFor(current)) }), why: null };
 }
 
+const GO_LABEL = { 'scene-say': 'Try it', wake: 'Set it up', settings: 'Pick a look' };
+
 // One of Hearth's own shapes (web/shapes.js) as a small SVG, filled with a gradient.
 let uid = 0;
 function art(name, palette) {
@@ -119,12 +128,15 @@ function art(name, palette) {
   return `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${stops[0]}"/><stop offset="1" stop-color="${stops[1]}"/></linearGradient></defs><path d="${d}" fill="url(#${id})" fill-rule="evenodd"/></svg>`;
 }
 
-export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = () => {}, ls = storage() } = {}) {
+// onGo(destination) runs after the sheet has closed from a card tap; without
+// it every card stays plain. onClose({ went }) gets the destination, or null.
+export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = () => {}, onGo = null, ls = storage() } = {}) {
   let dlg = null;
   let field = null;
   let cycle = null;
   let from = 'update';
   let opened = 0;
+  let went = null;
 
   function mount() {
     if (dlg) return dlg;
@@ -138,7 +150,10 @@ export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = 
       if (e.target.closest('[data-wn="close"]')) {
         haptic('tap');
         dlg.close();
+        return;
       }
+      const card = e.target.closest('[data-wn-go]');
+      if (card) go(card.dataset.wnGo);
     });
     dlg.addEventListener('toggle', (e) => {
       if (e.target.matches?.('details.wn-more') && e.target.open) track('whats_new', { step: 'notes', version: dlg.dataset.version });
@@ -147,10 +162,34 @@ export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = 
       clearInterval(cycle);
       field?.destroy();
       field = null;
-      track('whats_new', { step: 'close', version: dlg.dataset.version, from, secs: Math.round((Date.now() - opened) / 1000) });
-      onClose();
+      track('whats_new', { step: 'close', version: dlg.dataset.version, from, secs: Math.round((Date.now() - opened) / 1000), to: went ?? '' });
+      const to = went;
+      went = null;
+      onClose({ went: to });
+      if (to) onGo?.(to);
     });
     return dlg;
+  }
+
+  // A card tap: close the sheet, then (in 'close') open the place.
+  function go(to) {
+    if (!onGo || !DESTINATIONS.includes(to) || !dlg?.open) return false;
+    haptic('tap');
+    went = to;
+    track('whats_new', { step: 'go', version: dlg.dataset.version, to });
+    dlg.close();
+    return true;
+  }
+
+  function card(c, i) {
+    const to = onGo ? goFor(c) : null;
+    const inner = `
+            <span class="wn-art">${art(c.art, c.palette)}</span>
+            <span class="wn-text"><b>${esc(c.title)}</b><small>${esc(c.line)}</small>${to ? `<span class="wn-go-hint mono">${esc(GO_LABEL[to])} <i aria-hidden="true">→</i></span>` : ''}</span>`;
+    return `
+          <li class="wn-card${to ? ' wn-card-go' : ''}" data-palette="${c.palette === 'ice' ? 'ice' : 'ember'}" style="--i:${i}">
+            ${to ? `<button type="button" class="wn-tap" data-press="up" data-wn-go="${to}">${inner}</button>` : inner}
+          </li>`;
   }
 
   function paint(n) {
@@ -170,11 +209,7 @@ export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = 
         </div>
       </header>
       <ul class="wn-cards" aria-label="Highlights">
-        ${n.callouts.map((c, i) => `
-          <li class="wn-card" data-palette="${c.palette === 'ice' ? 'ice' : 'ember'}" style="--i:${i}">
-            <span class="wn-art">${art(c.art, c.palette)}</span>
-            <span class="wn-text"><b>${esc(c.title)}</b><small>${esc(c.line)}</small></span>
-          </li>`).join('')}
+        ${n.callouts.map(card).join('')}
       </ul>
       <details class="wn-more">
         <summary><span>Every change in ${esc(version)}</span><span class="wn-count mono">${n.notes.length}</span></summary>
@@ -240,6 +275,7 @@ export function createWhatsNew({ track = () => {}, haptic = () => {}, onClose = 
       return open(RELEASE_VERSION, decision.why === 'preview' ? 'preview' : 'update');
     },
     open,
+    go,
     get isOpen() {
       return Boolean(dlg?.open);
     },
