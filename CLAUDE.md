@@ -81,6 +81,8 @@ web/icons.js           app icons, best first: the TV's own icon for that app (Ro
                        api/tvs/:id/icon, the phone app gets GET /api/tvs/:id/icon-data), then web/brand-icons.js
                        (Simple Icons, CC0, `node scripts/brand-icons.mjs`; Prime Video, Disney+, Hulu, Peacock, ESPN,
                        Pluto TV and Sling aren't there at their owners' request), then a letter tile
+web/whatsnew.js|.css   "What's new": once per version after an update (never a fresh install), Settings → What's new;
+                       the words live in web/whatsnew-notes.js (see "What's new" below)
 web/wake.js|.css       the wake coach: "Turn on from your phone" (plan, steps, live test, AI on failure)
 web/link.js|.css       the link: "Looking for <TV>" / "Found <TV>" capsule with an aurora-field inside (hub 'looking'/'healed')
 web/guide.js|.css      "we know your TV": the model's guide in setup (pairing screen), after a failed pair or doctor
@@ -194,6 +196,15 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - web/eggs.js: 8 eggs (konami on the D-pad → 8-bit, 7 taps on the masthead flame, off-and-on 3× in 20 s, volume 11, Say "hello there", all off after midnight, 1,000 presses, Halloween/Christmas/New Year). Found ones live in localStorage `hearth.eggs`; analytics `easter_egg`. Never sends anything to a TV by itself.
 - LG on-screen messages go through `tvText()` (src/drivers/lg.js): webOS's toast font has no emoji, so they're stripped, quotes made plain, and Hearth's flame (src/toast-icon.js, 64 px PNG) is the icon.
 
+## What's new (update notes)
+
+- **One source per version:** `web/whatsnew-notes.js` (`NOTES`, newest first, and `RELEASE_VERSION`, which must equal package.json `version`). The in-app sheet (web/whatsnew.js|.css) and the App Store "What's New" text (`node scripts/whats-new.mjs [version]`, prints plain text ≤ 4000 chars, read-only, never talks to App Store Connect) both read it. The version is the core's (package.json), not hearth-app's marketing version.
+- **Bumping the version means a new entry**, written from the real changes since the last one (`git log <last bump>..HEAD`): `kicker`, `headline`, `dek`, 2-4 `callouts` `{ art, palette, title, line }` (art = a shape from web/shapes.js, drawn as SVG via `HearthShapes.paths()`; title a few words, line one short line) and the full `notes`. test/whatsnew.test.js fails until it exists.
+- **Copy rules:** every claim true for that version; playful nods to movie night, TV, seasons, game-day weekends and award-season couch nights, but original only: no real show or film titles, characters, franchises, brands, logos, quotes or real people (brand names only where a feature needs them: which TVs or boxes); no politics or tragedy; family-friendly. The test bans a list of obvious names; review catches the rest. Same spirit as hearth-app's store rule (Apple rejects listings that lean on others' IP).
+- **When it shows:** `launchDecision()` → `decide()`. The record is localStorage `hearth.whatsnew` (last version seen). No record + no other `hearth.*` keys = a fresh install: record, stay quiet. No record but older Hearth storage = an upgrade from before this feature: show once. Record older than the version = show once (and record at once). Same or newer = quiet. The `hearth.*` snapshot is taken when the module loads, which is why it's app.js's first import.
+- **Never under:** `window.HearthDemo` (public demo, the phone app's demo.html, store screenshot capture), `?embed=1` or any iframe (the landing page's phone frame), `navigator.webdriver` (automation, headless tests). Skipped launches record nothing. `?whatsnew=preview` shows it anyway and records nothing (screenshots: the demo with `?whatsnew=preview`).
+- **Manners:** it waits ~0.7 s after the first `hello`; if setup, the tour or another sheet is up it doesn't show or record (next launch tries again); the tour waits for it to close. The aurora sign cycles the callout shapes (none under Reduce Motion, nor the bulb chase or card stagger); focus lands on the one button; Esc and the backdrop close it. Analytics `whats_new` {step: open|notes|close, version, from}.
+
 ## Device guides, AI and the support queue
 
 - `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at
@@ -293,6 +304,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 | The D-pad's OK button is `class="ok"` | Global `.ok` (absolute, round) also hit `.chip-result.ok` result chips; launcher.css resets them for `.launch-results` and `.bulk-results`. Don't give new elements a bare `.ok` class. |
 | Synthetic PointerEvents with an unknown pointerId make `setPointerCapture` throw | The pad wraps it in try/catch. Use `pointerId: 1` in browser tests. |
 | `python3 -m http.server` lets Chrome cache JS/CSS heuristically; previews look stale | Re-fetch with `{cache:'reload'}`, or serve with `--directory dist` after each build (the build deletes dist). |
+| Headless Chrome against `python3 -m http.server` sometimes fails one of app.js's module fetches (seen 2026-11-10: "Failed to fetch dynamically imported module", app never boots, every module imports fine on its own); the server also keeps serving a deleted dist/ after a rebuild | Screenshot through a tiny Node static server (`http.createServer` + `readFile`, `cache-control: no-store`) and restart it after each `npm run build:site`. |
 | The house redraws its cards on every TV update, so an element found a moment ago is detached | Anything that points at a card later (web/tour.js) re-finds it by selector when `!el.isConnected`. |
 | Simple Icons' `max` is the Cycling '74 music app, not the streaming service | The catalog's Max uses `hbomax` (scripts/brand-icons.mjs). Check every new logo by eye. |
 | Never use `ok`/`bad` as a state class | `.ok` is the D-pad's OK button (`position:absolute; inset:31%`), so `.dr-step.ok` or `.chip-result.ok` turn into floating circles. Prefix state classes (`st-ok`, `res-ok`). |

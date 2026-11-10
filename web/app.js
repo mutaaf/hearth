@@ -1,6 +1,8 @@
 // Hearth web app. No framework, no build step: state lives in `tvs`, the
 // server pushes changes over /api/events, and render() repaints. Touch feel
 // lives in feel.js, the setup wizard in setup.js, skins are pure CSS.
+// First: it notes whether an older Hearth left storage here before this launch writes any.
+import { createWhatsNew } from './whatsnew.js';
 import { applySkin, feedback, gesturePad, haptic, HAPTIC_HINT, hapticSupport, pressable, prefs, savePrefs, sound, soundOn } from './feel.js';
 import { createSetup } from './setup.js';
 import { currentScreen, screen, scrollDepth, track } from './analytics.js';
@@ -1072,11 +1074,13 @@ const away = createAway({ isDemo: Boolean(demo) });
 // The tour of each screen, the first time it's seen (web/tour.js). Waits
 // for the screen to settle; skipped while setup or a sheet is up.
 const tour = createTour();
+// "What's new", once after an update (web/whatsnew.js); the tour waits for it.
+const whatsNew = createWhatsNew({ track, haptic, onClose: () => tourSoon() });
 let tourTimer = 0;
 function tourSoon() {
   clearTimeout(tourTimer);
   tourTimer = setTimeout(() => {
-    if (tour.open || setup.isOpen) return;
+    if (tour.open || setup.isOpen || whatsNew.isOpen) return;
     if (!$('#remote').hidden) tour.firstTime('remote');
     else if (tvs.size) tour.firstTime('house');
   }, 900);
@@ -1179,6 +1183,7 @@ function connectEvents() {
     if (!greeted) followLaunch();
     if (!greeted && !window.HearthDemo) setTimeout(() => guide.checkTickets(), 5000); // answers to "send it to us"
     if (!greeted) setTimeout(() => eggs.opened(), 2500);
+    if (!greeted) setTimeout(() => whatsNew.maybeShow({ blocked: () => setup.isOpen || tour.open || Boolean(document.querySelector('dialog[open]')) }), 700);
     launcher.load();
     greeted = true;
     bulk.prune();
@@ -1301,6 +1306,10 @@ function onPress(el, info) {
     case 'settings':
       haptic('tap');
       return openSettings();
+    case 'whatsnew': // Settings → What's new
+      haptic('tap');
+      $('#settingsSheet').close();
+      return whatsNew.open(undefined, 'settings');
     case 'tour': // "?" in a header, or Settings → Show me around
       haptic('tap');
       $('#settingsSheet').close();

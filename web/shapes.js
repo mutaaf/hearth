@@ -57,6 +57,10 @@
   var done = false;
   window.HearthShapes = {
     names: Object.keys(PATHS),
+    // The same outlines as plain SVG paths (the "What's new" cards draw them).
+    paths: function (name) {
+      return PATHS[name] ? PATHS[name].paths.slice() : null;
+    },
     register: function (AF) {
       if (done || !AF) return;
       done = true;

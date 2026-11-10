@@ -118,6 +118,10 @@ The remote changes with what's on the TV:
 
 Roku, LG and Apple TV report whether they're playing. For Samsung and Google TV, Hearth goes by what you pressed: play means watching, arrows mean browsing. You can always switch with the Remote · Watch · Trackpad · Gamepad bar.
 
+## What's new
+
+After Hearth updates, it opens once with a short **What's new** sheet: the highlights on a few cards, every change underneath, and one button to get back to the couch. A new install never sees it. Open it again any time from Settings → **What's new**.
+
 ## Away from home: Light Racer
 
 When your phone can't reach Hearth (you've left the house, or Wi-Fi is off), the app doesn't show an error. It turns into **Light Racer**, a light-cycle game played on a field of aurora. You eat sparks to grow your wall like a snake and box the other riders in.
