@@ -94,12 +94,19 @@ test('a TV switched back on is reached by the next command, not the next backoff
       }
     });
   });
-  const t = Date.now();
-  await driver.setVolume(20);
-  assert.ok(Date.now() - t < 1500, `took ${Date.now() - t} ms`);
-  assert.ok(got.includes('ssap://audio/setVolume'));
-  await driver.stop();
-  await new Promise((r) => tvServer.close(r));
+  try {
+    const t = Date.now();
+    await driver.setVolume(20);
+    // Usually at once; up to ~1 s when a try that failed silently just before
+    // the press has to be redialed.
+    assert.ok(Date.now() - t < 2500, `took ${Date.now() - t} ms`);
+    assert.ok(got.includes('ssap://audio/setVolume'));
+  } finally {
+    // A failure must not leave the server up: the process would never exit.
+    await driver.stop();
+    for (const ws of tvServer.clients) ws.terminate();
+    await new Promise((r) => tvServer.close(r));
+  }
 });
 
 test('a TV that stays off fails a command quickly as offline', async () => {

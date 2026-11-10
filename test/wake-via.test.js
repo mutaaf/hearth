@@ -233,26 +233,33 @@ test('the lookout knocks even with nobody looking (slowly), and at once when the
 
 test('bursts don\'t stretch or repeat: presses during one, or a box switched on again soon after, start nothing new', async () => {
   const { hub, ids, done } = await house();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Quiet for `ms`: no knock landed in that window.
+  const quiet = async (ms) => {
+    const before = knocks;
+    await sleep(ms);
+    return knocks === before;
+  };
+  let knocks = 0;
   try {
-    let knocks = 0;
-    Object.assign(hub, { burstEveryMs: 10, burstMs: 60, burstGapMs: 10_000, portOpenFn: async () => (knocks++, false) });
+    Object.assign(hub, { burstEveryMs: 10, burstMs: 80, burstGapMs: 60_000, portOpenFn: async () => (knocks++, false) });
     const atv = hub.driver(ids.atv);
     atv.setState({ online: true, power: 'off' });
     atv.setState({ power: 'on' }); // off → on: a burst
+    await sleep(20);
+    assert.ok(knocks > 0, 'it knocked');
     for (let i = 0; i < 4; i++) hub.boxActive(ids.atv); // presses meanwhile
-    await new Promise((r) => setTimeout(r, 150));
-    const first = knocks;
-    assert.ok(first > 0, 'it knocked');
+    await sleep(200); // well past 80 ms: had a press stretched it, it would still be knocking
+    assert.ok(await quiet(100), 'over when it said it would be');
     atv.setState({ power: 'off' });
     atv.setState({ power: 'on' }); // on again within the gap
-    hub.boxActive(ids.roku); // another box, also within its own first burst? no: a new box may start one
-    await new Promise((r) => setTimeout(r, 150));
-    const second = knocks - first;
-    assert.ok(second > 0 && second <= first + 2, 'only the Roku\'s own burst ran, about as long as the first');
-    atv.setState({ app: 'com.netflix' }); // hopping into an app while on: not a start
-    const before = knocks;
-    await new Promise((r) => setTimeout(r, 60));
-    assert.equal(knocks, before);
+    assert.ok(await quiet(100), 'the same box doesn\'t start another within 2 min');
+    atv.setState({ app: 'com.netflix' }); // into an app while already on
+    assert.ok(await quiet(100), 'hopping into an app isn\'t a start');
+    const n = knocks;
+    hub.boxActive(ids.roku); // a different box has its own gap
+    for (let i = 0; i < 100 && knocks === n; i++) await sleep(10);
+    assert.ok(knocks > n, 'the Roku started its own');
   } finally {
     await done();
   }
