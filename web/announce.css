@@ -1,0 +1,29 @@
+/* "Tell everyone" (announce.js): the message, then who'll see it and why not. */
+.announce-sheet .sub { text-align: center; }
+.ann-form { gap: 12px; }
+.ann-chips { gap: 6px; }
+.ann-chips .chip { font-size: 14px; }
+.ann-input span { display: block; margin: 0 2px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); }
+.ann-input input { width: 100%; font-size: 18px; }
+
+.ann-tvs { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.ann-tv { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 25%, transparent); }
+.ann-tv:last-child { border-bottom: 0; }
+.ann-tv i { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 13px; font-weight: 800; }
+.ann-tv span { display: grid; gap: 1px; min-width: 0; }
+.ann-tv b { font-size: 15px; font-weight: 650; }
+.ann-tv small { font-size: 12px; line-height: 1.35; color: var(--ink-soft); }
+.ann-yes i { background: #1f9d4c24; color: #1f9d4c; }
+.ann-pause i { background: color-mix(in srgb, var(--signal) 18%, transparent); color: var(--signal); }
+.ann-no i { background: color-mix(in srgb, var(--ink-faint) 22%, transparent); color: var(--ink-soft); }
+.ann-no b { color: var(--ink-soft); }
+
+.ann-toggle { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink-faint) 12%, transparent); font-weight: 600; font-size: 15px; }
+.ann-toggle input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--signal); }
+.ann-toggle small { display: block; margin-top: 2px; font-weight: 400; font-size: 12px; color: var(--ink-soft); }
+.ann-said { font-size: 17px; font-weight: 600; color: inherit; }
+
+[data-skin="8bit"] .ann-tv i, [data-skin="8bit"] .ann-toggle { border-radius: 0; }
+.fields .ann-toggle span, .fields .ann-toggle small { text-transform: none; letter-spacing: normal; font-family: inherit; }
+.fields .ann-toggle span { font-size: 15px; color: inherit; }
+.fields .ann-toggle input { width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; box-shadow: none; }

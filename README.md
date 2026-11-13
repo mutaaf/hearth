@@ -51,6 +51,7 @@ TVs that are fully off aren't on the network, so Hearth wakes them with Wake-on-
 - **Set up a TV in a minute:** a step-by-step wizard (turn it on, connect, pick the room) that wakes an off TV for you, and Hearth notices new TVs on the network by itself.
 - **Stays awake** while the remote is open, and works sideways too.
 - **Watch on every TV:** the house screen has a row of the popular apps (YouTube, YouTube TV, Netflix, Prime Video, Disney+, Max, Hulu, Apple TV, Peacock, Paramount+, ESPN and more). **Hold** one to open it on every TV, waking the ones that are off; each TV answers ✓ or ✕ with why (not installed, can't open on that TV). In select mode it opens on just the TVs you picked. On a TV's **Apps** tab, tap one to open it there. Each TV opens its own version of the app, so you never have to know that YouTube TV is a different id on a Samsung and a Roku.
+- **Tell everyone:** *Tell all* on the house screen sends one message ("Dinner's ready!", with quick picks and your last few) to every TV that can show it. Only LG TVs can put words over the picture; every other TV says plainly why not (Samsung, Roku, Apple TV and Google TV don't allow it), and you can have the ones that are playing something pause instead, so whoever's watching still notices.
 - **What you see is what the TV says:** on/asleep/off, the app on screen and the volume come from the TVs themselves and are re-checked right after every press, including older (2016-17) Samsungs.
 
 ### What works

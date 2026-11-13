@@ -1,4 +1,5 @@
-import { badRequest, HearthError, unsupported } from './errors.js';
+import { NO_MESSAGES } from './announce.js';
+import { badRequest, HearthError } from './errors.js';
 import { launchOne } from './launch.js';
 import { runDoctor } from './doctor.js';
 
@@ -49,7 +50,7 @@ export async function runAction(hub, id, action, args = {}) {
     case 'input':
       return driver.setInput(String(args.id ?? ''));
     case 'say':
-      if (!view.capabilities?.toast) throw unsupported('On-screen messages');
+      if (!view.capabilities?.toast) throw new HearthError(501, NO_MESSAGES[view.brand] ?? "This TV can't show messages");
       return driver.toast(String(args.message ?? '').trim() || 'Hello from Hearth 👋');
     case 'key':
       return driver.key(String(args.key ?? ''), args.hold ? { hold: args.hold } : {});

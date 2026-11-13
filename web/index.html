@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="link.css">
   <link rel="stylesheet" href="wake.css">
   <link rel="stylesheet" href="whatsnew.css">
+  <link rel="stylesheet" href="announce.css">
 </head>
 <body>
   <!-- Every launch switches on like an old CRT: a scan line, a flash, the ember. -->
@@ -117,6 +118,7 @@
 
     <nav class="dock" aria-label="House controls">
       <button type="button" class="dock-btn" data-press="up" data-action="setup"><svg><use href="#i-plus"/></svg><span>Add TV</span></button>
+      <button type="button" class="dock-btn" data-press="up" data-action="announce" aria-label="Tell everyone: a message on every TV"><svg><use href="#i-chat"/></svg><span>Tell all</span></button>
       <button type="button" class="dock-btn hold" id="allOff" data-press="confirm" data-action="all-off">
         <span class="charge" aria-hidden="true"></span>
         <svg><use href="#i-power"/></svg><span id="allOffLabel">Hold: all off</span>
@@ -304,6 +306,8 @@
 
   <!-- ─────────── Sheets ─────────── -->
   <dialog class="sheet" id="bulkSheet"></dialog>
+  <!-- "Tell everyone": a message on every TV that can show it (announce.js) -->
+  <dialog class="sheet announce-sheet" id="announceSheet"></dialog>
   <dialog class="sheet" id="editSheet">
     <div class="sheet-grip"></div>
     <h3>TV settings</h3>

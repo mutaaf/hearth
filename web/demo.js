@@ -147,6 +147,26 @@
     };
   }
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
+  var NO_MESSAGES = {
+    samsung: 'Samsung TVs don\u2019t take on-screen messages from phones',
+    roku: 'Roku doesn\u2019t let apps put messages over the picture',
+    appletv: 'Apple TV doesn\u2019t let other apps put words on the screen',
+    androidtv: 'Google TV can\u2019t show a message without stopping what\u2019s on',
+  };
+  function sayWhy(t) {
+    if (!t.paired) return 'Not connected to Hearth yet';
+    if (!t.capabilities.toast) return NO_MESSAGES[t.brand] || 'This TV can\u2019t show messages';
+    if (!t.state.online || t.state.power !== 'on') return 'It\u2019s off: messages show only on a TV that\u2019s on';
+    return null;
+  }
+  function canPause(t) {
+    var s = t.state;
+    if (!t.paired || !s.online || s.power !== 'on') return false;
+    if (t.brand === 'roku') return Boolean(s.media && s.media.state === 'playing');
+    if (t.brand === 'appletv') return s.playing === 'playing';
+    if (t.brand === 'samsung') return Boolean(s.app);
+    return false;
+  }
   function needsOn(t) {
     if (!t.state.online || t.state.power !== 'on') throw new Error('TV is off or not reachable');
   }
@@ -228,7 +248,7 @@
       if (!hit) throw new Error((args.title || 'That app') + ' isn’t installed on this TV');
       change(t, { app: hit[0], appTitle: hit[1] });
     } else if (action === 'say') {
-      if (t.brand !== 'lg') throw new Error('On-screen messages isn’t supported on this TV');
+      if (t.brand !== 'lg') throw new Error(sayWhy(t) || 'This TV can’t show messages');
     } else if (action === 'key') {
       key(t, args.key);
     }
@@ -597,6 +617,22 @@
       var labels = { HDMI_1: 'Apple TV', HDMI_2: 'PlayStation 5', HDMI_3: 'HDMI 3' };
       change(t, { app: 'com.webos.app.hdmi' + String(body.id).replace(/\D/g, ''), appTitle: null, inputLabel: labels[body.id] || null });
       return { ok: true };
+    }],
+    // "Tell everyone" (src/announce.js): the same reasons as the real thing.
+    ['GET', /^\/announce$/, function () {
+      return { tvs: tvs.map(function (t) { var why = sayWhy(t); return { id: t.id, name: t.name, room: t.room || '', brand: t.brand, can: !why, why: why || undefined, pause: Boolean(why) && canPause(t) }; }) };
+    }],
+    ['POST', /^\/announce$/, function (_, body) {
+      var text = String(body.message || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!text) throw Object.assign(new Error('Type a message first'), { status: 400 });
+      return wait(450).then(function () {
+        return { message: text, results: tvs.map(function (t) {
+          var why = sayWhy(t);
+          if (!why) return { id: t.id, name: t.name, ok: true, how: 'shown' };
+          if (body.pause && canPause(t)) { act(t, 'key', { key: 'pause' }); return { id: t.id, name: t.name, ok: true, how: 'paused', why: why }; }
+          return { id: t.id, name: t.name, ok: false, why: why };
+        }) };
+      });
     }],
     ['POST', /^\/tvs\/([\w-]+)\/toast$/, function (m) {
       var t = find(m[1]);
