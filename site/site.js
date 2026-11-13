@@ -110,5 +110,48 @@
     var bo = window.boxoffice = window.boxoffice || { q: [], track: function () { this.q.push([].slice.call(arguments)); } };
     bo.track('demo_open', { skin: /skin=8bit/.test(a.getAttribute('href')) ? '8bit' : 'default' });
   });
+  // …and which "Join the beta" link people tap.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href*="testflight.apple.com"]');
+    if (!a) return;
+    var bo = window.boxoffice = window.boxoffice || { q: [], track: function () { this.q.push([].slice.call(arguments)); } };
+    bo.track('beta_open', { from: a.dataset.beta || 'other' });
+  });
+
+  // iPhone Duo: the device opens as the track scrolls past. --p is the hinge
+  // (0 shut, 1 flat), --q the whole track (for the rail). Offsets are measured
+  // on resize, so a frame only reads scrollY. Reduced motion: two stills.
+  var track = document.getElementById('duoTrack');
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (track && !still) {
+    var section = track.closest('.duo');
+    var stage = track.querySelector('.duo-stage');
+    var dev = track.querySelector('.duo-dev');
+    section.classList.add('fold');
+    var top = 0, span = 1, raf = 0, last = -1;
+    var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+    var measure = function () {
+      var r = track.getBoundingClientRect();
+      top = r.top + window.scrollY;
+      span = Math.max(1, r.height - window.innerHeight);
+      frame();
+    };
+    var frame = function () {
+      raf = 0;
+      var q = Math.min(1, Math.max(0, (window.scrollY - top) / span));
+      if (Math.abs(q - last) < 0.0005) return;
+      last = q;
+      // Hold shut for the first third, open through the middle, hold open after.
+      var p = ease(Math.min(1, Math.max(0, (q - 0.3) / 0.4)));
+      dev.style.setProperty('--p', p.toFixed(4));
+      stage.style.setProperty('--q', q.toFixed(4));
+      stage.classList.toggle('is-open', p > 0.55);
+      stage.classList.toggle('is-closed', p < 0.08 && q > 0.02);
+    };
+    window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(frame); }, { passive: true });
+    window.addEventListener('resize', measure);
+    window.addEventListener('load', measure);
+    measure();
+  }
 
 })();
