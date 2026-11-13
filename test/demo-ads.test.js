@@ -73,3 +73,34 @@ test('the site build injects ads into the demo page only', () => {
     assert.ok(!s.includes('ads/v1/ads.js'), `dist/hearth/${f} must not load ads`);
   }
 });
+
+// Box Office analytics: the public website only (scripts/demo-insights.mjs).
+test('Box Office loads only on the public site, never at home or in the phone app', async () => {
+  const { insightsAllowed, insightsSnippet } = await import('../scripts/demo-insights.mjs');
+  assert.equal(insightsAllowed(loc('https://mutaafaziz.com/hearth/demo/'), {}), true);
+  assert.equal(insightsAllowed(loc('https://mutaafaziz.com/hearth/racer/'), {}), true);
+  for (const href of ['http://192.168.4.20:8770/', 'http://localhost:8770/hearth/demo/', 'https://mutaafaziz.com/hearth/demo/?embed=1',
+    'https://mutaafaziz.com/metaphases/kids/', 'capacitor://localhost/demo.html', 'https://mutaafaziz.com.evil.example/hearth/demo/'])
+    assert.equal(insightsAllowed(loc(href), {}), false, href);
+  assert.equal(insightsAllowed(loc('https://mutaafaziz.com/hearth/demo/'), { HearthHost: {} }), false);
+  const code = insightsSnippet().replace(/^[\s\S]*?<script>/, '').replace(/<\/script>[\s\S]*$/, '');
+  const run = (href, win = {}) => {
+    const added = [];
+    const document = { createElement: (tag) => ({ tag }), body: { appendChild: (n) => added.push(n) }, addEventListener() {} };
+    vm.runInNewContext(code, { location: loc(href), window: win, document });
+    return added;
+  };
+  assert.equal(run('https://mutaafaziz.com/hearth/demo/', { HearthDemo: {} })[0].src, '/boxoffice/v1/insights.js');
+  assert.deepEqual(run('http://192.168.4.20:8770/'), []);
+  assert.deepEqual(run('https://mutaafaziz.com/hearth/demo/', { HearthHost: { native: true } }), []);
+  for (const f of readdirSync(path.join(ROOT, 'web'), { recursive: true })) {
+    if (!/\.(html|js|css|webmanifest)$/.test(f)) continue;
+    assert.ok(!readFileSync(path.join(ROOT, 'web', f), 'utf8').includes('boxoffice'), `web/${f} mentions Box Office`);
+  }
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-site.mjs')], { cwd: ROOT, stdio: 'pipe' });
+  for (const f of ['index.html', 'demo/index.html', 'racer/index.html', 'privacy/index.html', 'guide/index.html', 'support/index.html']) {
+    const s = readFileSync(path.join(ROOT, 'dist', 'hearth', f), 'utf8');
+    assert.ok(s.includes('/boxoffice/v1/insights.js'), `dist/hearth/${f} has no Box Office tag`);
+    assert.ok(s.lastIndexOf('boxoffice') > s.lastIndexOf('<script src='), `dist/hearth/${f}: Box Office is not last`);
+  }
+});

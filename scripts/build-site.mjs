@@ -6,6 +6,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { demoAdsSnippet } from './demo-ads.mjs';
+import { insightsSnippet } from './demo-insights.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist', 'hearth');
@@ -44,8 +45,14 @@ writeFileSync(
     .replace('<title>Hearth</title>', '<title>Hearth demo</title>')
     .replace('<link rel="manifest" href="manifest.webmanifest">\n', '')
     // Ads: this demo page only, and only on mutaafaziz.com (see demo-ads.mjs).
-    .replace('</body>', `${demoAdsSnippet()}</body>`),
+    .replace('</body>', `${demoAdsSnippet()}</body>`)
+    // Box Office analytics: last in <body>, public site only (see demo-insights.mjs).
+    .replace('</body>', `${insightsSnippet()}</body>`),
 );
+
+// Light Racer at /hearth/racer/ gets the same analytics (web/racer is shared with home).
+const racerHtml = path.join(OUT, 'racer', 'index.html');
+writeFileSync(racerHtml, readFileSync(racerHtml, 'utf8').replace('</body>', `${insightsSnippet()}</body>`));
 
 // no-transform keeps Cloudflare from injecting analytics into the pages,
 // which would contradict the "nothing leaves your home" promise.
