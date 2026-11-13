@@ -18,7 +18,8 @@ test('the guide has its text, title and canonical in the HTML', () => {
   assert.ok(desc.length >= 70 && desc.length <= 160, String(desc.length));
   assert.match(html, /<link rel="canonical" href="https:\/\/mutaafaziz\.com\/hearth\/guide\/">/);
   assert.match(html, /<h1>Hearth Guide: Set Up One Remote for Every TV<\/h1>/);
-  assert.doesNotMatch(html, /<script/i, 'no scripts on the guide');
+  // The one script allowed is Box Office's async analytics tag (content never needs JS).
+  assert.doesNotMatch(html.replace('<script async src="/boxoffice/v1/insights.js"></script>', ''), /<script/i, 'no scripts on the guide');
   assert.doesNotMatch(html, /ads\.js/, 'no ads on the guide');
   assert.doesNotMatch(html, /—|&mdash;/);
   const words = html.replace(/<style[\s\S]*?<\/style>/, '').replace(/<head>[\s\S]*?<\/head>/, '').replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean);

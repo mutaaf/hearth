@@ -103,4 +103,12 @@
     });
   });
 
+  // Box Office (anonymous website analytics): which "Try it" link opens the demo.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href^="demo/"]');
+    if (!a) return;
+    var bo = window.boxoffice = window.boxoffice || { q: [], track: function () { this.q.push([].slice.call(arguments)); } };
+    bo.track('demo_open', { skin: /skin=8bit/.test(a.getAttribute('href')) ? '8bit' : 'default' });
+  });
+
 })();
