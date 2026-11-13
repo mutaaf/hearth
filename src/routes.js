@@ -2,6 +2,7 @@
 // req)]. Handlers return JSON or throw HearthError. The home server
 // (src/server.js) serves them over HTTP; the phone app (hearth-app) calls them
 // in-process from its WebView bridge, with a stand-in req ({ headers }).
+import { announce, announcePlan } from './announce.js';
 import { bulk } from './bulk.js';
 import { catalogView } from './catalog.js';
 import { runDoctor, runDoctorAll } from './doctor.js';
@@ -98,6 +99,9 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
       return hub.driver(tv).toast(message).then(() => ({ ok: true }));
     }),
     r('POST', '/all/power', (_, body) => hub.powerAll(Boolean(body.on))),
+    // "Tell everyone": one message to every TV that can show it, a reason for the rest.
+    r('GET', '/announce', () => announcePlan(hub)),
+    r('POST', '/announce', (_, body) => announce(hub, { message: body.message, pause: Boolean(body.pause) })),
     r('POST', '/refresh', () => hub.refreshAll()), // pull to refresh
     // ── the cross-brand app launcher ──
     r('GET', '/catalog', () => catalogView()),

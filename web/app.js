@@ -17,6 +17,7 @@ import { createHousehold } from './household.js'; // who's in the house
 import { createPull } from './pull.js';
 import { awake, badge, launch, noZoom, onResume, persist } from './native.js';
 import { createBulk } from './bulk.js';
+import { createAnnounce } from './announce.js';
 import { createScenes } from './scenes.js';
 import { createLauncher } from './launcher.js';
 import { createHealth } from './health.js'; // health
@@ -820,7 +821,7 @@ addEventListener('scroll', () => document.documentElement.classList.toggle('scro
 // instead of a call in every module that opens something.
 const houseDepth = scrollDepth(window, 'house');
 const OVERLAYS = [['setup', '#setup'], ['health', '#health'], ['energy', '#energy'], ['scene_editor', '#sceneEditor'], ['away', '#away']];
-const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings' };
+const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings', announceSheet: 'announce' };
 function whereNow() {
   for (const [name, sel] of OVERLAYS) {
     const el = document.querySelector(sel);
@@ -1012,6 +1013,9 @@ const bulk = createBulk({
     scenes.openEditor(null, { name: 'My scene', ...prefill });
   },
 });
+
+// "Tell everyone": one message on every TV that can show it.
+const announce = createAnnounce({ api, note });
 
 // ── doctor: fix connections + codes & pairing ─────────────
 const doctor = createDoctor({
@@ -1369,6 +1373,8 @@ function onPress(el, info) {
     }
     case 'all-off':
       return allOff();
+    case 'announce':
+      return announce.open();
     case 'forget':
       return forget();
     case 'pro': // the phone app's Pro screen (purchase and restore), any time

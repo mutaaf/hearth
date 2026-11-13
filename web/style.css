@@ -232,7 +232,7 @@ html.scrolled .masthead {
 /* ── House dock (thumb zone) ──────────────── */
 .dock {
   position: fixed; left: calc(50% + var(--cx)); bottom: calc(12px + var(--safe-b)); z-index: 40; transform: translateX(-50%);
-  width: min(calc(var(--safe-w) - 24px), 520px); display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; padding: 8px;
+  width: min(calc(var(--safe-w) - 24px), 520px); display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; padding: 8px;
   border-radius: 26px; background: color-mix(in srgb, var(--key) 92%, transparent);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 20px 50px -14px #000a;
 }
@@ -241,6 +241,8 @@ html.scrolled .masthead {
   color: var(--key-ink); font-weight: 650; font-size: 16px; background: #ffffff10; transition: transform .1s, background .15s;
 }
 .dock-btn svg { font-size: 20px; }
+/* Three buttons on a 320 px phone: keep each label on one line. */
+@media (max-width: 380px) { .dock { gap: 6px; padding: 6px; } .dock-btn { gap: 6px; font-size: 14px; white-space: nowrap; padding: 0 4px; } .dock-btn svg { font-size: 17px; } }
 .dock-btn.pressed { transform: scale(.96); background: #ffffff1c; }
 .dock-btn.hold { background: #ffffff14; }
 .dock-btn.hold.charging svg { animation: spin .75s linear; }

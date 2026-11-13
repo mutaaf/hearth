@@ -53,6 +53,7 @@ src/atv/               pure-JS Apple TV Companion (no Python, runs in Hermes): o
                        transport.js (the bridge-shaped ops, Companion port probing)
 src/catalog.js         the cross-brand app catalog (20 streaming apps × per-brand id arrays + sources) and
                        resolveApp(): id → exact title → fuzzy (never YouTube for YouTube TV)
+src/announce.js        "Tell everyone": GET/POST /api/announce, NO_MESSAGES (why a brand can't), sayWhy/canPause
 src/launch.js          POST /api/launch: wake → resolve per TV → launch in parallel → per-TV results; also
                        the `launch` action for bulk/scenes and GET /api/catalog/status
 src/upnp.js            just-enough UPnP SOAP (Samsung RenderingControl)
@@ -82,6 +83,7 @@ web/icons.js           app icons, best first: the TV's own icon for that app (Ro
                        api/tvs/:id/icon, the phone app gets GET /api/tvs/:id/icon-data), then web/brand-icons.js
                        (Simple Icons, CC0, `node scripts/brand-icons.mjs`; Prime Video, Disney+, Hulu, Peacock, ESPN,
                        Pluto TV and Sling aren't there at their owners' request), then a letter tile
+web/announce.js|.css   "Tell everyone": one message on every TV that can show it, a reason for the rest
 web/whatsnew.js|.css   "What's new": once per version after an update (never a fresh install), Settings → What's new;
                        the words live in web/whatsnew-notes.js (see "What's new" below)
 web/wake.js|.css       the wake coach: "Turn on from your phone" (plan, steps, live test, AI on failure)
@@ -189,6 +191,13 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - Worker `GET /hearth/api/app-icon?name=Netflix[&strict=1]` (src/worker/app-icon.js): Apple's public App Store search (no key), best match cached in D1 `app_icons` for 30 days (a real "no match" for 7), then a 302 to Apple's artwork CDN at 256 px. Only the app's name is sent.
 - Catalog tiles ask loosely (first result sharing a non-generic word: "Max" is "HBO Max"); apps a TV lists ask `strict` (App Store name before its ": tagline" must equal it). web/icons.js `storeIconImg()` stacks it on top of the TV's icon / vector / letter; a failed load removes itself.
 - The App Store search rejects `+` for spaces (use `%20`) and sometimes answers Cloudflare with an error or nothing: retried once, never cached.
+
+## Tell everyone (house-wide message)
+
+- *Tell all* in the house dock opens `#announceSheet` (web/announce.js|.css). `GET /api/announce` → `{ tvs: [{ id, name, brand, can, why?, pause }] }` draws who will see it before sending; `POST /api/announce { message, pause }` → `{ message, results: [{ id, name, ok, how: 'shown'|'paused', why? }] }` (src/announce.js). Message ≤ 120 chars, whitespace collapsed.
+- Only LG shows words on screen (`capabilities.toast`, webOS createToast). `NO_MESSAGES` holds the one plain reason per brand (Samsung, Roku, Apple TV, Google TV); bulk/scene `say` uses the same words. An LG that's off says so; unpaired TVs say "Not connected".
+- "Pause the TVs that can't show it" (remembered in localStorage `hearth.say.pause`) pauses only where it can't backfire (`canPause`): Roku and Apple TV only when they report playing (their pause is a toggle), Samsung when it's in an app (real KEY_PAUSE), never Google TV. Recent messages: `hearth.say.recent` (3).
+- The demo mirrors it (`sayWhy`/`canPause` in web/demo.js). Analytics `announce` {step: open|sent, shown, paused, skipped, tvs, pause, quick}. The dock is three buttons; under 380 px it tightens so labels stay on one line.
 
 ## Toasts, copy and easter eggs
 
