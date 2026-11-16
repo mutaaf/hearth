@@ -166,6 +166,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 
 - web/analytics.js: `track(event, props)` → `window.HearthHost.track` (hearth-app whitelists the properties again and sends them to PostHog). No HearthHost (home server, public demo) = nothing leaves the page. Brands, counts, steps and durations only: never a TV's name, IP, MAC or serial.
 - `screen` (screen, from, prev_s, brand/mode or tvs) comes from one MutationObserver in app.js watching `hidden`/`open`: the open overlay (#setup, #health, #energy, #sceneEditor) or dialog wins, else house/remote. New overlays: add them to `OVERLAYS`/`SHEETS`.
+- Settings → **Share usage stats** (`.usage-row`, `#prefUsage`): only in the phone app, and only when the app sets `HearthHost.usage` (a boolean); a change calls `HearthHost.setUsage(on)`. Off, the app sends nothing (its own analytics, crash reports and, from app 1.1, the usage counts it sends through mutaafaziz.com's relay) and deletes its install ids. The site privacy page says the same; keep them true together.
 - Others: `tap` (every `data-action`), `remote_tab`, `remote_mode`, `power`, `refresh`, `ui_error` (error notes), `scrolled` (house depth in 25 % steps, on leaving), `setting` (every savePrefs change), `launch_app`, `scene_run`, `setup_step`, `tour_start`/`tour_end`, `guide_open`, `support_report`.
 
 ## Getting back to a TV (hub-core)

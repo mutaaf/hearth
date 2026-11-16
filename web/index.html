@@ -354,6 +354,8 @@
     <div class="toggles">
       <label class="toggle"><span><b>Haptics</b><small class="mono" id="prefHapticsHint">Feel every press</small></span><input type="checkbox" switch id="prefHaptics"></label>
       <label class="toggle"><span><b>Sounds</b><small class="mono">Clicks and chip blips</small></span><input type="checkbox" switch id="prefSound"></label>
+      <!-- the phone app only (HearthHost.usage): its anonymous counts and crash reports, on or off -->
+      <label class="toggle usage-row" hidden><span><b>Share usage stats</b><small class="mono">Screens, button names, brands · never your TVs' names · off sends none</small></span><input type="checkbox" switch id="prefUsage"></label>
     </div>
     <!-- health: AI insights settings (rendered by health.js) -->
     <div class="toggles" id="aiSettings"></div>
