@@ -33,7 +33,9 @@
     <li>reconnects, Lock Screen presses, the Hearth Pro screen and purchase outcome (bought, cancelled or failed), and Light Racer opening;</li>
     <li>error reports, with TV names, network addresses and serial numbers removed on the phone before sending.</li>
   </ul>
-  <p>Each install gets a random ID that isn't tied to you, your Apple ID or your device. We don't build profiles, don't look up location from IP addresses, and ask PostHog to discard them. We never sell or share this data, and it is never used for advertising or tracking across apps.</p>
+  <p>From version 1.1, the app also sends a few usage counts to mutaafaziz.com's own analytics relay (Box Office), the same one this website uses: that a session started, which screen is open (say, "remote" or "settings"), the name of a remote button pressed (say, "up" or "volume"), and that pairing a TV started or finished, with the TV's brand. Only those names and numbers, the app's version and a random install ID go; never a TV's name, its address or anything you type. The relay removes cookies and shortens your IP address before passing them to PostHog, and no location is looked up. These counts are linked to that install ID, so we can tell a returning phone from a new one.</p>
+  <p>Each install's random IDs are made on the phone and aren't tied to you, your Apple ID or your device's advertising identifier; deleting the app removes them. We don't build profiles, don't look up location from IP addresses, and ask PostHog to discard them. We never sell or share this data, and it is never used for advertising or tracking across apps.</p>
+  <p><b>Settings → Share usage stats</b> turns all of this off (the usage counts, the anonymous events and the crash reports) and deletes the install IDs and anything waiting to be sent.</p>
 
   <h2>Connection help (optional)</h2>
   <p>When you ask how to connect a TV, or ask the AI about it, Hearth sends that TV's <b>brand, model code and software version</b>, and what went wrong if something did, to Hearth's server, where an AI writes the steps for that model. The answer is kept and shared with anyone who has the same model, so it's only about the TV, never about you.</p>
@@ -49,18 +51,19 @@
   <p>The Hearth app and the Hearth on your home network never show ads. Only the public demo on this website (with pretend TVs) shows a small ad below it; see the <a href="https://mutaafaziz.com/ads/privacy/">ad privacy policy</a>.</p>
 
   <h2>This website</h2>
-  <p>The Hearth pages on mutaafaziz.com (this site, the public demo and Light Racer) collect anonymous usage analytics: which pages are viewed, clicks and demo button presses, approximate city-level location, and session replays with everything typed masked. It goes to PostHog through mutaafaziz.com, with your IP address shortened before it leaves and no cookies. If your browser sends Global Privacy Control or Do Not Track, nothing is collected. The Hearth app and the Hearth on your home network never load it, and it never runs on the kids area of mutaafaziz.com.</p>
+  <p>The Hearth pages on mutaafaziz.com (this site, the public demo and Light Racer) collect anonymous usage analytics: which pages are viewed, clicks and demo button presses, approximate city-level location, and session replays with everything typed masked. It goes to PostHog through mutaafaziz.com, with your IP address shortened before it leaves and no cookies. If your browser sends Global Privacy Control or Do Not Track, nothing is collected. The Hearth app and the Hearth on your home network never load it (the app's own usage counts, above, go through the same relay), and it never runs on the kids area of mutaafaziz.com.</p>
 
   <h2>Children</h2>
   <p>Hearth collects nothing that identifies anyone, of any age.</p>
 
   <h2>Your choices</h2>
   <ul>
+    <li>Turn off <b>Settings → Share usage stats</b> in the app: nothing more is sent, and its install IDs are deleted.</li>
     <li>Delete the app, and everything it kept on your phone goes with it.</li>
     <li>Questions or a request about your data: <a href="https://github.com/mutaaf/hearth/issues">open an issue</a> and we'll answer.</li>
   </ul>
 
-  <p class="fine">Last updated 12 November 2026 · Hearth: Universal TV Remote · <a href="../guide/">Guide</a> · <a href="../support/">Support</a></p>
+  <p class="fine">Last updated 16 November 2026 · Hearth: Universal TV Remote · <a href="../guide/">Guide</a> · <a href="../support/">Support</a></p>
 </main>
   <script async src="/boxoffice/v1/insights.js"></script>
 </body>

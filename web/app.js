@@ -75,6 +75,10 @@ const demo = window.HearthDemo ?? window.HearthHost;
 if (window.HearthHost?.native && !window.HearthDemo) {
   for (const el of document.querySelectorAll('.demo-link, .demo-row, .pro-row')) el.hidden = false;
 }
+// The phone app's "Share usage stats" (hearth-app src/telemetry.js and its usage counts): shown only when the
+// app says where the switch is. Off: the app sends no counts or crash reports and deletes its install ids.
+const usageSwitch = () => window.HearthHost?.native && !window.HearthDemo && typeof window.HearthHost.usage === 'boolean';
+if (usageSwitch()) document.querySelector('.usage-row').hidden = false;
 if (window.HearthHost) document.documentElement.dataset.host = 'app'; // hides web-only bits (style.css)
 
 async function api(method, path, body) {
@@ -967,6 +971,7 @@ function openSettings() {
   $('#prefHaptics').checked = prefs.haptics;
   $('#prefHapticsHint').textContent = HAPTIC_HINT[hapticSupport()];
   $('#prefSound').checked = soundOn();
+  if (usageSwitch()) $('#prefUsage').checked = window.HearthHost.usage;
   health.renderAiSettings($('#aiSettings')); // health
   openSheet('#settingsSheet');
 }
@@ -1467,6 +1472,9 @@ function wire() {
   $('#prefSound').addEventListener('change', (e) => {
     savePrefs({ sound: e.target.checked });
     sound('success');
+  });
+  $('#prefUsage').addEventListener('change', (e) => {
+    if (usageSwitch()) window.HearthHost.setUsage?.(e.target.checked);
   });
 
   $('#sayForm').addEventListener('submit', (e) => {
