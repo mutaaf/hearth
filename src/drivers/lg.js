@@ -90,14 +90,19 @@ export class LgDriver extends Driver {
       timeout: 8000,
     });
     this.#watch(client); // the constructor connects
+    // Every handler checks it's still the current client: reconnect() swaps
+    // clients, and the old one's late 'connect' or 'close' used to land on the
+    // new connection (a null client crash, or "Off" on a TV that works).
     client.on('connect', () => {
+      if (this.#client !== client) return;
       this.#dialing = false;
       clearTimeout(this.#dialTimer);
       this.#backoff.up();
-      this.#onConnect();
+      this.#onConnect(client);
     });
-    client.on('prompt', () => this.emit('prompt'));
+    client.on('prompt', () => this.#client === client && this.emit('prompt'));
     client.on('close', () => {
+      if (this.#client !== client) return;
       this.#dialing = false;
       this.#pointer = null;
       this.setState({ online: false, power: 'off', app: null });
@@ -108,6 +113,7 @@ export class LgDriver extends Driver {
     // A TV that was already off when Hearth started never connects, so 'close' never fires: say so
     // instead of leaving the first-boot 'unknown' up (webOS drops Wi-Fi when fully off).
     client.on('error', (err) => {
+      if (this.#client !== client) return;
       this.#dialing = false;
       if (!client.connected) {
         this.setState({ online: false, power: 'off', app: null, inputLabel: null });
@@ -197,12 +203,23 @@ export class LgDriver extends Driver {
   }
 
   // The phone slept: iOS may have dropped the socket without either side
-  // noticing, so it looks connected and commands go nowhere. Start over.
-  async reconnect() {
-    if (!this.#client) return;
+  // noticing, so it looks connected and commands go nowhere. Ask the TV
+  // something first: a socket that answers is kept (the app opens with the TV
+  // already connected); one that doesn't is replaced, and we wait for the new
+  // one so the house shows the truth. Before 2026-11-18 every app open tore
+  // down a working connection and showed the LG as off until it redialled.
+  async reconnect({ probeMs = 1500, waitMs = 3500 } = {}) {
+    const client = this.#client;
+    if (!client) return;
+    if (client.connected && (await answers(client, SSAP.power, probeMs))) {
+      if (this.#client === client) this.refresh?.();
+      return;
+    }
+    if (this.#client !== client) return;
     await this.stop();
     this.#backoff.reset();
     this.start();
+    await this.#ready(waitMs).catch(() => {}); // off: the lookout keeps knocking
   }
 
   setActive(active) {
@@ -344,6 +361,7 @@ export class LgDriver extends Driver {
   // "Turn on via Wi-Fi/LAN" is what lets Wake-on-LAN reach a sleeping LG.
   // Read it on every connect and switch it on if someone turned it off.
   async #ensureWakeOnLan(client) {
+    if (!client) return;
     const ask = (uri, payload) => new Promise((resolve) => client.request(uri, payload, (err, res) => resolve(err ? null : res)));
     const read = await ask(SSAP.getSettings, { category: 'network', keys: ['wolwowlOnOff'] });
     const value = read?.settings?.wolwowlOnOff;
@@ -356,11 +374,11 @@ export class LgDriver extends Driver {
     this.setState({ wakeOnLan: on });
   }
 
-  async #onConnect() {
+  async #onConnect(client) {
     this.setState({ online: true, power: 'on' });
     this.emit('connect');
-    const client = this.#client;
-    this.#ensureWakeOnLan(client);
+    if (!client || this.#client !== client) return;
+    this.#ensureWakeOnLan(client).catch(() => {});
     client.subscribe(SSAP.volume, (err, res) => {
       if (err || !res) return;
       const v = res.volumeStatus ?? res;
@@ -588,4 +606,20 @@ export class LgDriver extends Driver {
       foreground,
     };
   }
+}
+
+// Does this connection still answer? (false on an error or no reply in `ms`)
+function answers(client, uri, ms) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(false), ms);
+    try {
+      client.request(uri, (err) => {
+        clearTimeout(t);
+        resolve(!err);
+      });
+    } catch {
+      clearTimeout(t);
+      resolve(false);
+    }
+  });
 }

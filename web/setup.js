@@ -447,9 +447,18 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
           </div>
         </form>`);
       const form = root.querySelector('#manualForm');
+      const submit = form.querySelector('button[type="submit"]');
+      let busy = false;
+      let misses = 0;
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const ip = root.querySelector('#manualIp').value.trim();
+        // One try at a time: a phone that can't reach the Wi-Fi fails at once,
+        // and tapping again just stacked up the same error (18 in 7 s, 2026-11-18).
+        if (busy || !ip) return;
+        busy = true;
+        submit.disabled = true;
+        submit.textContent = 'Checking…';
         try {
           const tv = await api('POST', '/tvs', { ip });
           onTv(tv);
@@ -458,7 +467,17 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
           else startPair({ candidate: tv, tvId: tv.id, tv });
         } catch (err) {
           feedback('error');
+          misses++;
+          // Nothing answers at any address: on the phone that's usually Local
+          // Network switched off for Hearth, so say that instead of the same line.
+          if (misses >= 2 && window.HearthHost?.native && /answer/i.test(err.message)) return go('none');
           note(err.message, true);
+        } finally {
+          busy = false;
+          if (submit.isConnected) {
+            submit.disabled = false;
+            submit.textContent = 'Add this TV';
+          }
         }
       });
       setTimeout(() => root.querySelector('#manualIp')?.focus(), 300);

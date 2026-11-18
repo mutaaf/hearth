@@ -18,6 +18,7 @@ class FakeBridge extends EventEmitter {
   available = true;
   reason = '';
   calls = [];
+  busy = 0;
   pairing = null;
   connected = new Map();
   apps = [{ id: 'com.netflix.Netflix', title: 'Netflix' }, { id: 'com.google.ios.youtube', title: 'YouTube' }];
@@ -35,6 +36,11 @@ class FakeBridge extends EventEmitter {
       case 'info':
         return { name: 'Media Room', ip: args.ip, identifier: 'E2:AC:BD:99:96:BD', model: 'AppleTV11,1', services: this.services };
       case 'pair_begin':
+        // The Apple TV is still holding the last pairing session.
+        if (this.busy > 0) {
+          this.busy--;
+          fail(409, 'busy', 'The Apple TV is busy pairing with something else');
+        }
         this.pairing = { key: args.key, protocol: args.protocol };
         return { protocol: args.protocol, devicePin: true, identifier: 'E2:AC:BD:99:96:BD' };
       case 'pair_pin': {
@@ -127,6 +133,21 @@ test('pairing: a wrong code says how to get a new one; no code pending is a 409'
   // Asking again shows a fresh code, which then works.
   assert.equal((await driver.pair({ mode: 'pin' })).step, 1);
   assert.equal((await driver.pair({ pin: '1234' })).step, 2);
+  await driver.stop();
+});
+
+test('pairing: an Apple TV still busy with the last code is asked again, not given up on', async () => {
+  const { driver, bridge } = makeDriver();
+  driver.busyWaits = [5, 5, 5];
+  bridge.busy = 2;
+  const first = await driver.pair({ mode: 'pin' });
+  assert.equal(first.needsPin, true);
+  assert.equal(bridge.sent('pair_begin').length, 3, 'two busy answers, then the code');
+  assert.equal((await driver.pair({ pin: '1234' })).step, 2);
+  // Still busy after every wait: a plain 409 that says what to do.
+  bridge.busy = 10;
+  driver.busyWaits = [5];
+  await assert.rejects(driver.pair({ mode: 'pin' }), (e) => e.status === 409 && /Wait a few seconds/.test(e.message));
   await driver.stop();
 });
 
