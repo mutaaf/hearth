@@ -47,7 +47,7 @@ before(async () => {
     await hub.pair(tv.id);
   }
   // Paired drivers start on their own tick; under load that's later than this line.
-  for (let i = 0; i < 100 && !hub.list().every((v) => v.state?.power === START[v.name].power); i++) await new Promise((r) => setTimeout(r, 30));
+  for (let i = 0; i < 300 && !hub.list().every((v) => v.state?.power === START[v.name].power); i++) await new Promise((r) => setTimeout(r, 30));
   server = createServer(hub);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;

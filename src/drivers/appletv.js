@@ -58,6 +58,9 @@ export class AppleTvDriver extends Driver {
     // An explicit transport, or HEARTH_ATV, sticks; 'auto' may fall back to JS.
     this.#pinned = Boolean(opts.bridge) || mode !== 'auto';
     this.#use(opts.bridge ?? getAtvTransport(mode));
+    // How long to wait before asking again when the Apple TV says it's busy
+    // pairing (tests shorten it).
+    this.busyWaits = opts.busyWaits ?? [1500, 3000, 5000];
   }
 
   #use(transport) {
@@ -226,10 +229,31 @@ export class AppleTvDriver extends Driver {
       return {};
     }
     const protocol = todo[0];
-    const begun = await this.bridge.request('pair_begin', { key: this.#key, ip: this.tv.ip, identifier: this.tv.atvId, port: this.tv.atvPort, protocol });
+    const begun = await this.#beginPairing(protocol);
     if (begun?.port && begun.port !== this.tv.atvPort) this.onInfo({ atvPort: begun.port });
     this.#pending = { protocol, step: plan.indexOf(protocol) + 1, steps: plan.length, plan };
     return { needsPin: true, step: this.#pending.step, steps: this.#pending.steps, label: LABELS[protocol], protocol };
+  }
+
+  // "Show the number again" right after a code closes one pairing session and
+  // opens the next; the Apple TV keeps the old one a few seconds and answers
+  // Busy/BackOff (409) meanwhile. Seen 2026-11-18: five tries in a row failed
+  // that way and the TV was deleted and re-added. Wait and ask again instead.
+  async #beginPairing(protocol) {
+    const args = { key: this.#key, ip: this.tv.ip, identifier: this.tv.atvId, port: this.tv.atvPort, protocol };
+    for (let i = 0; ; i++) {
+      try {
+        return await this.bridge.request('pair_begin', args);
+      } catch (err) {
+        const busy = err?.status === 409 || err?.code === 'busy';
+        if (!busy || i >= this.busyWaits.length) {
+          if (busy) throw new HearthError(409, 'The Apple TV is still busy with the last code. Wait a few seconds, then tap “Show the number again”.');
+          throw err;
+        }
+        this.bridge.request('pair_cancel', { key: this.#key }).catch(() => {});
+        await new Promise((r) => setTimeout(r, this.busyWaits[i]));
+      }
+    }
   }
 
   async #finishPin(pin) {
