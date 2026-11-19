@@ -826,7 +826,7 @@ addEventListener('scroll', () => document.documentElement.classList.toggle('scro
 // instead of a call in every module that opens something.
 const houseDepth = scrollDepth(window, 'house');
 const OVERLAYS = [['setup', '#setup'], ['health', '#health'], ['energy', '#energy'], ['scene_editor', '#sceneEditor'], ['away', '#away']];
-const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings', announceSheet: 'announce', shareSheet: 'share_house' };
+const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings', announceSheet: 'announce', shareSheet: 'share_house', shortcutsSheet: 'shortcuts' };
 function whereNow() {
   for (const [name, sel] of OVERLAYS) {
     const el = document.querySelector(sel);

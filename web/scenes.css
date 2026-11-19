@@ -171,3 +171,15 @@ body.selecting .colophon { padding-bottom: 300px; }
 [data-skin="8bit"] .ed-body h2 { font-size: 18px; line-height: 1.5; }
 [data-skin="8bit"] .ed-steps li { font-size: 9px; color: #1c1b24; background: var(--body); line-height: 1.6; }
 [data-skin="8bit"] .ed-name input { font-size: 13px; border-radius: 0; }
+
+/* "Run it automatically with Shortcuts" (shortcuts.js; iPhone app only). */
+.ed-shortcuts { display: grid; gap: 8px; justify-items: start; margin-top: 4px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink-faint) 12%, transparent); }
+.ed-shortcuts p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+.shortcuts-sheet .sub { text-align: center; }
+.sc-first { margin: 0 0 4px; padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; background: color-mix(in srgb, var(--signal) 14%, transparent); }
+.sc-steps { counter-reset: sc; list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 10px; }
+.sc-steps li { counter-increment: sc; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; font-size: 15px; line-height: 1.45; }
+.sc-steps li::before { content: counter(sc); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-weight: 800; font-size: 14px; color: #fff; background: var(--signal); }
+.sc-siri { margin: 4px 0 0; font-size: 14px; font-style: italic; color: var(--ink-soft); text-align: center; }
+.sc-note { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-soft); text-align: center; }
+[data-skin="8bit"] .ed-shortcuts, [data-skin="8bit"] .sc-first, [data-skin="8bit"] .sc-steps li::before { border-radius: 0; }
