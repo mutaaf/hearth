@@ -23,7 +23,10 @@
     <li>Your scenes, schedules and settings.</li>
     <li>What's on each TV, its volume, and everything you press.</li>
   </ul>
-  <p>None of this is sent to us or anyone else. Hearth reaches your TVs directly on your local network, which is why iOS asks for <b>Local Network</b> access.</p>
+  <p>None of this is sent to us or anyone else, unless you choose to share your house (below), and then only locked so that we can't read it. Hearth reaches your TVs directly on your local network, which is why iOS asks for <b>Local Network</b> access.</p>
+
+  <h2>Sharing your house (optional)</h2>
+  <p>Settings → <b>Share this house</b> hands your TVs, their pairing keys and your scenes to a family member's phone, so they don't have to pair every TV again. Your phone locks all of it first (XChaCha20-Poly1305 encryption) with a new random key made for that one invite. Only the locked copy goes to Hearth's server; the key exists only in the invite link, after the <code>#</code>, which browsers and apps never send to a server. We can't open the copy and never see the key. The copy is deleted the moment the other phone fetches it, or after 24 hours if nobody does, and it isn't logged or backed up. Anyone who gets the link before it's used can open it, so send it only to people you'd hand your TV remotes to. Joining works the same way in reverse: the invite is unlocked on the phone that joins.</p>
 
   <h2>Anonymous usage and crash reports</h2>
   <p>To find bugs and see which features earn their keep, the app sends anonymous events to <a href="https://posthog.com">PostHog</a>, an analytics service:</p>
@@ -51,7 +54,7 @@
   <p>The Hearth app and the Hearth on your home network never show ads. Only the public demo on this website (with pretend TVs) shows a small ad below it; see the <a href="https://mutaafaziz.com/ads/privacy/">ad privacy policy</a>.</p>
 
   <h2>This website</h2>
-  <p>The Hearth pages on mutaafaziz.com (this site, the public demo and Light Racer) collect anonymous usage analytics: which pages are viewed, clicks and demo button presses, approximate city-level location, and session replays with everything typed masked. It goes to PostHog through mutaafaziz.com, with your IP address shortened before it leaves and no cookies. If your browser sends Global Privacy Control or Do Not Track, nothing is collected. The Hearth app and the Hearth on your home network never load it (the app's own usage counts, above, go through the same relay), and it never runs on the kids area of mutaafaziz.com.</p>
+  <p>The Hearth pages on mutaafaziz.com (this site, the public demo and Light Racer) collect anonymous usage analytics: which pages are viewed, clicks and demo button presses, approximate city-level location, and session replays with everything typed masked. It goes to PostHog through mutaafaziz.com, with your IP address shortened before it leaves and no cookies. If your browser sends Global Privacy Control or Do Not Track, nothing is collected. The Hearth app and the Hearth on your home network never load it (the app's own usage counts, above, go through the same relay), and it never runs on the kids area of mutaafaziz.com. The page that opens a house invite (/hearth/join) doesn't load it either.</p>
 
   <h2>Children</h2>
   <p>Hearth collects nothing that identifies anyone, of any age.</p>
@@ -63,7 +66,7 @@
     <li>Questions or a request about your data: <a href="https://github.com/mutaaf/hearth/issues">open an issue</a> and we'll answer.</li>
   </ul>
 
-  <p class="fine">Last updated 16 November 2026 · Hearth: Universal TV Remote · <a href="../guide/">Guide</a> · <a href="../support/">Support</a></p>
+  <p class="fine">Last updated 19 November 2026 · Hearth: Universal TV Remote · <a href="../guide/">Guide</a> · <a href="../support/">Support</a></p>
 </main>
   <script async src="/boxoffice/v1/insights.js"></script>
 </body>

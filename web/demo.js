@@ -498,6 +498,42 @@
         return { ok: true, ms: 3200 };
       });
     }],
+    // ── share this house (src/handoff.js): a pretend invite, a pretend family house to join ──
+    ['POST', /^\/handoff\/create$/, function () {
+      var paired = tvs.filter(function (t) { return t.paired; });
+      return Promise.all([wait(900), fetch('share-demo-qr.svg').then(function (r) { return r.ok ? r.text() : ''; }).catch(function () { return ''; })]).then(function (r) {
+        return { link: 'https://mutaafaziz.com/hearth/join#demo', appLink: 'hearth://join#demo', expires: new Date(Date.now() + 864e5).toISOString(),
+          tvs: paired.length, scenes: scenes.length, names: paired.map(function (t) { return t.name; }), qr: r[1] };
+      });
+    }],
+    ['POST', /^\/handoff\/open$/, function () {
+      // Grandma's house: two TVs this demo doesn't have, and one it does.
+      return wait(1100).then(function () {
+        return { token: 'demo', scenes: 1, from: new Date().toISOString(), room: null, tvs: [
+          { ref: 'gran-sunroom', name: 'Sunroom', room: 'Sunroom', brand: 'lg', model: 'OLED48C3PUA', status: 'new' },
+          { ref: 'gran-garage', name: 'Garage', room: 'Garage', brand: 'roku', model: 'Express 3960R', status: 'new' },
+          { ref: 'demo-living', name: 'Big TV', room: 'Downstairs', brand: 'lg', model: 'OLED65C1PUB', status: 'have', as: 'Living Room' },
+        ] };
+      });
+    }],
+    ['POST', /^\/handoff\/preview$/, function () { return { token: 'demo', tvs: [], scenes: 0 }; }],
+    ['POST', /^\/handoff\/forget$/, function () { return { ok: true }; }],
+    ['POST', /^\/handoff\/accept$/, function (_, body) {
+      var only = body.only || [];
+      var made = [];
+      if (only.indexOf('gran-sunroom') >= 0 && !tvs.some(function (t) { return t.id === 'gran-sunroom'; })) {
+        made.push(tv('gran-sunroom', 'lg', 'Sunroom', 'Sunroom', 'OLED48C3PUA', '192.168.1.45', true, { online: true, power: 'off', volume: 10, muted: false }));
+      }
+      if (only.indexOf('gran-garage') >= 0 && !tvs.some(function (t) { return t.id === 'gran-garage'; })) {
+        made.push(tv('gran-garage', 'roku', 'Garage', 'Garage', 'Express 3960R', '192.168.1.54', true, { online: true, power: 'standby' }));
+      }
+      return wait(1300).then(function () {
+        made.forEach(function (t) { tvs.push(t); emit('tv', t); });
+        var living = tvs.filter(function (t) { return t.id === 'demo-living'; })[0];
+        var swapped = (body.replace || []).indexOf('demo-living') >= 0 && living;
+        return { added: made, updated: swapped ? [living] : [], kept: living && !swapped ? [{ id: living.id, name: living.name, room: living.room, brand: 'lg' }] : [], skipped: [], scenes: made.length ? 1 : 0 };
+      });
+    }],
     ['POST', /^\/support$/, function () { return wait(700).then(function () { return { id: 'demo' + Math.random().toString(36).slice(2, 8) }; }); }],
     ['GET', /^\/support\/([a-z0-9]+)$/, function (m) { return { id: m[1], status: 'new', resolution: null }; }],
     ['GET', /^\/info$/, function () { return { name: 'hearth', friendlyUrl: null }; }],

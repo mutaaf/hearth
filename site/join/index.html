@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Join a house · Hearth</title>
+  <meta name="description" content="Someone shared the TVs in their house with you in Hearth. Open the invite in the Hearth app: every TV comes already connected.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../demo/icons/icon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wdth,wght@87.5,400..600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../legal.css">
+  <style>
+    /* The invite: one big ember button, the way in for people without the app, and what's private. */
+    .glow { position: relative; margin: 26px 0 8px; padding: 26px 22px 22px; border-radius: 28px; overflow: hidden; isolation: isolate;
+      background: #05070d; color: #f3eee4; box-shadow: 0 30px 60px -36px #f25a1d, 0 0 0 1px #ffffff14 inset; }
+    .glow::before { content: ''; position: absolute; inset: -40% -20%; z-index: -1;
+      background: radial-gradient(36% 50% at 22% 70%, #ffb35c88, transparent 70%), radial-gradient(34% 48% at 76% 34%, #ff6a2b88, transparent 70%), radial-gradient(30% 40% at 50% 100%, #ffe2a855, transparent 70%);
+      filter: blur(18px); animation: drift 10s ease-in-out infinite alternate; }
+    @keyframes drift { to { transform: translate3d(6%, -5%, 0) scale(1.1); } }
+    .glow p { color: #f3eee4cc; margin: 0 0 18px; }
+    .glow .tvs { font: 500 11px/1.4 'Martian Mono', ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #ffb35c; margin: 0 0 8px; }
+    .glow h2 { margin: 0 0 6px; color: #fff; font-size: 26px; }
+    .open { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px; border-radius: 18px; border: 0;
+      background: linear-gradient(180deg, #ff7a3d, #f25a1d); color: #1a0d05; font: 750 19px/1 'Bricolage Grotesque', system-ui, sans-serif; letter-spacing: -.01em; text-decoration: none;
+      box-shadow: 0 16px 34px -14px #ff6a2b, 0 1px 0 #ffffff80 inset; }
+    .open:active { transform: scale(.98); }
+    .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .row a, .row button { flex: 1; min-width: 140px; padding: 13px; border-radius: 14px; border: 1px solid #ffffff26; background: #ffffff10; color: #f3eee4;
+      font: 600 15px/1.2 'Bricolage Grotesque', system-ui, sans-serif; text-align: center; text-decoration: none; cursor: pointer; }
+    .steps { counter-reset: s; list-style: none; padding: 0; }
+    .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 12px 0; }
+    .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+      font: 700 12px/1 'Martian Mono', monospace; background: var(--ember); color: #1a0d05; }
+    [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) { .glow::before { animation: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="../"><i aria-hidden="true"></i>hearth</a>
+  <p class="kicker">Join a house</p>
+  <h1>Someone shared their TVs with you.</h1>
+  <p class="lede">Open it in Hearth and every TV in their house is already connected: no codes, nothing to press on the TVs.</p>
+
+  <div class="glow" id="invite" hidden>
+    <p class="tvs" id="kind">One invite · works once · 24 hours</p>
+    <h2>Open it in Hearth</h2>
+    <p>On the iPhone with Hearth, tap below, then tap <b>Open</b>.</p>
+    <a class="open" id="open" href="hearth://join">Open in Hearth</a>
+    <div class="row">
+      <a href="https://testflight.apple.com/join/RT4VHGH4" id="get">Get Hearth (free beta)</a>
+      <button type="button" id="copy">Copy this link</button>
+    </div>
+  </div>
+
+  <div class="card" id="nolink" hidden><b>This link is missing its key</b>
+    The invite's last part (after the <code>#</code>) didn't come through. Ask them to send it again, or to show you the QR code to scan with your iPhone's camera.</div>
+
+  <div class="card" id="pretend" hidden><b>This is a pretend invite</b>
+    It came from the Hearth demo, so there's no house behind it. <a href="../demo/">Back to the demo</a>.</div>
+
+  <h2>No Hearth yet?</h2>
+  <ol class="steps">
+    <li>Get Hearth on your iPhone (it's a free beta on TestFlight right now).</li>
+    <li>Come back to this page and tap <b>Open in Hearth</b>. The invite still works: it's used up only once Hearth opens it.</li>
+    <li>Or open Hearth, then Settings → <b>Join a house</b>, and scan their code again.</li>
+  </ol>
+
+  <h2>Using Hearth on a computer at home?</h2>
+  <p>Open your home Hearth, then Settings → <b>Join a house</b>, and paste this page's link.</p>
+
+  <h2>What's private</h2>
+  <p>The TVs and their pairing keys were locked on the sender's phone before anything left it. Hearth's server holds only that scrambled copy, and the key to open it is the part of this link after the <code>#</code>, which browsers never send to any server. The copy is deleted when Hearth opens it, or after 24 hours. Whoever opens the link can use those TVs, so keep it in the family. This page loads no analytics.</p>
+
+  <p class="fine">Hearth: Universal TV Remote · <a href="../guide/">Guide</a> · <a href="../support/">Support</a> · <a href="../privacy/">Privacy policy</a></p>
+</main>
+<script>
+  // The key stays in this page: it's only ever handed to the Hearth app.
+  (function () {
+    var frag = location.hash.slice(1);
+    var invite = /^[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/.test(frag) ? frag : null;
+    var demo = /^demo\b/.test(frag);
+    document.getElementById(invite ? 'invite' : demo ? 'pretend' : 'nolink').hidden = false;
+    if (!invite) return;
+    document.getElementById('open').href = 'hearth://join#' + invite;
+    document.getElementById('copy').addEventListener('click', function () {
+      var b = this;
+      var done = function (ok) { b.textContent = ok ? 'Copied' : 'Press and hold the address to copy'; };
+      if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(function () { done(true); }, function () { done(false); });
+      else done(false);
+    });
+  })();
+</script>
+</body>
+</html>

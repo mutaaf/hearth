@@ -151,6 +151,32 @@ export class Scenes extends EventEmitter {
     return this.view(scene);
   }
 
+  // "Share this house": scenes from a family member's phone. One we already
+  // have (same id, e.g. the starter scenes) stays ours. Steps aimed at their
+  // TVs are pointed at ours (idMap: their id → our id); steps for TVs that
+  // didn't come along are dropped, and a scene left with nothing is skipped.
+  async adopt(list = [], idMap = new Map()) {
+    let n = 0;
+    for (const s of list.slice(0, 60)) {
+      if (!s || typeof s !== 'object' || this.scenes.some((x) => x.id === s.id)) continue;
+      let scene;
+      try {
+        scene = sanitizeScene({ name: s.name ?? 'Scene', emoji: s.emoji ?? '✨', steps: s.steps ?? [], schedule: s.schedule ?? null });
+      } catch {
+        continue;
+      }
+      scene.steps = scene.steps
+        .map((st) => (st.target === 'all' ? st : { ...st, target: st.target.map((id) => idMap.get(id)).filter(Boolean) }))
+        .filter((st) => st.target === 'all' || st.target.length);
+      if (!scene.steps.some((st) => st.action !== 'wait')) continue;
+      scene.id = typeof s.id === 'string' && /^[\w-]{1,80}$/.test(s.id) ? s.id : `shared-${Date.now().toString(36)}-${n}`;
+      this.scenes.push(scene);
+      n++;
+    }
+    if (n) await this.#changed();
+    return n;
+  }
+
   async update(id, patch) {
     const scene = this.get(id);
     Object.assign(scene, sanitizeScene(patch, {}));

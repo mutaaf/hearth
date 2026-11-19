@@ -12,6 +12,7 @@ import { Insights } from './llm.js';
 import { instrument, Telemetry } from './telemetry.js';
 import { billRequest, Energy } from './energy.js';
 import { WAKE_BOXES } from './wake-plan.js';
+import { exportHouse, Handoff, planImport } from './handoff.js';
 
 
 // Ports a TV listens on even before it's paired: enough to tell "on" from
@@ -27,7 +28,7 @@ const REACH_PORTS = { lg: [3001, 3000], samsung: [8001], roku: [8060], androidtv
 export class Hub extends EventEmitter {
   #drivers = new Map();
 
-  constructor({ store, drivers = {}, onClose = async () => {}, discoverFn = discover, probeFn = probe, telemetry, insights, energy, macForFn = macFor, forbiddenIp = isForbiddenTarget } = {}) {
+  constructor({ store, drivers = {}, onClose = async () => {}, discoverFn = discover, probeFn = probe, telemetry, insights, energy, macForFn = macFor, forbiddenIp = isForbiddenTarget, handoff } = {}) {
     super();
     // Loopback, link-local, multicast…: never a TV, and never somewhere the
     // icon proxy or a driver should be pointed (tests with fake TVs on
@@ -45,6 +46,8 @@ export class Hub extends EventEmitter {
     this.discoverFn = discoverFn;
     this.probeFn = probeFn;
     this.tvs = [];
+    // "Share this house" (src/handoff.js): tests pass { cloud, fetchFn }.
+    this.handoff = new Handoff({ hub: this, ...handoff });
   }
 
   async init() {
@@ -472,6 +475,73 @@ export class Hub extends EventEmitter {
       await this.store.save(this.tvs);
       this.emit('removed', { id });
       return { ok: true };
+    });
+  }
+
+  // ── share this house (src/handoff.js) ──
+  // The only place pairing keys leave the hub, and only sealed end to end:
+  // Handoff.create() encrypts this on the hub before anything is uploaded.
+  exportHouse() {
+    return exportHouse(this.tvs, this.scenes?.scenes ?? []);
+  }
+
+  planHouse(house, opts = {}) {
+    return planImport(this.tvs, house.tvs, { ...opts, supported: new Set(Object.keys(this.driverClasses)) });
+  }
+
+  // Bring a family member's TVs in, already paired. New TVs are added; one
+  // we have but never paired takes their pairing; one we have paired is
+  // left alone unless `replace` names it. Their scenes follow, pointed at our
+  // ids for the same TVs. → { added, updated, kept, skipped, scenes }
+  async importHouse(house, { replace = [], only = null } = {}) {
+    return this.#withLock('import', async () => {
+      const plan = this.planHouse(house, { replace, only });
+      const idMap = new Map();
+      const added = [];
+      const updated = [];
+      const kept = [];
+      const skipped = [];
+      for (const { inc, match, status, reason } of plan) {
+        if (status === 'new' && this.forbiddenIp(inc.ip)) {
+          skipped.push({ name: inc.name, brand: inc.brand, reason: 'address' });
+          continue;
+        }
+        if (status === 'new') {
+          const tv = { ...inc, addedAt: new Date().toISOString() };
+          delete tv.wakeVia; // pointed at our ids below
+          if (this.tvs.some((t) => t.id === tv.id)) tv.id += `-${Date.now().toString(36)}`;
+          this.tvs.push(tv);
+          this.#attach(tv);
+          idMap.set(inc.id, tv.id);
+          added.push(tv);
+        } else if (status === 'adopt' || status === 'replace') {
+          await this.#withLock(`tv:${match.id}`, () =>
+            this.#reattach(match, () => {
+              match.credentials = JSON.parse(JSON.stringify(inc.credentials));
+              match.macs = [...new Set([...(match.macs ?? []), ...inc.macs])];
+              for (const k of ['model', 'atvId', 'atvPort']) if (!match[k] && inc[k]) match[k] = inc[k];
+            }),
+          );
+          this.#apps.delete(match.id);
+          idMap.set(inc.id, match.id);
+          updated.push(match);
+        } else if (match) {
+          idMap.set(inc.id, match.id);
+          kept.push(match);
+        } else skipped.push({ name: inc.name, brand: inc.brand, reason: reason ?? 'skipped' });
+      }
+      // "Wake it through the box": only when that box came along too.
+      for (const { inc } of plan) {
+        const tv = this.tvs.find((t) => t.id === idMap.get(inc.id));
+        const box = inc.wakeVia && this.tvs.find((t) => t.id === idMap.get(inc.wakeVia));
+        if (tv && box && box !== tv && !tv.wakeVia && WAKE_BOXES.has(box.brand) && (added.includes(tv) || updated.includes(tv))) tv.wakeVia = box.id;
+      }
+      await this.store.save(this.tvs);
+      for (const tv of [...added, ...updated]) this.emit('change', this.view(tv));
+      this.#setNearby(this.nearby.filter((n) => !this.tvs.some((t) => t.ip === n.ip)));
+      const scenes = this.scenes?.adopt ? await this.scenes.adopt(house.scenes ?? [], idMap) : 0;
+      const brief = (tv) => ({ id: tv.id, name: tv.name, room: tv.room ?? '', brand: tv.brand });
+      return { added: added.map((t) => this.view(t)), updated: updated.map((t) => this.view(t)), kept: kept.map(brief), skipped, scenes };
     });
   }
 

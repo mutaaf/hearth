@@ -25,6 +25,7 @@ import { createEnergy } from './energy.js';
 import { createDoctor } from './doctor.js'; // doctor
 import { createLink } from './link.js';
 import { createWake } from './wake.js';
+import { createShare, inviteIn } from './share.js';
 import { activityBadge, activityOf, createModes, housePalette, paletteFor, renderRightNow } from './modes.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -90,7 +91,7 @@ async function api(method, path, body) {
   }
   // Never hang: pairing, launches that wake TVs, the doctor and AI notes can
   // legitimately take a while; everything else answers in seconds.
-  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power|key|volume|input|wake-test|guide|draft|try)$|^\/ai\/|^\/tvs$|\/run$/.test(path); // keys may wake the TV first
+  const slow = /\/(pair|launch|doctor|insights|scan|bulk|power|key|volume|input|wake-test|guide|draft|try)$|^\/handoff\/|^\/ai\/|^\/tvs$|\/run$/.test(path); // keys may wake the TV first
   init.signal = AbortSignal.timeout?.(slow ? 90_000 : 15_000);
   let res;
   try {
@@ -825,7 +826,7 @@ addEventListener('scroll', () => document.documentElement.classList.toggle('scro
 // instead of a call in every module that opens something.
 const houseDepth = scrollDepth(window, 'house');
 const OVERLAYS = [['setup', '#setup'], ['health', '#health'], ['energy', '#energy'], ['scene_editor', '#sceneEditor'], ['away', '#away']];
-const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings', announceSheet: 'announce' };
+const SHEETS = { settingsSheet: 'settings', editSheet: 'tv_settings', announceSheet: 'announce', shareSheet: 'share_house' };
 function whereNow() {
   for (const [name, sel] of OVERLAYS) {
     const el = document.querySelector(sel);
@@ -995,6 +996,8 @@ const setup = createSetup({
     render();
   },
   onClose: () => render(),
+  // "Joining someone's house? Scan their code" (web/share.js; `share` is made further down).
+  onJoin: () => share.join({ how: 'setup' }),
 });
 
 // ── Bulk select + scenes ─────────────────────────────────
@@ -1042,6 +1045,28 @@ const wake = createWake({
     current ? renderRemote() : render();
   },
 });
+// "Share this house" / "Join a house" (web/share.js).
+const share = createShare({
+  api,
+  getTvs: () => [...tvs.values()],
+  feedback,
+  track,
+  note,
+  onTvs: (list) => {
+    for (const tv of list) tvs.set(tv.id, tv);
+    render();
+  },
+});
+// An invite opened as a link: #house=<id>.<key> (the phone app turns
+// hearth://join#… into this). Taken out of the address at once.
+function houseInvite() {
+  const m = location.hash.match(/^#house=(.+)$/);
+  if (!m) return false;
+  history.replaceState(null, '', `${location.pathname}${location.search}#/`);
+  const invite = inviteIn(decodeURIComponent(m[1]));
+  if (invite) share.join({ invite, how: 'link' });
+  return true;
+}
 link = createLink({
   getTv: (id) => tvs.get(id),
   current: () => current,
@@ -1111,6 +1136,7 @@ function tourSoon() {
 }
 
 function route() {
+  houseInvite();
   const m = location.hash.match(/^#\/tv\/([\w-]+)/);
   const t = m && tvs.get(m[1]);
   if (tour.open && tour.name !== (t ? 'remote' : 'house')) tour.end(); // about the screen we're leaving
@@ -1352,6 +1378,14 @@ function onPress(el, info) {
     case 'tv-health':
       $('#editSheet').close();
       return health.openTv(editing);
+    case 'share-house':
+      haptic('tap');
+      $('#settingsSheet').close();
+      return share.give();
+    case 'join-house':
+      haptic('tap');
+      $('#settingsSheet').close();
+      return share.join({ how: 'settings' });
     case 'energy':
       haptic('tap');
       $('#settingsSheet').close();

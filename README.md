@@ -123,6 +123,12 @@ Roku, LG and Apple TV report whether they're playing. For Samsung and Google TV,
 
 After Hearth updates, it opens once with a short **What's new** sheet: the highlights on a few cards, every change underneath, and one button to get back to the couch. A new install never sees it. Open it again any time from Settings → **What's new**.
 
+## Share this house
+
+In the iPhone app every phone keeps its own list of TVs, so a family of four used to pair every TV four times. Now one phone does it once: Settings → **Share this house** makes a one-time invite (a QR code, or a link to send with Messages). The other phone scans it with its camera (or Settings → **Join a house** in Hearth, or "Joining someone's house? Scan their code" in setup) and gets every connected TV and your scenes, with no Allow prompts or codes. Before anything changes it shows what's coming: new TVs, TVs it already has (it keeps its own pairing unless you tap *Use theirs*), and TVs it had but never connected (they take the shared pairing). TVs you bring count like any TV you add in the app, so a free Hearth brings one and offers room for the rest.
+
+How it stays private: the sending phone locks the TVs, their pairing keys and the scenes with XChaCha20-Poly1305 and a new random 256-bit key. Only the locked copy goes to Hearth Cloud, which deletes it the moment it's fetched, or after 24 hours. The key is only in the link after the `#` (`https://mutaafaziz.com/hearth/join#<id>.<key>`), which never reaches a server. Anyone with an unused link can open it, so send it only to family. The home server can share and join too (paste the link; browsers only allow the camera over HTTPS).
+
 ## Away from home: Light Racer
 
 When your phone can't reach Hearth (you've left the house, or Wi-Fi is off), the app doesn't show an error. It turns into **Light Racer**, a light-cycle game played on a field of aurora. You eat sparks to grow your wall like a snake and box the other riders in.
@@ -171,7 +177,7 @@ Over plain `http://` (like `http://azizfamily.local`), browsers don't let a page
 
 ## Privacy and security
 
-Hearth talks only to devices on your home network. Your Hearth never shows ads; only the public demo at mutaafaziz.com/hearth/demo/ carries a small ad under it ([ad policy](https://mutaafaziz.com/ads/privacy/)). TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser.
+Hearth talks only to devices on your home network. Your Hearth never shows ads; only the public demo at mutaafaziz.com/hearth/demo/ carries a small ad under it ([ad policy](https://mutaafaziz.com/ads/privacy/)). TV pairing keys are stored in `~/.hearth/tvs.json` (readable only by your user) and are never sent to the browser. The one way they leave is **Share this house**, and only locked end to end (see above).
 
 **Only your household's phones can work the TVs.** Being on the Wi-Fi isn't enough: a new phone sees a number pad and types the 6-digit **house code** once, or scans an invite from a phone that's already in (⚙ → Get Hearth on another phone; an invite works for one phone, within a day). To see the code, open ⚙ → **Phones in this house** on any phone that's in, open Hearth on the computer running it (that computer is always in), or run `npm run code`. The same screen lists every phone, lets you rename one, hold to remove one (it's cut off at once), or pick a new code (phones already in stay in). Wrong codes are rate limited, and after 20 wrong codes in an hour typing a code pauses (invites still work). Commands require a JSON request, so a random website can't press buttons on your TV through your browser.
 
