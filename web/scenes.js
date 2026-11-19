@@ -9,6 +9,7 @@
 import { feedback, haptic } from './feel.js';
 import { track } from './analytics.js';
 import { quip } from './quips.js';
+import { createShortcutsGuide, shortcutsAvailable } from './shortcuts.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const EMOJI = ['🌙', '🍿', '📚', '☀️', '🎮', '🏈', '🧸', '🎉', '🛋️', '🍽️', '🎬', '✨'];
@@ -39,6 +40,7 @@ export function createScenes({ api, getTvs, note }) {
   let trying = null; // a draft being tried: { step, total, done, ok, failed }
   let field = null;
   let asked = 0;
+  let guide = null; // "Run it automatically with Shortcuts" (iPhone app only)
 
   const tvName = (id) => getTvs().find((t) => t.id === id)?.name ?? 'a TV';
   const targetLabel = (target) =>
@@ -341,6 +343,7 @@ export function createScenes({ api, getTvs, note }) {
           ${DAYS.map((d, i) => `<button type="button" class="${sch.days.includes(i) ? 'active' : ''}" data-press="up" data-ed="day" data-v="${i}" aria-label="${DAY_NAMES[i]}">${d}</button>`).join('')}
           <input type="time" id="edTime" value="${esc(sch.time)}" aria-label="Time">
         </div>
+        ${shortcutsAvailable() ? '<div class="ed-shortcuts"><p>Or let your iPhone run it: at a time, when you get home, with a Focus.</p><button type="button" class="chip" data-press="up" data-ed="shortcuts">Run it automatically with Shortcuts</button></div>' : ''}
       </div>
       <div class="ed-save">
         ${tryLine()}
@@ -409,6 +412,9 @@ export function createScenes({ api, getTvs, note }) {
       case 'save': return save();
       case 'make': return make();
       case 'try': return tryIt();
+      case 'shortcuts':
+        guide ??= createShortcutsGuide();
+        return guide.open({ name: draft.name, saved: Boolean(draft.id), scheduled: Boolean(draft.schedule?.enabled && draft.schedule.days.length) });
       case 'example':
         say.text = el.dataset.v;
         break;
