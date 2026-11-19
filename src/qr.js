@@ -1,10 +1,9 @@
-import { createRequire } from 'node:module';
-
 // QR codes as SVG, using the encoder that ships inside qrcode-terminal (no
-// extra dependency). Used for "scan this to get Hearth on your iPad".
-const require = createRequire(import.meta.url);
-const QRCode = require('qrcode-terminal/vendor/QRCode/index.js');
-const Level = require('qrcode-terminal/vendor/QRCode/QRErrorCorrectLevel.js');
+// extra dependency). Used for "scan this to get Hearth on your iPad" and the
+// "Share this house" invite. Plain imports (not createRequire), so the phone
+// app's bundler (Metro) can bring it along too.
+import QRCode from 'qrcode-terminal/vendor/QRCode/index.js';
+import Level from 'qrcode-terminal/vendor/QRCode/QRErrorCorrectLevel.js';
 
 export function qrSvg(text, { dark = '#07080c', light = '#ffffff', margin = 2 } = {}) {
   const qr = new QRCode(-1, Level.M);

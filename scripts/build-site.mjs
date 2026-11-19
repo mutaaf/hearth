@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { demoAdsSnippet } from './demo-ads.mjs';
 import { insightsSnippet } from './demo-insights.mjs';
+import { qrSvg } from '../src/qr.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist', 'hearth');
@@ -24,6 +25,9 @@ cpSync(
 cpSync(path.join(ROOT, 'src', 'insight-schema.js'), path.join(DEMO, 'vendor', 'insight-schema.js'));
 cpSync(path.join(ROOT, 'src', 'bill-schema.js'), path.join(DEMO, 'vendor', 'bill-schema.js'));
 for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) cpSync(path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', f), path.join(DEMO, 'vendor', f));
+cpSync(path.join(ROOT, 'node_modules', 'jsqr', 'dist', 'jsQR.js'), path.join(DEMO, 'vendor', 'jsqr.js'));
+// "Share this house" in the demo: a real QR code for the pretend invite (web/demo.js).
+writeFileSync(path.join(DEMO, 'share-demo-qr.svg'), qrSvg('https://mutaafaziz.com/hearth/join#demo', { margin: 1 }));
 
 // /hearth/racer/: Light Racer on its own, installable and offline. Its
 // relative ../ imports (feel.js, shapes.js, vendor/) land beside the landing page.

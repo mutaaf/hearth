@@ -44,6 +44,13 @@ export function mergeGuide(local, ai) {
   };
 }
 
+// Which incoming TVs to bring ({ only }) and which of ours to re-pair with
+// theirs ({ replace }): lists of their TV ids.
+export function handoffPicks(body = {}) {
+  const ids = (v) => (Array.isArray(v) ? v.map(String).filter((x) => /^[\w-]{1,80}$/.test(x)).slice(0, 60) : null);
+  return { replace: ids(body.replace) ?? [], only: ids(body.only) };
+}
+
 // [method, path pattern, handler(params, body, url)] — handlers return JSON.
 export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
   const id = '([\\w-]+)';
@@ -132,6 +139,12 @@ export function routes(hub, { version = '0.0.0', friendlyUrl = null } = {}) {
       scenesOf(hub).run(sc).catch((err) => log.warn('[hearth] scene failed:', err.message));
       return { ok: true, started: true };
     }),
+    // ── share this house (src/handoff.js): sealed on this hub, the key only in the link ──
+    r('POST', '/handoff/create', () => hub.handoff.create()),
+    r('POST', '/handoff/open', (_, body) => hub.handoff.open(String(body.invite ?? '').slice(0, 2000))),
+    r('POST', '/handoff/preview', (_, body) => hub.handoff.preview(body.token, handoffPicks(body))),
+    r('POST', '/handoff/accept', (_, body) => hub.handoff.accept(body.token, handoffPicks(body))),
+    r('POST', '/handoff/forget', (_, body) => hub.handoff.forget(body.token)),
     // ── health: report card, diagnostics, AI insights (keys pass through, never stored) ──
     r('GET', '/report', () => hub.report()),
     r('GET', `/tvs/${id}/health`, ([tv]) => hub.health(tv)),

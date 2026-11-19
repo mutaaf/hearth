@@ -79,6 +79,8 @@ const VENDOR = {
   'vendor/bill-schema.js': path.join(ROOT, 'src', 'bill-schema.js'),
   'vendor/pdf.min.mjs': path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'),
   'vendor/pdf.worker.min.mjs': path.join(ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'),
+  // "Join a house": reads the invite's QR code from the camera (web/share.js).
+  'vendor/jsqr.js': path.join(ROOT, 'node_modules', 'jsqr', 'dist', 'jsQR.js'),
 };
 
 async function serveStatic(res, pathname) {
@@ -123,7 +125,7 @@ const LIMITED = [
   ['POST', /^\/api\/scan$/, 'scan'],
   ['POST', /^\/api\/tvs$/, 'add'],
   ['POST', /^\/api\/(tvs\/[\w-]+\/)?doctor$/, 'doctor'],
-  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models|energy\/bill|guide|support|scenes\/draft)$/, 'ai'],
+  ['POST', /^\/api\/(tvs\/[\w-]+\/insights|ai\/models|energy\/bill|guide|support|scenes\/draft|handoff\/(create|open))$/, 'ai'],
   ['POST', /^\/api\/household\/join$/, 'join'],
   ['POST', /^\/api\/refresh$/, 'refresh'],
 ];

@@ -23,7 +23,7 @@ const ROOMS = [
   ['💻', 'Office'], ['🎮', 'Basement'], ['🏋️', 'Gym'], ['🏡', 'Den'],
 ];
 
-export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
+export function createSetup({ root, api, onTv, onClose, note, guide = null, onJoin = null }) {
   let state = {};
   let field = null;
   let run = 0; // bumps on every step change so late network replies are ignored
@@ -225,6 +225,7 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
         </ul>
         <div class="setup-actions">
           <button type="button" class="ghost" data-press="up" data-setup="manual">Type the TV’s number instead</button>
+          ${onJoin ? '<button type="button" class="ghost setup-join" data-press="up" data-setup="join">Joining someone’s house? Scan their code</button>' : ''}
         </div>`);
       mountField('mind');
       const mine = run;
@@ -533,6 +534,10 @@ export function createSetup({ root, api, onTv, onClose, note, guide = null }) {
       if (action === 'close') return close();
       if (action === 'search') return go('search');
       if (action === 'manual') return go('manual');
+      if (action === 'join') {
+        close();
+        return onJoin?.();
+      }
       if (action === 'settings') return window.HearthHost?.openSettings?.();
       if (action === 'guide' || action === 'report') {
         const tv = state.tv ?? state.candidate;

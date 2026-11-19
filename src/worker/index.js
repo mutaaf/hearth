@@ -18,6 +18,10 @@ import { appIcon } from './app-icon.js';
 //   GET  /hearth/api/support/status/:id → { status, resolution, updated } (the app checks back)
 //   GET  /hearth/api/support?status=   (Bearer SUPPORT_TOKEN) the queue, for the triage agent
 //   PATCH /hearth/api/support/:id      (Bearer SUPPORT_TOKEN) { status, resolution }
+//   POST /hearth/api/handoff           { box } → { id, expires }: "Share this house", a sealed box
+//                                      (XChaCha20-Poly1305, sealed on the phone; the key is only in the
+//                                      invite link's #fragment, never here). Kept 24 h, ≤ ~64 KB.
+//   GET  /hearth/api/handoff/:id       → { box } once, then it's gone (404 used/unknown, 410 expired)
 //
 // The bill: only scrubbed charge lines (src/bill-schema.js chargeLines, run
 // again here) or a photo the person cropped to the charges box. Neither is
@@ -41,6 +45,11 @@ const GUIDE_HOURLY_PER_IP = 20;
 const GUIDE_TTL_MS = 30 * 86_400_000; // a model's guide is rewritten at most monthly
 const SUPPORT_HOURLY_PER_IP = 5;
 const SCENE_HOURLY_PER_IP = 20;
+const HANDOFF_TTL_MS = 24 * 3_600_000;
+const HANDOFF_MAX_BOX = 87_400; // base64url characters ≈ 64 KB sealed (src/handoff.js MAX_BOX)
+const HANDOFF_HOURLY_PER_IP = 10;
+const HANDOFF_GETS_HOURLY_PER_IP = 60;
+const HANDOFF_GONE = 'This invite was already used or has expired. Ask them to make a new one.';
 const SUPPORT_STATUS = ['new', 'triaged', 'in-progress', 'supported', 'wont-fix', 'duplicate'];
 const MAX_BODY = 16_384;
 const MAX_BILL_BODY = 2_300_000; // a cropped, downscaled photo as a data URL
@@ -66,6 +75,7 @@ async function ensureTables(db) {
       'CREATE TABLE IF NOT EXISTS support (id TEXT PRIMARY KEY, at INTEGER NOT NULL, updated INTEGER NOT NULL, status TEXT NOT NULL, brand TEXT, model TEXT, sym TEXT, report TEXT NOT NULL, resolution TEXT)',
     )
     .run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS handoff (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL, expires INTEGER NOT NULL)').run();
   tablesReady.add(db);
 }
 
@@ -391,6 +401,40 @@ async function supportUpdate(req, env, id) {
   return r.meta?.changes ? json({ id, status: body.status }) : json({ error: 'not found' }, 404);
 }
 
+// ── share this house: a sealed box, handed over once ──
+// The box is ciphertext made on the phone; the key never comes here (it's in
+// the invite link's #fragment). Taking it deletes it, so an invite works once.
+const handoffId = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+async function handoffAdd(req, env) {
+  const { body, error } = await readBody(req, HANDOFF_MAX_BOX + 1024);
+  if (error) return error.status === 413 ? json({ error: 'That’s more than one invite can carry.' }, 413) : error;
+  const box = body?.box;
+  if (typeof box !== 'string' || box.length < 54 || !/^[A-Za-z0-9_-]+$/.test(box)) return json({ error: 'Send the sealed house.' }, 400);
+  if (box.length > HANDOFF_MAX_BOX) return json({ error: 'That’s more than one invite can carry.' }, 413);
+  const db = env.DB;
+  if (!db) return json({ error: 'Sharing is offline. Try later.' }, 503);
+  await ensureTables(db);
+  if ((await bump(db, `handoff:${await ipHash(req)}:${hour()}`)) > HANDOFF_HOURLY_PER_IP) return json({ error: 'That’s a lot of invites. Try again in an hour.' }, 429);
+  const now = Date.now();
+  await db.prepare('DELETE FROM handoff WHERE expires < ?').bind(now).run();
+  const id = handoffId();
+  const expires = now + HANDOFF_TTL_MS;
+  await db.prepare('INSERT INTO handoff (id, box, at, expires) VALUES (?, ?, ?, ?)').bind(id, box, now, expires).run();
+  return json({ id, expires: new Date(expires).toISOString() }, 201);
+}
+
+async function handoffTake(req, env, id) {
+  const db = env.DB;
+  if (!db) return json({ error: 'Sharing is offline. Try later.' }, 503);
+  await ensureTables(db);
+  if ((await bump(db, `handoff-get:${await ipHash(req)}:${hour()}`)) > HANDOFF_GETS_HOURLY_PER_IP) return json({ error: 'Too many tries. Wait a little.' }, 429);
+  const row = await db.prepare('DELETE FROM handoff WHERE id = ? RETURNING box, expires').bind(id).first();
+  if (!row) return json({ error: HANDOFF_GONE }, 404);
+  if (row.expires < Date.now()) return json({ error: HANDOFF_GONE }, 410);
+  return json({ box: row.box });
+}
+
 export async function handle(req, env) {
   const url = new URL(req.url);
   if (!url.pathname.startsWith('/hearth/api/')) return env.ASSETS ? env.ASSETS.fetch(req) : json({ error: 'not found' }, 404);
@@ -409,8 +453,11 @@ export async function handle(req, env) {
   if (path === '/device' && req.method === 'POST') return device(req, env);
   if (path === '/scene' && req.method === 'POST') return scene(req, env);
   if (path === '/support' && req.method === 'POST') return supportAdd(req, env);
+  if (path === '/handoff' && req.method === 'POST') return handoffAdd(req, env);
   if (path === '/support' && req.method === 'GET') return supportList(req, env, url);
-  let m = path.match(/^\/support\/status\/([a-z0-9]{6,16})$/);
+  let m = path.match(/^\/handoff\/([A-Za-z0-9_-]{22})$/);
+  if (m && req.method === 'GET') return handoffTake(req, env, m[1]);
+  m = path.match(/^\/support\/status\/([a-z0-9]{6,16})$/);
   if (m && req.method === 'GET') return supportStatus(env, m[1]);
   m = path.match(/^\/support\/([a-z0-9]{6,16})$/);
   if (m && req.method === 'PATCH') return supportUpdate(req, env, m[1]);

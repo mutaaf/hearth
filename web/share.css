@@ -1,0 +1,70 @@
+/* "Share this house" (web/share.js). The sheet is the wake coach's night
+   glass (wake.css: .wake-sheet, .wake-sky, .wake-body); these are its own
+   pieces: the TV list, the QR tile, the camera and the picks. */
+
+.share-tvs, .share-list { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.share-tvs li, .share-row {
+  display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 16px;
+  background: var(--body); border: 1px solid var(--body-edge); color: var(--ink);
+}
+.share-tvs { display: flex; flex-wrap: wrap; gap: 6px; }
+.share-tvs li { display: inline-grid; gap: 0; padding: 8px 12px; border-radius: 14px; }
+.share-tvs li b { font-size: 14.5px; }
+.share-tvs li small { font: 500 9.5px/1.3 var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+.share-tvs b, .share-row b { font-size: 16px; letter-spacing: -.01em; }
+.share-tvs small, .share-row small { display: block; font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+.share-row small.mono { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+.share-row > span { flex: 1; min-width: 0; }
+.share-row > i { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 700 14px/1 var(--mono); font-style: normal; background: color-mix(in srgb, var(--a1) 22%, transparent); }
+.share-row.st-got > i { background: var(--a1); color: #1a0d05; }
+.share-row.st-new, .share-row.st-adopt, .share-row.st-replace { border-color: color-mix(in srgb, var(--a1) 55%, transparent); box-shadow: 0 10px 26px -20px var(--a2); }
+.share-row.st-skip { opacity: .62; }
+.share-row .chip { flex: none; }
+
+/* Bring this one? A round tick, like the wake coach's steps. */
+.share-pick {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; padding: 0;
+  border: 2px solid color-mix(in srgb, var(--a1) 70%, transparent); background: transparent;
+}
+.share-pick.on { background: var(--a1); border-color: var(--a1); }
+.share-pick.on::before { content: '✓'; color: #1a0d05; font: 700 15px/26px var(--mono); }
+
+.share-promise { margin-bottom: 4px; }
+.share-room { margin: 0 0 12px; padding: 12px 14px; border-radius: 16px; font-size: 14px; line-height: 1.45; background: color-mix(in srgb, var(--a1) 10%, var(--body)); border: 1px dashed color-mix(in srgb, var(--a1) 45%, transparent); }
+
+/* The QR code: always dark on white (cameras want contrast), on a lit tile. */
+.share-qr {
+  width: min(240px, 66vw); aspect-ratio: 1; margin: 6px auto 16px; padding: 14px; border-radius: 26px; background: #fff;
+  box-shadow: 0 0 0 1px #0000000f, 0 22px 50px -26px var(--a2), 0 0 60px -24px var(--a1);
+  animation: share-in .5s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+.share-qr svg { display: block; width: 100%; height: 100%; }
+@keyframes share-in { from { transform: scale(.86) rotate(-2deg); opacity: 0; } }
+.share-how { font-size: 15px; text-align: center; }
+.share-send { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.share-send .cta { text-decoration: none; }
+
+/* The camera: a rounded window with a pulsing frame. */
+.share-cam { position: relative; aspect-ratio: 4 / 3; margin: 0 0 14px; border-radius: 22px; overflow: hidden; background: #05070d; }
+.share-cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.share-cam-frame {
+  position: absolute; inset: 18% 22%; border-radius: 18px; pointer-events: none;
+  box-shadow: 0 0 0 2px var(--a1), 0 0 0 999px #05070d66, 0 0 30px var(--a1);
+  animation: share-frame 1.6s ease-in-out infinite;
+}
+@keyframes share-frame { 50% { inset: 20% 24%; } }
+.share-cam-say { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center; font-size: 11px; color: #f3eee4; text-shadow: 0 1px 6px #000; }
+.share-nocam { margin: 0 0 14px; }
+
+.share-paste { display: grid; gap: 6px; margin: 0 0 6px; }
+.share-paste label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.share-paste div { display: flex; gap: 8px; }
+.share-paste input {
+  flex: 1; min-width: 0; font: 16px var(--mono); padding: 12px 14px; border-radius: 14px; color: var(--ink);
+  background: var(--body); border: 1px solid var(--body-edge);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-qr, .share-cam-frame { animation: none; }
+}
+.share-demo { margin: 0 0 18px; }

@@ -65,6 +65,8 @@ src/launch.js          POST /api/launch: wake → resolve per TV → launch in p
 src/upnp.js            just-enough UPnP SOAP (Samsung RenderingControl)
 src/bill-schema.js     the power bill: chargeLines() privacy filter, prompt/schema, validateBill(); shared by
                        web (vendor/bill-schema.js), hub and Worker (POST /hearth/api/bill)
+src/handoff.js         "Share this house": seal()/openBox() (XChaCha20-Poly1305, @noble/ciphers), invite links
+                       (parseInvite), exportHouse/planImport (merge rules) and Handoff (create → Worker, open, preview, accept)
 src/energy.js          watts estimate from the model code, ~/.hearth/energy.json (price, bill numbers, watts),
                        report() = telemetry hours on × watts × price; web/energy.js|.css draws it
 src/scene-schema.js    "just say it": sceneRequest() (names/rooms → TV1…, scrub), prompt/schema, validateSceneDraft(),
@@ -90,6 +92,8 @@ web/icons.js           app icons, best first: the TV's own icon for that app (Ro
                        (Simple Icons, CC0, `node scripts/brand-icons.mjs`; Prime Video, Disney+, Hulu, Peacock, ESPN,
                        Pluto TV and Sling aren't there at their owners' request), then a letter tile
 web/announce.js|.css   "Tell everyone": one message on every TV that can show it, a reason for the rest
+web/share.js|.css      "Share this house" / "Join a house": the wake coach's night glass; QR (hub-made SVG), Share/Copy;
+                       camera scan (getUserMedia + vendor/jsqr.js) or paste; preview with picks; done list
 web/whatsnew.js|.css   "What's new": once per version after an update (never a fresh install), Settings → What's new;
                        the words live in web/whatsnew-notes.js (see "What's new" below)
 web/wake.js|.css       the wake coach: "Turn on from your phone" (plan, steps, live test, AI on failure)
@@ -108,7 +112,7 @@ web/stream.js|.css     the Stream Center ("Watch" mode): tap surface = play/paus
                        live progress; modes.js auto-switches to it when phaseOf() says playback
 web/racer/             Light Racer (canvas game + aurora-field sky), own manifest + sw.js; public at /hearth/racer/
 web/demo.js            pretend TVs for the public demo only (has a slice of the catalog)
-site/                  landing page for mutaafaziz.com/hearth
+site/                  landing page for mutaafaziz.com/hearth (site/join/: where a house invite link lands; no analytics)
 scripts/build-site.mjs builds dist/ for the Worker (wrangler.jsonc)
 ```
 
@@ -171,6 +175,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - web/analytics.js: `track(event, props)` → `window.HearthHost.track` (hearth-app whitelists the properties again and sends them to PostHog). No HearthHost (home server, public demo) = nothing leaves the page. Brands, counts, steps and durations only: never a TV's name, IP, MAC or serial.
 - `screen` (screen, from, prev_s, brand/mode or tvs) comes from one MutationObserver in app.js watching `hidden`/`open`: the open overlay (#setup, #health, #energy, #sceneEditor) or dialog wins, else house/remote. New overlays: add them to `OVERLAYS`/`SHEETS`.
 - Settings → **Share usage stats** (`.usage-row`, `#prefUsage`): only in the phone app, and only when the app sets `HearthHost.usage` (a boolean); a change calls `HearthHost.setUsage(on)`. Off, the app sends nothing (its own analytics, crash reports and, from app 1.1, the usage counts it sends through mutaafaziz.com's relay) and deletes its install ids. The site privacy page says the same; keep them true together.
+- `share_house` {step, tvs, how?, …counts}: give_open, made, copy, send, give_error, join_open, preview, joined, join_error, give_close/join_close. Never names.
 - Others: `tap` (every `data-action`), `remote_tab`, `remote_mode`, `power`, `refresh`, `ui_error` (error notes), `scrolled` (house depth in 25 % steps, on leaving), `setting` (every savePrefs change), `launch_app`, `scene_run`, `setup_step`, `tour_start`/`tour_end`, `guide_open`, `support_report`.
 
 ## Getting back to a TV (hub-core)
@@ -224,6 +229,18 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 - **Callouts go to the feature:** a callout with `go` (one of `DESTINATIONS` in web/whatsnew.js: `scene-say`, `wake`, `settings`) is one big button with a hint chip; a tap closes the sheet, then app.js `whatsNewGo[to]()` opens the place, and the tour doesn't follow (`onClose({ went })`). No `go` (the feature just happens) = a plain card. A new place = add it to `DESTINATIONS` and `whatsNewGo`; the test checks both. Analytics `whats_new` {step: go, to}.
 - **Manners:** it waits ~0.7 s after the first `hello`; if setup, the tour or another sheet is up it doesn't show or record (next launch tries again); the tour waits for it to close. The aurora sign cycles the callout shapes (none under Reduce Motion, nor the bulb chase or card stagger); focus lands on the one button; Esc and the backdrop close it. Analytics `whats_new` {step: open|notes|close, version, from}.
 
+## Share this house (src/handoff.js, web/share.js)
+
+- **Why:** in the phone app each phone runs its own hub and store, so every family member used to pair every TV. Phone A seals its paired TVs (whole store records: credentials, ids, names, rooms, macs, atvId/atvPort, wakeVia…) and every scene; phone B merges them.
+- **Give:** `POST /api/handoff/create` → `hub.handoff.create()`: `exportHouse()` → `seal()` with a fresh 32-byte key (24-byte nonce, AAD `hearth/house/v1`, base64url nonce‖ct‖tag) → Worker `POST /hearth/api/handoff {box}` → `{id, expires}`. Answers `{ link: https://mutaafaziz.com/hearth/join#<id>.<key>, appLink: hearth://join#…, expires, tvs, scenes, names, qr }` (qr = src/qr.js SVG, made on the hub). Nothing paired → 409.
+- **Worker:** D1 `handoff (id, box, at, expires)`; id = 16 random bytes base64url (22 chars); box ≤ 87,400 chars (~64 KB sealed), else 413; 10 uploads/h per IP, 60 fetches/h; expired rows swept on each upload. `GET /hearth/api/handoff/:id` is `DELETE … RETURNING`: the first fetch gets `{box}`, every later one 404; past 24 h → 410. The server never has the key.
+- **Join:** `POST /api/handoff/open {invite}` (any text holding `<id>.<key>`) fetches (uses it up), opens, `checkHouse()`s and keeps the house in memory for 30 min under a token → `{ token, tvs: [{ref, name, room, brand, model, status, as?}], scenes, from }`. `POST /api/handoff/preview|accept {token, only?, replace?}`, `POST /api/handoff/forget {token}` (the sheet closed). Errors are one plain line each (`MESSAGES`): used/expired 410, tampered or cut link 400, not an invite 400.
+- **Merge rules (`planImport`):** the same TV is the same id, else a shared MAC, else the same Apple TV `atvId`, else the same address (all same brand); one of ours matches at most once. `new` → added with its pairing (driver starts at once); `adopt` (ours never paired) → takes their credentials, keeps our name/room/ip; `same` (identical keys) → nothing; `have` (ours paired, other keys) → left alone unless `replace` lists it (`replace` status). Brands this hub can't drive → `skip`/`unsupported`; `only` limits which TVs come (the rest `skip`/`not-picked`). `wakeVia` survives only if its box came too. Scenes: `Scenes.adopt()` skips ids we have (the starter scenes), points targets at our ids, drops steps for TVs that didn't come.
+- **Pro (phone app):** TVs brought over count like any added TV. hearth-app src/host.js adds `room` (TVs left under the limit, `null` = no limit) to the open/preview answers, and answers accept with 402 when the picked new TVs don't fit; App.js's usual 402 flow shows the paywall and replays the accept if bought. The sheet pre-picks as many new TVs as fit and says so plainly.
+- **Links:** `site/join/` reads the fragment in the page (no analytics there; the key goes nowhere) and offers "Open in Hearth" (`hearth://join#<id>.<key>`), the beta, and copy. The phone app turns `hearth://join#…` into the web hash `#house=…`; app.js `houseInvite()` strips it from the address and opens the join sheet. No universal links: the AASA file would have to live at mutaafaziz.com/.well-known, outside this Worker's `/hearth*` route.
+- **Camera:** `navigator.mediaDevices.getUserMedia` + `vendor/jsqr.js` (jsqr 1.4.0, served from node_modules at home, copied by build-site and by hearth-app's build-web). Secure contexts only: the http home server pastes instead; the iPhone Camera app scanning the QR lands on site/join/ anyway.
+- **Demo:** web/demo.js pretends: a real QR for `…/join#demo` (dist `share-demo-qr.svg`, made by build-site), and "Open a pretend invite" brings two TVs from a pretend family house.
+
 ## Device guides, AI and the support queue
 
 - `POST /api/guide { tvId | device, symptom?, ai? }` → `{ guide, ai, aiError? }`. The built-in guide (src/devices.js) answers at
@@ -263,7 +280,7 @@ The app only ever shows what the TV last said; nothing optimistic sticks.
 
 ## Invariants
 
-- Pairing keys never leave the server: `Hub.view()` is the only shape sent to clients. A test enforces this.
+- Pairing keys never leave the server: `Hub.view()` is the only shape sent to clients. A test enforces this. In the phone app the phone *is* the server, so this holds per hub. The one exception is "Share this house": `Hub.exportHouse()` hands the store records (keys included) to `Handoff.create()`, which seals them on the hub with XChaCha20-Poly1305 before anything is uploaded; they leave only end-to-end encrypted, the key only in the invite link's `#fragment`. Web code never reads credentials (the handoff routes answer with names/rooms/brands/status only; test/handoff.test.js checks it).
 - Mutating API calls must be `application/json` (blocks cross-site form POSTs). Keep it that way.
 - The icon proxy only fetches from the TV's own IP, and only icon URLs that TV listed in `apps()`.
 - Drivers throw `HearthError` with a status (`unsupported()` → 501, `offline()` → 503), never HTTP-aware code. Network errors go through `asOffline()`/`isUnreachable()` in errors.js (one shared errno set); the server also maps any stray unreachable error to 503.
@@ -378,3 +395,4 @@ Tests green (`npm test`), README updated for anything user-facing, a new nuance 
 | A 2016 Samsung (UN55KU6290) switched itself off ~15 min after every switch-on (seen 2026-10-21/22, telemetry), and Hearth then showed "Not responding · Fix", which read as "it forgot the TV" | `Telemetry.offPattern()` → `view.off`: `last: 'off'` (powered down, then left the network: normal) vs `'lost'` (vanished while on); `autoOff` when ≥2 sessions with nobody pressing power on *any* TV (a Roku's power-off reaches its TV over CEC) end at the same length (±2 min). The card drops "Fix" for a normal off; the banner says "Switched off · still connected", or "Turns itself off after ~N min" → health finding with the TV's sleep/no-signal settings. Wakes resolved after the 90 s window no longer count as working (a hand switch-on 20 min later used to). |
 | A power bill carries a name, service address and account number | Never sent whole. PDFs are read on the phone (pdf.js 6, `vendor/pdf.min.mjs` served from node_modules, copied into the demo build) and only `chargeLines()` go out (lines with money/kWh/rate words; lines with account/address/phone/email/meter-no words dropped; digit runs of 7+ digits → `#`); the person sees them first. Photos: the person crops to the charges box. Hub and Worker run `chargeLines()` again. The `@` in "918 kWh @ $0.0921" once matched an email filter and dropped every rate line; dates like 09/01/2026 - 09/30/2026 once got scrubbed as account numbers: both covered by test/energy.test.js. |
 | Gemma 4 on Workers AI reads bill photos | OpenAI-style `image_url` data-URL parts in `env.AI.run` (verified 2026-10-22: text 1.7 s, photo 2.8 s, ~$0.0001 each). Fallback vision model: mistral-small-3.1. `/bill` takes bodies up to 2.3 MB (hub: 2.4 MB on that route only); free calls are 6/h per IP within the shared daily cap. |
+
