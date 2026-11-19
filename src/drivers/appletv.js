@@ -10,9 +10,9 @@ import { Driver } from './base.js';
 //   AirPlay:   tunnels MRP, which pushes what's playing (app, title, play state)
 // Companion alone is a full remote; AirPlay adds the live "what's on" info.
 // The transport is either pyatv in one shared Python process (src/atv-bridge.js
-// → src/drivers/appletv-bridge.py) or the pure-JS Companion client
-// (src/atv/transport.js: no Python, so it runs in the phone app; Companion
-// only, so one code). Both answer the same ops; atvMode() picks.
+// → src/drivers/appletv-bridge.py) or the pure-JS client (src/atv/transport.js:
+// no Python, so it runs in the phone app; Companion, plus AirPlay/MRP when the
+// Apple TV answers on :7000). Both answer the same ops; atvMode() picks.
 const PROTOCOLS = ['companion', 'airplay'];
 const LABELS = { companion: 'remote control', airplay: 'what’s playing' };
 
@@ -285,11 +285,18 @@ export class AppleTvDriver extends Driver {
     return {};
   }
 
-  // New keys: (re)connect so the bridge uses them.
+  // New keys: (re)connect so the bridge uses them. A connect already in
+  // flight was asked with the old keys (the first code's), so another one
+  // follows it; otherwise the second code's AirPlay keys would sit unused
+  // until the next reconnect.
   #afterPair() {
     if (this.#stopped) return this.start();
-    this.#connected = false;
-    this.#connect().catch(() => this.#scheduleRetry());
+    const again = () => {
+      this.#connected = false;
+      this.#connect().catch(() => this.#scheduleRetry());
+    };
+    if (this.#connecting) this.#connecting.then(again, again);
+    else again();
   }
 
   // ── remote ────────────────────────────────────────────
