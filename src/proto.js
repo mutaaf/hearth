@@ -1,7 +1,27 @@
-// Just enough protobuf for the Android TV remote protocol: varints and
-// length-delimited fields, no schema compiler. Messages are written as
-// { fieldNumber: value } where a value is a number (varint), a string or
-// Buffer (bytes), a nested object (sub-message) or an array of those.
+// Just enough protobuf for the Android TV remote protocol and Apple's MRP:
+// varints, length-delimited and fixed-width fields, no schema compiler.
+// Messages are written as { fieldNumber: value } where a value is a number
+// (varint), a string or Buffer (bytes), a Fixed (double()/float()), a nested
+// object (sub-message) or an array of those.
+
+// A 64-bit double or 32-bit float field (wire types 1 and 5).
+export class Fixed {
+  constructor(bytes) {
+    this.bytes = bytes;
+  }
+}
+export function double(n) {
+  const b = Buffer.alloc(8);
+  b.writeDoubleLE(n);
+  return new Fixed(b);
+}
+export function float(n) {
+  const b = Buffer.alloc(4);
+  b.writeFloatLE(n);
+  return new Fixed(b);
+}
+// A decoded fixed field (a Buffer of 4 or 8 bytes) → number.
+export const fixedNumber = (v) => (Buffer.isBuffer(v) && v.length === 8 ? v.readDoubleLE(0) : Buffer.isBuffer(v) && v.length === 4 ? v.readFloatLE(0) : null);
 
 export function varint(n) {
   const out = [];
@@ -32,7 +52,9 @@ export function encode(msg) {
     const num = Number(key);
     for (const value of Array.isArray(raw) ? raw : [raw]) {
       if (value === undefined || value === null) continue;
-      if (typeof value === 'number' || typeof value === 'boolean') {
+      if (value instanceof Fixed) {
+        parts.push(varint(num * 8 + (value.bytes.length === 8 ? 1 : 5)), value.bytes);
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
         parts.push(varint(num * 8), varint(Number(value)));
       } else {
         const bytes = Buffer.isBuffer(value) ? value : typeof value === 'string' ? Buffer.from(value) : encode(value);
@@ -44,7 +66,9 @@ export function encode(msg) {
 }
 
 // → { fieldNumber: [values] }; varints become numbers, everything
-// length-delimited stays a Buffer (call decode() again for sub-messages).
+// length-delimited stays a Buffer (call decode() again for sub-messages), and
+// fixed-width fields stay 8- or 4-byte Buffers (fixedNumber() reads them).
+// A truncated field ends the message there.
 export function decode(buf) {
   const out = {};
   let pos = 0;
@@ -63,14 +87,14 @@ export function decode(buf) {
     } else if (wire === 2) {
       const len = readVarint(buf, pos);
       if (!len) break;
+      if (len.pos + len.value > buf.length) break;
       value = buf.subarray(len.pos, len.pos + len.value);
       pos = len.pos + len.value;
-    } else if (wire === 1) {
-      pos += 8;
-      continue;
-    } else if (wire === 5) {
-      pos += 4;
-      continue;
+    } else if (wire === 1 || wire === 5) {
+      const size = wire === 1 ? 8 : 4;
+      if (pos + size > buf.length) break;
+      value = buf.subarray(pos, pos + size);
+      pos += size;
     } else {
       break;
     }

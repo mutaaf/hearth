@@ -158,13 +158,15 @@ export class PairVerify {
     return encode([[TLV.SeqNo, 3], [TLV.EncryptedData, seal(key, 'PV-Msg03', reply)]]);
   }
 
+  // Keys for one channel from the verified shared secret.
+  keys(salt, outputInfo, inputInfo) {
+    return { output: hkdf(this.#shared, salt, outputInfo), input: hkdf(this.#shared, salt, inputInfo) };
+  }
+
   // Companion's session keys (pyatv companion/protocol.py: salt "",
   // ClientEncrypt-main / ServerEncrypt-main).
   sessionKeys() {
-    return {
-      output: hkdf(this.#shared, '', 'ClientEncrypt-main'),
-      input: hkdf(this.#shared, '', 'ServerEncrypt-main'),
-    };
+    return this.keys('', 'ClientEncrypt-main', 'ServerEncrypt-main');
   }
 }
 

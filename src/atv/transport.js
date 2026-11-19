@@ -1,18 +1,24 @@
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
+import { Backoff } from '../backoff.js';
 import { HearthError } from '../errors.js';
+import { AIRPLAY_PORT, AirPlaySession, airplayInfo, beginAirPlayPairing } from './airplay.js';
 import { beginPairing, CompanionClient, HID, MCC } from './companion.js';
-import { PairingError, PairVerify } from './hap.js';
+import { PairingError, PairVerify, parseCredentials } from './hap.js';
 import { CompanionLink, FRAME } from './link.js';
+import { COMMAND, MrpClient } from './mrp.js';
 import { float } from './opack.js';
 
 // The pure-JS Apple TV transport. It answers the same ops as the pyatv
 // bridge (src/atv-bridge.js: info, pair_begin, pair_pin, pair_cancel,
 // connect, disconnect, remote, power, apps, launch, set_volume, text) and
 // emits the same 'state'/'closed' events, so AppleTvDriver runs on either.
-// Companion only: keys, power, apps. No AirPlay/MRP, so no "what's
-// playing" and one pairing code instead of two. No typing (that needs
-// tvOS's keyed-archiver text payloads).
+// Companion: keys, power, apps (the first code). AirPlay (the second code,
+// when the Apple TV answers on :7000): an encrypted AirPlay session whose
+// data stream tunnels MRP, which pushes what's playing (app, title, play
+// state, position). AirPlay is extra: if it can't start, the remote still
+// works and it tries again with backoff. No typing (that needs tvOS's
+// keyed-archiver text payloads).
 
 // Companion's port isn't fixed (49153 on this house's Apple TVs). Without
 // mDNS: the port we saved, then these.
@@ -33,13 +39,8 @@ const fail = (status, code, message) => Object.assign(new HearthError(status, me
 const offline = (msg = 'The Apple TV didn’t answer. Is it on the same Wi-Fi?') => fail(503, 'offline', msg);
 const authFailed = (msg) => fail(401, 'auth', msg);
 
-// AirPlay GET :7000/info is a binary plist with the model in plain ASCII.
-async function airplayInfo(ip, timeout = 2000) {
-  const res = await fetch(`http://${ip}:7000/info`, { signal: AbortSignal.timeout(timeout) });
-  if (!res.ok) return null;
-  const text = Buffer.from(await res.arrayBuffer()).toString('latin1');
-  return { model: text.match(/AppleTV\d+,\d+/)?.[0] ?? null };
-}
+// MRP's fields in the state, empty while AirPlay is down.
+const NO_MRP = { app: null, appTitle: null, title: null, playing: null, position: null, duration: null };
 
 export class JsAtvTransport extends EventEmitter {
   kind = 'js';
@@ -47,11 +48,15 @@ export class JsAtvTransport extends EventEmitter {
   reason = '';
   keyboard = false; // capabilities.keyboard
   #clients = new Map(); // key → CompanionClient
-  #pairings = new Map(); // key → PairingSession
+  #pairings = new Map(); // key → PairingSession | AirPlayPairing
+  #airplay = new Map(); // key → { session, mrp, timer, backoff, stopped, reason }
 
-  constructor({ ports = COMMON_PORTS, probeMs = 1500, info = airplayInfo, name = 'Hearth', connect = net.connect, holdMs = 1000 } = {}) {
+  constructor({
+    ports = COMMON_PORTS, probeMs = 1500, info = airplayInfo, name = 'Hearth', connect = net.connect, holdMs = 1000,
+    airplayPort = AIRPLAY_PORT, airplayRetry = { min: 5000, max: 60_000 }, feedbackMs, mrpTimeout = 5000,
+  } = {}) {
     super();
-    Object.assign(this, { ports, probeMs, infoFn: info, name, connectFn: connect, holdMs });
+    Object.assign(this, { ports, probeMs, infoFn: info, name, connectFn: connect, holdMs, airplayPort, airplayRetry, feedbackMs, mrpTimeout });
     this.setMaxListeners(0);
   }
 
@@ -100,20 +105,28 @@ export class JsAtvTransport extends EventEmitter {
   }
 
   // ── ops ────────────────────────────────────────────────
+  // AirPlay is offered when GET :7000/info answers as an Apple TV; then the
+  // driver asks for its code after Companion's (Step 2 of 2).
   async op_info({ ip, port }) {
-    const found = await this.findPort(ip, port);
-    const extra = await Promise.resolve(this.infoFn?.(ip)).catch(() => null);
-    return {
-      ip,
-      model: extra?.model ?? null,
-      appleTv: true,
-      services: { companion: { port: found, pairing: 'Mandatory' } },
-    };
+    const [found, extra] = await Promise.all([
+      this.findPort(ip, port),
+      Promise.resolve(this.infoFn?.(ip, { port: this.airplayPort, connect: this.connectFn })).catch(() => null),
+    ]);
+    const services = { companion: { port: found, pairing: 'Mandatory' } };
+    if (extra?.airplay) services.airplay = { port: this.airplayPort, pairing: 'Mandatory' };
+    return { ip, model: extra?.model ?? null, appleTv: true, services };
   }
 
   async op_pair_begin({ key, ip, port, protocol = 'companion' }) {
-    if (protocol !== 'companion') throw fail(501, 'unsupported', `This Hearth can’t pair ${protocol}`);
+    if (protocol !== 'companion' && protocol !== 'airplay') throw fail(501, 'unsupported', `This Hearth can’t pair ${protocol}`);
     this.op_pair_cancel({ key });
+    if (protocol === 'airplay') {
+      const session = await beginAirPlayPairing({ host: ip, port: this.airplayPort, name: this.name, connect: this.connectFn });
+      session.protocol = 'airplay';
+      this.#pairings.set(key, session);
+      session.link.once('close', () => this.#pairings.get(key) === session && this.#pairings.delete(key));
+      return { protocol, devicePin: true };
+    }
     const found = await this.findPort(ip, port);
     const session = await beginPairing({ host: ip, port: found, name: this.name, connect: this.connectFn });
     session.port = found;
@@ -127,6 +140,7 @@ export class JsAtvTransport extends EventEmitter {
     this.#pairings.delete(key);
     if (!session) throw fail(410, 'expired', 'That code expired. Ask the Apple TV for a new one.');
     const credentials = await session.finish(pin);
+    if (session.protocol === 'airplay') return { protocol: 'airplay', credentials };
     return { protocol: 'companion', credentials, port: session.port };
   }
 
@@ -151,13 +165,94 @@ export class JsAtvTransport extends EventEmitter {
       client = await this.#open(ip, used, creds);
     }
     this.#clients.set(key, client);
-    client.on('state', (state) => this.#clients.get(key) === client && this.emit('state', { event: 'state', key, state }));
+    client.on('state', () => this.#clients.get(key) === client && this.#emitState(key));
     client.once('close', () => {
       if (this.#clients.get(key) !== client) return;
       this.#clients.delete(key);
+      this.#stopAirPlay(key);
       this.emit('closed', { event: 'closed', key, reason: 'closed' });
     });
-    return { ip, port: used, state: client.snapshot() };
+    if (credentials.airplay) this.#startAirPlay(key, ip, credentials.airplay);
+    return { ip, port: used, state: this.#snapshot(key) };
+  }
+
+  // Companion's state with MRP's on top (while AirPlay is up).
+  #snapshot(key) {
+    const base = this.#clients.get(key)?.snapshot() ?? {};
+    const mrp = this.#airplay.get(key)?.mrp;
+    return { ...base, ...NO_MRP, ...(mrp ? mrp.snapshot() : {}) };
+  }
+
+  #emitState(key) {
+    if (this.#clients.has(key)) this.emit('state', { event: 'state', key, state: this.#snapshot(key) });
+  }
+
+  // ── AirPlay + MRP (what's playing) ─────────────────────
+  // Runs beside Companion and never holds it up. A drop or a failed start
+  // tries again with backoff while the remote is connected; keys the Apple
+  // TV refuses stop it (pairing again fixes that).
+  #startAirPlay(key, ip, credentials) {
+    this.#stopAirPlay(key);
+    try {
+      parseCredentials(credentials);
+    } catch {
+      return; // unreadable: Companion only
+    }
+    const entry = { session: null, mrp: null, timer: null, backoff: new Backoff({ ...this.airplayRetry, healthyMs: 60_000 }), stopped: false, reason: '' };
+    this.#airplay.set(key, entry);
+    const attempt = async () => {
+      if (entry.stopped) return;
+      let session;
+      try {
+        session = new AirPlaySession({ host: ip, port: this.airplayPort, credentials, name: this.name, connect: this.connectFn, ...(this.feedbackMs ? { feedbackMs: this.feedbackMs } : {}) });
+        entry.session = session;
+        await session.connect();
+        const clientId = parseCredentials(credentials).clientId.toString('utf8');
+        const mrp = new MrpClient(session.dataChannel, { name: this.name, uniqueIdentifier: clientId, timeout: this.mrpTimeout });
+        await mrp.start();
+        if (entry.stopped || session.closed) throw new Error('closed');
+        entry.mrp = mrp;
+        entry.reason = '';
+        entry.backoff.up();
+        mrp.on('state', () => entry.mrp === mrp && this.#emitState(key));
+        session.once('close', () => {
+          if (entry.mrp !== mrp) return;
+          entry.mrp = null;
+          this.#emitState(key);
+          retry();
+        });
+        this.#emitState(key);
+      } catch (err) {
+        session?.close();
+        if (entry.stopped) return;
+        entry.reason = err?.message || 'AirPlay didn’t start';
+        if (err instanceof PairingError && err.code === 'auth') return; // the Apple TV forgot these keys
+        retry();
+      }
+    };
+    const retry = () => {
+      if (entry.stopped) return;
+      clearTimeout(entry.timer);
+      entry.timer = setTimeout(attempt, entry.backoff.next());
+      entry.timer.unref?.();
+    };
+    attempt();
+  }
+
+  #stopAirPlay(key) {
+    const entry = this.#airplay.get(key);
+    if (!entry) return;
+    this.#airplay.delete(key);
+    entry.stopped = true;
+    clearTimeout(entry.timer);
+    entry.mrp = null;
+    entry.session?.close();
+  }
+
+  // For diagnostics and tests: is "what's playing" up, and if not, why.
+  airplayStatus(key) {
+    const entry = this.#airplay.get(key);
+    return { connected: Boolean(entry?.mrp), reason: entry?.reason ?? '' };
   }
 
   async #open(ip, port, credentials) {
@@ -168,6 +263,7 @@ export class JsAtvTransport extends EventEmitter {
   async op_disconnect({ key }) {
     const client = this.#clients.get(key);
     this.#clients.delete(key);
+    this.#stopAirPlay(key);
     await client?.close();
     return {};
   }
@@ -179,12 +275,15 @@ export class JsAtvTransport extends EventEmitter {
   }
 
   op_state({ key }) {
-    return this.#client(key).snapshot();
+    this.#client(key);
+    return this.#snapshot(key);
   }
 
   async op_remote({ key, method, hold }) {
     const client = this.#client(key);
-    if (HOLDABLE[method]) await client.press(HOLDABLE[method], { hold: Boolean(hold) });
+    const mrp = this.#airplay.get(key)?.mrp;
+    if (method === 'stop' && mrp) await mrp.command(COMMAND.Stop);
+    else if (HOLDABLE[method]) await client.press(HOLDABLE[method], { hold: Boolean(hold) });
     else if (BUTTONS[method]) await client.press(BUTTONS[method]);
     else if (MEDIA[method]) await client.mediaControl(...MEDIA[method]);
     else throw fail(501, 'unsupported', `The ${method.replace(/_/g, ' ')} button isn’t supported on this Apple TV without AirPlay`);
